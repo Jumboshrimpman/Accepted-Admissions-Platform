@@ -268,7 +268,7 @@ export function preworkReminderHtml(input: {
               <td style="padding:32px 32px 8px 32px;">
                 <p style="margin:0 0 18px 0;font-size:17px;line-height:1.6;color:#1e3448;">Hi ${first},</p>
                 <p style="margin:0 0 18px 0;font-size:17px;line-height:1.6;color:#33414f;">
-                  Your session is <strong style="color:#1e3448;">${escapeHtml(input.sessionLabel)}</strong>. There is a short set of recommended pre-work to look at beforehand. No pressure if you cannot get to all of it &mdash; a first pass is still useful.
+                  Your session is <strong style="color:#1e3448;">${escapeHtml(input.sessionLabel)}</strong>. There is a short set of recommended pre-work to look at beforehand.
                 </p>
               </td>
             </tr>
