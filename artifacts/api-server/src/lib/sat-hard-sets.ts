@@ -7,12 +7,19 @@ import {
   bankQuestionsTable,
   curriculumBlocksTable,
   db,
-  remediationRetriesTable,
   sessionsTable,
   tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
-import { assignPreworkFromBank, materializeHardSatQuestion, upsertBankRecords } from "./sat-bank-service.ts";
+import {
+  assignPreworkFromBank,
+  loadRoutineSatFormPool,
+  materializeHardSatQuestion,
+  upsertBankRecords,
+} from "./sat-bank-service.ts";
+import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
+import { selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
+import { isHardChallengeReserve } from "./sat-hard-reserve-plan.ts";
 import { logger } from "./logger.ts";
 import {
   composeOct30HardPrework,
@@ -26,14 +33,15 @@ import { inferSessionPreworkKind } from "./session-prework-dedupe.ts";
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   HARD_SAT_PREWORK_QUESTIONS,
-  coercePracticeTestNumber,
   inSessionQuestionTargetForStudent,
   isRenderableHardSatItem,
   originalHardSatDateKeyForSession,
   planHardSatSessionSets,
-  satBankUsageCountsAsSeen,
+  sameSourceKeySet,
   satDifficultyForStudent,
+  satSectionsForStudent,
   toRenderableHardSatInput,
+  type SatPracticeSection,
   type HardSatCandidate,
   type SatDifficulty,
 } from "./sat-set-difficulty.ts";
@@ -54,33 +62,57 @@ function hardInSessionInstructions(target: number, original: boolean): string {
   return `${source} Work through them with your tutor. This is not a timed prediction quiz.`;
 }
 
+async function studentIdentity(clientUserId?: string | null): Promise<{
+  email: string | null;
+  displayName: string | null;
+  userId: string | null;
+}> {
+  if (!clientUserId) return { email: null, displayName: null, userId: null };
+  const [user] = await db
+    .select({ email: usersTable.email, displayName: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, clientUserId))
+    .limit(1);
+  return {
+    email: user?.email ?? null,
+    displayName: user?.displayName ?? null,
+    userId: clientUserId,
+  };
+}
+
 async function hardPlanOptionsForSession(session: {
   dateTime?: Date;
   timezone?: string | null;
   clientUserId?: string | null;
+  subject?: string | null;
+  title?: string | null;
 }): Promise<{
   originalDateKey: string | null;
   balance: "sat" | "even";
+  sections: readonly SatPracticeSection[];
 }> {
-  let email: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   const originalDateKey =
-    session.dateTime && email
+    session.dateTime && identity.email
       ? originalHardSatDateKeyForSession({
           dateTime: session.dateTime,
           timezone: session.timezone,
-          email,
+          email: identity.email,
           clientUserId: session.clientUserId,
         })
       : null;
-  return { originalDateKey, balance: originalDateKey ? "even" : "sat" };
+  return {
+    originalDateKey,
+    balance: originalDateKey ? "even" : "sat",
+    sections: satSectionsForStudent({
+      email: identity.email,
+      displayName: identity.displayName,
+      userId: identity.userId,
+      sessionTitle: session.title,
+      subject: session.subject ?? "SAT",
+      session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
+    }),
+  };
 }
 
 export const HARD_SAT_NEEDS_QUESTIONS_SUMMARY =
@@ -96,23 +128,32 @@ export async function satDifficultyForSession(session: {
   clientUserId?: string | null;
 }): Promise<SatDifficulty> {
   if (normalizedSessionSubject(session.subject) !== "SAT") return "standard";
-  let email: string | null = null;
-  let displayName: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email, displayName: usersTable.displayName })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-    displayName = user?.displayName ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   return satDifficultyForStudent({
-    email,
-    displayName,
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
     sessionTitle: session.title,
     subject: session.subject,
     session,
+  });
+}
+
+export async function satSectionsForSession(session: {
+  subject?: string | null;
+  title?: string | null;
+  dateTime?: Date;
+  timezone?: string | null;
+  clientUserId?: string | null;
+}): Promise<readonly SatPracticeSection[]> {
+  const identity = await studentIdentity(session.clientUserId);
+  return satSectionsForStudent({
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
+    sessionTitle: session.title,
+    subject: session.subject ?? "SAT",
+    session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
   });
 }
 
@@ -123,20 +164,11 @@ async function inSessionTargetForSession(session: {
   timezone?: string | null;
   clientUserId?: string | null;
 }): Promise<number> {
-  let email: string | null = null;
-  let displayName: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email, displayName: usersTable.displayName })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-    displayName = user?.displayName ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   return inSessionQuestionTargetForStudent({
-    email,
-    displayName,
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
     sessionTitle: session.title,
     subject: session.subject,
     session,
@@ -224,72 +256,6 @@ async function classifyBankAssignment(
   return { keys, questionCount, attempts, everyKeyIsHard };
 }
 
-async function loadSeenSatBankUsage(
-  studentUserId: string,
-  ignoreAssignmentIds: readonly string[],
-): Promise<{ sourceKeys: Set<string>; practiceTests: Set<number> }> {
-  const ignore = new Set(ignoreAssignmentIds);
-  const rows = await db
-    .select({
-      sourceKey: bankQuestionsTable.sourceKey,
-      practiceTestNumber: bankQuestionsTable.practiceTestNumber,
-      assignmentId: assignmentQuestionsTable.assignmentId,
-      status: assignmentsTable.status,
-    })
-    .from(assignmentQuestionsTable)
-    .innerJoin(assignmentsTable, eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId))
-    .innerJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
-    .innerJoin(
-      bankQuestionsTable,
-      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
-    )
-    .where(eq(sessionsTable.clientUserId, studentUserId));
-  const assignmentIds = [...new Set(rows.map((row) => row.assignmentId))];
-  const attemptRows =
-    assignmentIds.length === 0
-      ? []
-      : await db
-          .select({
-            assignmentId: attemptsTable.assignmentId,
-            count: sql<number>`count(*)`,
-          })
-          .from(attemptsTable)
-          .where(inArray(attemptsTable.assignmentId, assignmentIds))
-          .groupBy(attemptsTable.assignmentId);
-  const attemptsByAssignment = new Map(
-    attemptRows.map((row) => [row.assignmentId, Number(row.count ?? 0)]),
-  );
-  const sourceKeys = new Set<string>();
-  const practiceTests = new Set<number>();
-  for (const row of rows) {
-    if (ignore.has(row.assignmentId)) continue;
-    const attemptCount = attemptsByAssignment.get(row.assignmentId) ?? 0;
-    if (!satBankUsageCountsAsSeen(row.status, attemptCount)) continue;
-    sourceKeys.add(row.sourceKey);
-    const testNumber = coercePracticeTestNumber(row.practiceTestNumber);
-    if (testNumber != null) practiceTests.add(testNumber);
-  }
-  const retries = await db
-    .select({
-      sourceKey: bankQuestionsTable.sourceKey,
-      practiceTestNumber: bankQuestionsTable.practiceTestNumber,
-    })
-    .from(remediationRetriesTable)
-    .innerJoin(sessionsTable, eq(sessionsTable.id, remediationRetriesTable.sessionId))
-    .innerJoin(
-      bankQuestionsTable,
-      eq(bankQuestionsTable.id, remediationRetriesTable.retryBankQuestionId),
-    )
-    .where(eq(sessionsTable.clientUserId, studentUserId));
-  for (const row of retries) {
-    if (!row.sourceKey) continue;
-    sourceKeys.add(row.sourceKey);
-    const testNumber = coercePracticeTestNumber(row.practiceTestNumber);
-    if (testNumber != null) practiceTests.add(testNumber);
-  }
-  return { sourceKeys, practiceTests };
-}
-
 async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bankId: string }>> {
   const rows = await db
     .select()
@@ -324,7 +290,7 @@ async function liveDuringAssignments(sessionId: string) {
       ),
     )
     .orderBy(asc(assignmentsTable.createdAt));
-  return rows.filter((row) => row.status !== "archived");
+  return rows.filter((row) => row.status !== "archived" && !isHardChallengeReserve(row));
 }
 
 async function markSessionNeedsHardQuestions(sessionId: string, summary: string) {
@@ -677,12 +643,96 @@ async function notifyOct30ReadingLeftInPlace(session: SessionRow): Promise<void>
   );
 }
 
+type ClassifiedRoutinePrework = {
+  row: { id: string };
+  keys: string[];
+  questionCount: number;
+  attempts: number;
+};
+
 /**
- * Fill hard pre-work from the same renderable pool used for planning.
- * A live unattempted routine set stays only when every question's source key
- * is in that pool. Anything else with no attempts is archived and refilled,
- * or flagged as a shortfall when the pool cannot fill a full set.
- * Taito's Oct 30 set keeps the official math half and uses original hard reading.
+ * Hard-student pre-work other than Oct 30: 40 questions from one official SAT
+ * form the student has not used, seeded by the session id. Module 1 stays in
+ * the draw. An unattempted set is replaced when it is not that draw, including
+ * a previous module-2 hardest-first set and a seeded mini homework.
+ * Attempted pre-work is left alone by the caller.
+ */
+async function assignOfficialFormPrework(
+  session: SessionRow,
+  actorUserId: string | null | undefined,
+  classified: readonly ClassifiedRoutinePrework[],
+): Promise<
+  | { action: "unchanged"; assignmentId: string | null }
+  | { action: "shortfall"; assignmentId: string | null }
+  | { action: "assigned"; result: Awaited<ReturnType<typeof assignPreworkFromBank>> }
+> {
+  const replaceableIds = classified.map((item) => item.row.id);
+  const seen = session.clientUserId
+    ? await loadSeenSatBankUsage(session.clientUserId, replaceableIds)
+    : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
+  const sections = await satSectionsForSession(session);
+  const pool = (await loadRoutineSatFormPool()).filter((item) => {
+    if (sections.includes("rw") && sections.includes("math")) return true;
+    return sections.includes(item.section === "math" ? "math" : "rw");
+  });
+  const sectionRestricted =
+    (sections.includes("rw") && !sections.includes("math")) ||
+    (sections.includes("math") && !sections.includes("rw"));
+  const picked = selectRoutinePreworkFromOneForm(pool, {
+    seed: session.id,
+    usedPracticeTests: seen.practiceTests,
+    requireFullCount: sectionRestricted,
+  });
+  if (picked.selected.length !== HARD_SAT_PREWORK_QUESTIONS) {
+    await raiseHardSatShortfallAlert(
+      session,
+      `No official SAT practice form could supply ${HARD_SAT_PREWORK_QUESTIONS} questions. No partial set was assigned, and seeded mini homework was left in place.`,
+    );
+    return { action: "shortfall", assignmentId: classified[0]?.row.id ?? null };
+  }
+  const desiredKeys = picked.selected.flatMap((item) => (item.sourceKey ? [item.sourceKey] : []));
+  const current = classified.find(
+    (item) =>
+      item.questionCount === desiredKeys.length &&
+      desiredKeys.length === HARD_SAT_PREWORK_QUESTIONS &&
+      sameSourceKeySet(item.keys, desiredKeys),
+  );
+  if (current) {
+    await resolveHardSatShortfallAlert(session.id);
+    return { action: "unchanged", assignmentId: current.row.id };
+  }
+  try {
+    const result = await assignPreworkFromBank({
+      sessionId: session.id,
+      actorUserId,
+      homeworkKind: "routine",
+      mcqOnly: true,
+      skipArchiveExisting: false,
+      bankQuestionIds: picked.selected.map((item) => item.id),
+      archiveAssignmentIds: replaceableIds,
+    });
+    if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
+      await raiseHardSatShortfallAlert(
+        session,
+        `Pre-work assignment wrote ${result.questionCount} questions instead of ${HARD_SAT_PREWORK_QUESTIONS}.`,
+      );
+      return { action: "shortfall", assignmentId: result.assignmentId };
+    }
+    await resolveHardSatShortfallAlert(session.id);
+    return { action: "assigned", result };
+  } catch {
+    await raiseHardSatShortfallAlert(
+      session,
+      "The official SAT form pre-work could not be assigned.",
+    );
+    return { action: "shortfall", assignmentId: classified[0]?.row.id ?? null };
+  }
+}
+
+/**
+ * Fill hard pre-work. Oct 30 keeps its official-math plus original-reading mix.
+ * Every other hard session draws 40 questions from one unused official SAT form.
+ * Attempted pre-work stays. A shortfall does not publish a partial set.
  */
 export async function ensureHardSatPrework(
   session: SessionRow,
@@ -743,6 +793,9 @@ export async function ensureHardSatPrework(
     }
     return { action: "blocked-by-attempts", assignmentId: attempted[0]!.row.id, readingLeftInPlace };
   }
+  if (!oct30) {
+    return assignOfficialFormPrework(session, actorUserId, classified);
+  }
   for (const item of classified) {
     if (item.questionCount > 0 && !item.everyKeyIsHard) {
       await archiveUnattemptedAssignment(session.id, item.row.id);
@@ -761,9 +814,6 @@ export async function ensureHardSatPrework(
       await suppressShortfallWhenAssigned(session, target);
       return { action: "unchanged", assignmentId: current?.row.id ?? null };
     }
-  } else if (fullHard) {
-    await suppressShortfallWhenAssigned(session, target);
-    return { action: "unchanged", assignmentId: fullHard.row.id };
   }
   const shortHard = classified.find(
     (item) => item.everyKeyIsHard && item.keys.length < HARD_SAT_PREWORK_QUESTIONS,

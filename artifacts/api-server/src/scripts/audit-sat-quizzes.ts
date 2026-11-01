@@ -20,7 +20,7 @@ import {
   isStudentUsableQuizItem,
   isTrueSprQuizItem,
 } from "../lib/sat-bank-diagnostic-quality.ts";
-import { selectQuestionsForCountBudget } from "../lib/sat-bank-timing.ts";
+import { selectRoutinePreworkFromOneForm } from "../lib/sat-routine-form.ts";
 import { TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY } from "../lib/session-schedule.ts";
 
 const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
@@ -61,13 +61,9 @@ const { selected, composition } = composeDiagnosticItems(sat, {
   allowCrossCollectionFill: true,
 });
 const satUsable = sat.filter((row) => isStudentUsableQuizItem(row));
-const routine = selectQuestionsForCountBudget(
-  satUsable.map((row) => ({
-    ...row,
-    estimatedSeconds: row.estimatedSeconds || 90,
-    skill: row.skill || row.section,
-  })),
-  { preferOriginalOrder: false },
+const routine = selectRoutinePreworkFromOneForm(
+  satUsable.map((row) => ({ ...row, id: row.sourceKey })),
+  { seed: "audit", usedPracticeTests: new Set() },
 );
 
 const successiveSat = TAITO_FALL_2026_SESSIONS.filter((session) => session.subject === "SAT");
@@ -103,7 +99,7 @@ console.log(
         mathCount: routine.selected.filter((row) => row.section === "math").length,
         residualJunk: routine.selected.filter((row) => !isStudentUsableQuizItem(row)).length,
         assignable: canAssignCleanStudentQuizSet(routine.selected),
-        note: "Autogen successive SAT sessions share this 30–50 pool; rebuild each session after deploy. They currently pick the same first 40 unless Cos assigns distinct collections.",
+        note: "Routine pre-work draws 40 at random from one unused official SAT form. This dry run uses seed 'audit' and no seen forms, so it is the lowest practice test that can fill 40. A later session skips forms the student has already been assigned.",
       },
       taitoSatSessions: successiveSat.map((session) => ({
         dateKey: session.dateKey,

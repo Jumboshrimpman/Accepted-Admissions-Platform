@@ -38,12 +38,14 @@ import {
   planHardSatSessionSets,
   satBankUsageCountsAsSeen,
   satDifficultyForStudent,
+  satSectionsForStudent,
   selectHardSatQuestions,
   shouldRefreshUnattemptedHardPrework,
   toRenderableHardSatInput,
   type HardSatCandidate,
   type RenderableHardSatInput,
 } from "./sat-set-difficulty.ts";
+import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import { TAITO_STUDENT_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
 
 function candidate(
@@ -140,6 +142,79 @@ test("hard difficulty starts the session after Oct 16 and stays reusable", () =>
     }),
     "standard",
   );
+});
+
+test("Taito stays on both sections and Sophia's hard bank is reading and writing only", () => {
+  const taito = SAT_DIFFICULTY_SETTINGS.find((setting) => setting.email === TAITO_STUDENT_EMAIL);
+  assert.equal(taito?.difficulty, "hard");
+  assert.equal(taito?.sections, undefined);
+  assert.equal(taito?.inSessionQuestionTarget, 20);
+  assert.deepEqual(
+    satSectionsForStudent({
+      email: TAITO_STUDENT_EMAIL,
+      subject: "SAT",
+      sessionDateKey: "2026-11-20",
+    }),
+    ["rw", "math"],
+  );
+  assert.deepEqual(hardSatSectionQuotas(40), { rw: 22, math: 18 });
+  const sophia = SAT_DIFFICULTY_SETTINGS.find((setting) => setting.userId === SOPHIA_SLEIMAN_SAT_USER_ID);
+  assert.equal(sophia?.difficulty, "hard");
+  assert.deepEqual(sophia?.sections, ["rw"]);
+  assert.equal(sophia?.effectiveAfterDateKey, "2026-10-31");
+  assert.equal(sophia?.nameIncludes, "Sophia Sleiman");
+  assert.equal(
+    satDifficultyForStudent({
+      userId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      displayName: "Sophia Sleiman",
+      subject: "SAT",
+      sessionDateKey: "2026-11-04",
+    }),
+    "hard",
+  );
+  assert.deepEqual(
+    satSectionsForStudent({
+      userId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      subject: "SAT",
+      sessionDateKey: "2026-11-04",
+    }),
+    ["rw"],
+  );
+  assert.equal(
+    satDifficultyForStudent({
+      userId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      subject: "SAT",
+      sessionDateKey: "2026-10-31",
+    }),
+    "standard",
+  );
+  const rw = Array.from({ length: 20 }, (_, index) => candidate(4, "rw", 33 - index));
+  const math = Array.from({ length: 12 }, (_, index) => candidate(4, "math", 22 - index));
+  const rwOnly = planHardSatSessionSets([...rw, ...math], {
+    preworkTarget: 0,
+    preworkMin: 0,
+    preworkMax: 0,
+    inSessionMax: 15,
+    sections: ["rw"],
+  });
+  assert.equal(rwOnly.inSession.length, 15);
+  assert.equal(rwOnly.inSession.every((item) => item.section === "rw"), true);
+  const shortRw = planHardSatSessionSets([...rw.slice(0, 3), ...math], {
+    preworkTarget: 0,
+    preworkMin: 0,
+    preworkMax: 0,
+    inSessionMax: 15,
+    sections: ["rw"],
+  });
+  assert.equal(shortRw.inSession.length, 3);
+  assert.equal(shortRw.inSession.every((item) => item.section === "rw"), true);
+  const both = planHardSatSessionSets([...rw, ...math], {
+    preworkTarget: 0,
+    preworkMin: 0,
+    preworkMax: 0,
+    inSessionMax: 10,
+  });
+  assert.equal(both.inSession.some((item) => item.section === "math"), true);
 });
 
 test("hard selection takes the hardest official module 2 items and balances sections", () => {
@@ -469,8 +544,11 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.doesNotMatch(prep, /ensureHardSatSessionSets/);
   assert.match(prep, /describeHardSatSessionPrep/);
   const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const seenUsage = readFileSync(new URL("./sat-bank-usage.ts", import.meta.url), "utf8");
   assert.match(hardSets, /status: "attempted"/);
-  assert.match(hardSets, /satBankUsageCountsAsSeen/);
+  assert.match(seenUsage, /satBankUsageCountsAsSeen/);
+  assert.match(hardSets, /loadSeenSatBankUsage/);
+  assert.match(hardSets, /selectRoutinePreworkFromOneForm/);
   assert.match(hardSets, /ne\(assignmentsTable\.status, "archived"\)/);
   assert.match(hardSets, /raiseHardSatShortfallAlert/);
   assert.match(hardSets, /everyKeyIsHard/);

@@ -203,6 +203,11 @@ export const assignmentsTable = pgTable("assignments", {
   timeLimitMinutes: numeric("time_limit_minutes", { mode: "number" }).notNull(),
   /** When true, the limit is a guide. The attempt never expires or auto-submits. */
   softTimeLimit: boolean("soft_time_limit").notNull().default(false),
+  /**
+   * Tutor-held hard reserve for a student who is doing well in the session.
+   * This is not the session's during-session practice assignment.
+   */
+  hardChallengeReserve: boolean("hard_challenge_reserve").notNull().default(false),
   maxAttempts: numeric("max_attempts", { mode: "number" }).notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
