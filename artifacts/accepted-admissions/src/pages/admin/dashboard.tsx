@@ -13,14 +13,14 @@ import {
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ArrowRight, AlertTriangle, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users } from "lucide-react";
+import { ArrowRight, AlertTriangle, Bell, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   formSubmissionSourceLabel,
   isFormSubmissionResolved,
@@ -32,7 +32,6 @@ import {
 } from "@/components/session-tutor-materials";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue } from "./question-reports-queue";
-import { EssayRequestsPanel } from "@/components/essay-editing-panel";
 import { ClientIntakeAdmin } from "@/components/client-intake-admin";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -110,18 +109,26 @@ function applyGuidanceRequestUpdate(queryClient: QueryClient, updated: AdminGuid
   });
 }
 
+function openDisclosureChain(element: Element | null) {
+  let current: Element | null = element;
+  while (current) {
+    if (current instanceof HTMLDetailsElement) current.open = true;
+    current = current.parentElement;
+  }
+}
+
 function revealAdminHashTarget(hash: string) {
   if (hash === "guidance-requests") {
-    document.getElementById("guidance-requests")?.scrollIntoView({ block: "start" });
+    const element = document.getElementById("guidance-requests");
+    openDisclosureChain(element);
+    element?.scrollIntoView({ block: "start" });
     return;
   }
   if (!hash.startsWith("guidance-request-")) return;
   const requestId = hash.slice("guidance-request-".length);
   const element = document.getElementById(`guidance-request-${requestId}`);
   if (!element) return;
-  const history = document.getElementById("resolved-form-submissions");
-  if (history instanceof HTMLDetailsElement && history.contains(element)) history.open = true;
-  if (element instanceof HTMLDetailsElement) element.open = true;
+  openDisclosureChain(element);
   element.scrollIntoView({ block: "start" });
 }
 
@@ -131,6 +138,51 @@ function resolutionSummary(request: AdminGuidanceRequest): string {
     return `Resolved ${new Date(request.resolvedAt).toLocaleString()} by ${request.resolvedByName}`;
   }
   return "Resolved earlier";
+}
+
+function CollapsedAdminSection({
+  testId,
+  cardTestId,
+  id,
+  icon: Icon,
+  title,
+  summary,
+  count,
+  className,
+  iconClassName = "text-primary",
+  summaryClassName,
+  children,
+}: {
+  testId: string;
+  cardTestId?: string;
+  id?: string;
+  icon: LucideIcon;
+  title: string;
+  summary: string;
+  count: number;
+  className?: string;
+  iconClassName?: string;
+  summaryClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Card className={className} data-testid={cardTestId}>
+      <details id={id} data-testid={testId} className="group/section scroll-mt-24">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-6 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <Icon className={`h-5 w-5 ${iconClassName}`} />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold">{title}</h2>
+            <p className={`mt-1 truncate text-sm ${summaryClassName ?? "text-muted-foreground"}`}>{summary}</p>
+          </div>
+          <Badge variant="secondary">{count}</Badge>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open/section:rotate-180" />
+        </summary>
+        <CardContent className="border-t px-3 py-3 sm:px-6">
+          {children}
+        </CardContent>
+      </details>
+    </Card>
+  );
 }
 
 export default function AdminDashboard() {
@@ -192,6 +244,17 @@ export default function AdminDashboard() {
     .sort((left, right) => new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime());
   const visibleUpcomingSessions = disclosedSessions(upcomingSessions, showAllSessions);
   const newRequestCount = platform?.newRequests ?? guidanceRequests.filter((request) => request.status === "new").length;
+  const studentPortalSummary = portalStudents.length === 0
+    ? "No students on file yet."
+    : portalStudents.length === 1
+      ? `Preview ${portalStudents[0]?.name}.`
+      : `${portalStudents.length} students ready to preview.`;
+  const guidanceSummary = guidanceRequests.length === 0
+    ? "No guidance requests have been submitted yet."
+    : `${unresolvedRequests.length} unresolved · ${newRequestCount} new`;
+  const loginSummary = latestLogin
+    ? `Latest: ${latestLogin.userName} · ${new Date(latestLogin.signedInAt).toLocaleString()}`
+    : "No successful sign-ins have been recorded since tracking began.";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
@@ -203,17 +266,6 @@ export default function AdminDashboard() {
       <UnresolvedFormSubmissionsAlert requests={unresolvedRequests} />
       <CalendarReconnectAlert alerts={overview?.calendarReconnectAlerts ?? []} />
       <SharedMeetOverlapAlert overlaps={overview?.sharedMeetOverlaps ?? []} />
-      <ConsultingProvisionNotice provision={overview?.consultingProvision} />
-      <div>
-        <p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p>
-        <h1 className="text-3xl font-bold tracking-tight">Admin overview</h1>
-        <p className="mt-1 text-muted-foreground">
-          {upcomingSessions.length} upcoming session{upcomingSessions.length === 1 ? "" : "s"}
-          {" · "}
-          {newRequestCount} new guidance request{newRequestCount === 1 ? "" : "s"}
-        </p>
-      </div>
-      <EssayRequestsPanel mode="admin" />
 
       {accessConflicts.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 text-amber-950" role="alert">
@@ -246,13 +298,173 @@ export default function AdminDashboard() {
           .map((user) => ({ id: user.id, displayName: user.displayName }))}
       />
 
+      <div>
+        <p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p>
+        <h1 className="text-3xl font-bold tracking-tight">Admin overview</h1>
+        <p className="mt-1 text-muted-foreground">
+          {upcomingSessions.length} upcoming session{upcomingSessions.length === 1 ? "" : "s"}
+          {" · "}
+          {newRequestCount} new guidance request{newRequestCount === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      <Card data-testid="card-upcoming-sessions">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-primary" /> Upcoming sessions
+              </CardTitle>
+              <CardDescription>Next scheduled appointments.</CardDescription>
+            </div>
+            <Badge variant="secondary">{upcomingSessions.length} scheduled</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {visibleUpcomingSessions.map((session) => (
+            <div key={session.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">{displaySessionTitle(session.title, session.subject)}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{formatSessionDateTime(session)}</p>
+              </div>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/tutor/sessions/${session.id}`}>Open session</Link>
+                </Button>
+                {sessionOffersQuestionPdfs(curriculum?.assignments ?? [], session.id) ? (
+                  <SessionQuestionDownloads sessionId={session.id} />
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {upcomingSessions.length === 0 && (
+            <p className="py-5 text-center text-sm text-muted-foreground">No upcoming sessions are scheduled.</p>
+          )}
+          {upcomingSessions.length > 3 && (
+            <Button variant="outline" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>
+              {showAllSessions ? "View less" : `View more (${upcomingSessions.length - 3})`}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <CollapsedAdminSection
+        testId="card-operations"
+        icon={ClipboardList}
+        title="Operations"
+        summary="Jump to the area you need."
+        count={operationLinks.length}
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {operationLinks.map(({ href, title, detail, icon: Icon }) => (
+            <Link key={href} href={href} className="group rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-primary/5">
+              <div className="flex items-start justify-between">
+                <Icon className="h-5 w-5 text-primary" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+              </div>
+              <h2 className="mt-4 font-semibold">{title}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+            </Link>
+          ))}
+        </div>
+      </CollapsedAdminSection>
+
+      <CollapsedAdminSection
+        testId="card-student-portals"
+        icon={Eye}
+        title="Student portals"
+        summary={studentPortalSummary}
+        count={portalStudents.length}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Preview an existing student’s portal. New people must be provisioned under People & access before they can sign in.
+          </p>
+          {portalStudents.map((client) => (
+            <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">{client.name}</p>
+                <p className="text-sm text-muted-foreground">{client.email}</p>
+              </div>
+              <Button asChild size="sm">
+                <Link href={`/admin/clients/${client.id}/preview`} data-testid={`link-preview-client-${client.id}`}>
+                  <Eye className="mr-2 h-4 w-4" /> Preview client portal
+                </Link>
+              </Button>
+            </div>
+          ))}
+          {portalStudents.length === 0 && (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-student-portals">
+              No students on file yet. Provision them under People & access, then they can sign in at /login.
+            </p>
+          )}
+          <p className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="hint-michelle-provision">
+            Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access before preview or login. There is no Clerkless demo.
+          </p>
+        </div>
+      </CollapsedAdminSection>
+
+      <CollapsedAdminSection
+        testId="card-guidance-requests"
+        id="guidance-requests"
+        icon={MessageSquareText}
+        title="Guidance requests"
+        summary={guidanceSummary}
+        count={guidanceRequests.length}
+      >
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable. Resolve a submission to clear its alert. Resolved submissions stay in history.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" data-testid="count-guidance-requests">{guidanceRequests.length} total</Badge>
+              <Badge variant={newRequestCount > 0 ? "default" : "outline"} data-testid="count-new-guidance-requests">
+                {newRequestCount} new
+              </Badge>
+            </div>
+          </div>
+          {guidanceRequests.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-guidance-requests">
+              No guidance requests have been submitted yet.
+            </p>
+          ) : (
+            <>
+              {unresolvedRequests.map((request) => (
+                <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+              ))}
+              {unresolvedRequests.length === 0 && (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-unresolved-form-submissions">
+                  No unresolved form submissions.
+                </p>
+              )}
+              {resolvedRequests.length > 0 && (
+                <details id="resolved-form-submissions" className="rounded-xl border" data-testid="resolved-form-submissions">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    Resolved history ({resolvedRequests.length})
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </summary>
+                  <div className="space-y-3 border-t p-4">
+                    {resolvedRequests.map((request) => (
+                      <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      </CollapsedAdminSection>
+
       {assignmentNotifications.length > 0 && (
-        <Card data-testid="card-admin-notifications">
-          <CardHeader>
-            <CardTitle>Assignment notifications</CardTitle>
-            <CardDescription>Ownership changes addressed to you.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
+        <CollapsedAdminSection
+          testId="card-admin-notifications"
+          icon={Bell}
+          title="Assignment notifications"
+          summary={`${unreadCount} unread · ${priorCount} prior`}
+          count={assignmentNotifications.length}
+        >
+          <div className="space-y-5">
             {activeNotifications.length > 0 && (
               <section aria-labelledby="active-notifications-heading" className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -300,171 +512,19 @@ export default function AdminDashboard() {
                 </div>
               </details>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsedAdminSection>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Operations</CardTitle>
-          <CardDescription>Jump to the area you need.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {operationLinks.map(({ href, title, detail, icon: Icon }) => (
-            <Link key={href} href={href} className="group rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-primary/5">
-              <div className="flex items-start justify-between">
-                <Icon className="h-5 w-5 text-primary" />
-                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
-              </div>
-              <h2 className="mt-4 font-semibold">{title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-            </Link>
-          ))}
-        </CardContent>
-      </Card>
+      <ConsultingProvisionNotice provision={overview?.consultingProvision} />
 
-      <Card data-testid="card-student-portals">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5 text-primary" /> Student portals
-          </CardTitle>
-          <CardDescription>
-            Preview an existing student’s portal. New people must be provisioned under People & access before they can sign in.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {portalStudents.map((client) => (
-            <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-medium">{client.name}</p>
-                <p className="text-sm text-muted-foreground">{client.email}</p>
-              </div>
-              <Button asChild size="sm">
-                <Link href={`/admin/clients/${client.id}/preview`} data-testid={`link-preview-client-${client.id}`}>
-                  <Eye className="mr-2 h-4 w-4" /> Preview client portal
-                </Link>
-              </Button>
-            </div>
-          ))}
-          {portalStudents.length === 0 && (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-student-portals">
-              No students on file yet. Provision them under People & access, then they can sign in at /login.
-            </p>
-          )}
-          <p className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="hint-michelle-provision">
-            Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access before preview or login. There is no Clerkless demo.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5 text-primary" /> Upcoming sessions
-              </CardTitle>
-              <CardDescription>Next scheduled appointments.</CardDescription>
-            </div>
-            <Badge variant="secondary">{upcomingSessions.length} scheduled</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {visibleUpcomingSessions.map((session) => (
-            <div key={session.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">{displaySessionTitle(session.title, session.subject)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{formatSessionDateTime(session)}</p>
-              </div>
-              <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/tutor/sessions/${session.id}`}>Open session</Link>
-                </Button>
-                {sessionOffersQuestionPdfs(curriculum?.assignments ?? [], session.id) ? (
-                  <SessionQuestionDownloads sessionId={session.id} />
-                ) : null}
-              </div>
-            </div>
-          ))}
-          {upcomingSessions.length === 0 && (
-            <p className="py-5 text-center text-sm text-muted-foreground">No upcoming sessions are scheduled.</p>
-          )}
-          {upcomingSessions.length > 3 && (
-            <Button variant="outline" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>
-              {showAllSessions ? "View less" : `View more (${upcomingSessions.length - 3})`}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card id="guidance-requests" data-testid="card-guidance-requests" className="scroll-mt-24">
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquareText className="h-5 w-5 text-primary" /> Guidance requests
-              </CardTitle>
-              <CardDescription>
-                Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable. Resolve a submission to clear its alert. Resolved submissions stay in history.
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" data-testid="count-guidance-requests">{guidanceRequests.length} total</Badge>
-              <Badge variant={newRequestCount > 0 ? "default" : "outline"} data-testid="count-new-guidance-requests">
-                {newRequestCount} new
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {guidanceRequests.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-guidance-requests">
-              No guidance requests have been submitted yet.
-            </p>
-          ) : (
-            <>
-              {unresolvedRequests.map((request) => (
-                <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
-              ))}
-              {unresolvedRequests.length === 0 && (
-                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-unresolved-form-submissions">
-                  No unresolved form submissions.
-                </p>
-              )}
-              {resolvedRequests.length > 0 && (
-                <details id="resolved-form-submissions" className="rounded-xl border" data-testid="resolved-form-submissions">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    Resolved history ({resolvedRequests.length})
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  </summary>
-                  <div className="space-y-3 border-t p-4">
-                    {resolvedRequests.map((request) => (
-                      <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
-                    ))}
-                  </div>
-                </details>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-6 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            <LogIn className="h-5 w-5 text-primary" />
-            <div className="min-w-0 flex-1">
-              <h2 className="font-semibold">Login activity</h2>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {latestLogin
-                  ? `Latest: ${latestLogin.userName} · ${new Date(latestLogin.signedInAt).toLocaleString()}`
-                  : "No successful sign-ins have been recorded since tracking began."}
-              </p>
-            </div>
-            <Badge variant="secondary">{loginActivity.length}</Badge>
-            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-          </summary>
-          <CardContent className="border-t px-3 py-3 sm:px-6">
+      <CollapsedAdminSection
+        testId="card-login-activity"
+        icon={LogIn}
+        title="Login activity"
+        summary={loginSummary}
+        count={loginActivity.length}
+      >
             {loginActivity.length > 0 ? (
               <div className="divide-y">
                 {loginActivity.map((item) => (
@@ -485,9 +545,7 @@ export default function AdminDashboard() {
             ) : (
               <p className="px-2 py-5 text-sm text-muted-foreground">Activity will appear here after each user’s next successful sign-in.</p>
             )}
-          </CardContent>
-        </details>
-      </Card>
+      </CollapsedAdminSection>
     </div>
   );
 }
@@ -611,30 +669,54 @@ function SharedMeetOverlapAlert({
   );
 }
 
+function consultingStoppedParties(provision: NonNullable<AdminOverview["consultingProvision"]>): string[] {
+  return [
+    provision.neelStoppedReason ? "Neel" : null,
+    provision.victoriaStoppedReason ? "Victoria" : null,
+  ].filter((name): name is string => name !== null);
+}
+
+function consultingSectionSummary(
+  provision: NonNullable<AdminOverview["consultingProvision"]>,
+  stoppedParties: string[],
+): string {
+  if (stoppedParties.length === 1) return `${stoppedParties[0]} needs attention.`;
+  if (stoppedParties.length > 1) return `${stoppedParties.join(" and ")} need attention.`;
+  const nika = provision.nikaBookable ? "bookable" : "not bookable";
+  const neel = provision.neelLinked ? "linked" : "not linked";
+  const victoria = provision.victoriaLinked ? "linked" : "not linked";
+  return `Nika ${nika} · Neel ${neel} · Victoria ${victoria}.`;
+}
+
 function ConsultingProvisionNotice({
   provision,
 }: {
   provision: AdminOverview["consultingProvision"];
 }) {
   if (!provision) return null;
-  const stopped = Boolean(provision.neelStoppedReason || provision.victoriaStoppedReason);
+  const stoppedParties = consultingStoppedParties(provision);
+  const stopped = stoppedParties.length > 0;
   return (
-    <Card
+    <CollapsedAdminSection
+      cardTestId="consulting-provision-notice"
+      testId="details-consulting-provision"
+      icon={stopped ? AlertTriangle : Users}
+      title="College Consulting provisioning"
+      summary={consultingSectionSummary(provision, stoppedParties)}
+      count={stopped ? stoppedParties.length : 1}
       className={stopped ? "border-amber-300 bg-amber-50 text-amber-950" : undefined}
-      data-testid="consulting-provision-notice"
+      iconClassName={stopped ? "text-amber-950" : "text-primary"}
+      summaryClassName={stopped ? "text-amber-900" : undefined}
     >
-      <CardHeader>
-        <CardTitle className="text-base">College Consulting provisioning</CardTitle>
-        <CardDescription className={stopped ? "text-amber-900" : undefined}>
+      <div className="space-y-2 text-sm">
+        <p className={stopped ? "text-amber-900" : "text-muted-foreground"}>
           Nika signs in at /login, then connects Google Calendar at /tutor with {provision.nikaEmail}
           {provision.nikaClerkUserId ? ` (${provision.nikaClerkUserId})` : ""}.{" "}
           {provision.nikaBookable
             ? "She is bookable."
             : `Not bookable (${provision.nikaSkipReason ?? "inactive"}).`}{" "}
           No invitation was sent.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+        </p>
         <p>
           Neel: {provision.neelLinked ? `linked as ${provision.neelEmail}` : `not linked (${provision.neelStoppedReason ?? "stopped"})`}.
         </p>
@@ -655,8 +737,8 @@ function ConsultingProvisionNotice({
             Victoria&apos;s placeholder email is already owned by {provision.victoriaEmailOwner.displayName} ({provision.victoriaEmailOwner.email}, role {provision.victoriaEmailOwner.role}). Reason: {provision.victoriaStoppedReason ?? "email_owned_by_other_user"}. Leave that account and her tutor profile unchanged until you decide.
           </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsedAdminSection>
   );
 }
 
