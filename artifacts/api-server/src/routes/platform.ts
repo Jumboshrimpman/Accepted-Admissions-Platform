@@ -13,7 +13,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger";
 import {
   providerConflictOverrideLog,
@@ -747,6 +747,7 @@ import {
   quizSubmissionNotificationTitle,
 } from "../lib/submission-alerts";
 import { sendTransactionalEmail, verifiedFromAddress } from "../lib/transactional-email";
+import { runPreworkReminders } from "../lib/prework-reminder-run";
 import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
@@ -4388,6 +4389,7 @@ async function alertOnQuizSubmission(result: AttemptResultPayload): Promise<void
     from: verifiedFromAddress(),
     subject: email.subject,
     text: email.text,
+    html: email.html,
   });
 }
 
@@ -7536,6 +7538,38 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
     status: "received",
     message: "Thanks — we received your request.",
   });
+});
+
+function preworkReminderAuthorized(authorization: string | undefined): boolean {
+  const secret = process.env.PREWORK_REMINDER_SECRET?.trim() ?? "";
+  if (!secret) return false;
+  const match = authorization?.match(/^Bearer\s+(\S+)$/i);
+  const provided = match?.[1] ?? "";
+  const received = Buffer.from(provided);
+  const expected = Buffer.from(secret);
+  if (received.length === 0 || received.length !== expected.length) return false;
+  return timingSafeEqual(received, expected);
+}
+
+router.post("/internal/prework-reminders/run", async (req, res): Promise<void> => {
+  if (!preworkReminderAuthorized(req.header("authorization"))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  try {
+    const result = await runPreworkReminders({ now: new Date() });
+    res.json({
+      ok: true,
+      considered: result.considered,
+      sent: result.sent,
+      alreadySent: result.alreadySent,
+      skipped: result.skipped,
+      failed: result.failed,
+    });
+  } catch (error) {
+    req.log?.error({ err: error }, "prework reminder run failed");
+    res.status(500).json({ error: "Pre-work reminders could not be sent" });
+  }
 });
 
 router.use(requireAppUser);

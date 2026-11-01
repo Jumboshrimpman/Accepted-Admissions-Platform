@@ -231,6 +231,31 @@ export const studentQuizResolutionsTable = pgTable(
   ],
 );
 
+/**
+ * One row per student and assignment after a pre-work reminder email is sent.
+ * The unique index is what stops a second run in the same window from emailing again.
+ */
+export const preworkReminderSendsTable = pgTable(
+  "prework_reminder_sends",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assignmentId: uuid("assignment_id")
+      .notNull()
+      .references(() => assignmentsTable.id, { onDelete: "cascade" }),
+    studentUserId: uuid("student_user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => sessionsTable.id, { onDelete: "cascade" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("prework_reminder_sends_assignment_student_idx").on(
+      table.assignmentId,
+      table.studentUserId,
+    ),
+  ],
+);
+
 export const questionsTable = pgTable("questions", {
   id: uuid("id").primaryKey().defaultRandom(),
   subject: text("subject").notNull(),
