@@ -163,9 +163,6 @@ const mocks = vi.hoisted(() => ({
       }>;
     }>,
   },
-}));
-
-vi.mock("@workspace/api-client-react", () => ({
   questionReports: [] as Array<{
     id: string;
     assignmentTitle: string;
@@ -186,6 +183,9 @@ vi.mock("@workspace/api-client-react", () => ({
     completedAt: string | null;
     response: null;
   }>,
+}));
+
+vi.mock("@workspace/api-client-react", () => ({
   customFetch: vi.fn(async (path: string) => {
     if (String(path).includes("client-intakes")) return { assignments: mocks.intakeAssignments };
     return { reports: mocks.questionReports };
