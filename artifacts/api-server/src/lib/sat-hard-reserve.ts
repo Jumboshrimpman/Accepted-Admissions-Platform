@@ -14,7 +14,7 @@ import {
   HARD_RESERVE_DEFAULT,
   decideHardReserveWrite,
   hardChallengeSetTitle,
-  isHardChallengeSetTitle,
+  isHardChallengeReserve,
   selectHardReserve,
   type HardReserveCandidate,
 } from "./sat-hard-reserve-plan.ts";
@@ -29,10 +29,13 @@ export {
   HARD_RESERVE_DEFAULT,
   HARD_RESERVE_MAX,
   decideHardReserveWrite,
+  duringSessionAcceptsSessionWork,
   hardChallengeSetTitle,
   hardChallengeTitleIsPrework,
   hardReserveTarget,
+  isHardChallengeReserve,
   isHardChallengeSetTitle,
+  resolveDuringSessionAssignment,
   selectHardReserve,
 } from "./sat-hard-reserve-plan.ts";
 export type { HardReserveCandidate, HardReservePick } from "./sat-hard-reserve-plan.ts";
@@ -104,7 +107,12 @@ export async function ensureHardChallengeReserve(session: {
     return { action: "skipped", assignmentId: null, questionCount: 0, shortfall: 0, target };
   }
   const during = await db
-    .select({ id: assignmentsTable.id, title: assignmentsTable.title, status: assignmentsTable.status })
+    .select({
+      id: assignmentsTable.id,
+      title: assignmentsTable.title,
+      status: assignmentsTable.status,
+      hardChallengeReserve: assignmentsTable.hardChallengeReserve,
+    })
     .from(assignmentsTable)
     .where(
       and(
@@ -114,7 +122,7 @@ export async function ensureHardChallengeReserve(session: {
     );
   if (decideHardReserveWrite(during) === "keep") {
     const existing = during.find(
-      (row) => row.status !== "archived" && isHardChallengeSetTitle(row.title),
+      (row) => row.status !== "archived" && isHardChallengeReserve(row),
     );
     const questionCount = existing ? await assignmentQuestionCount(existing.id) : 0;
     return {
@@ -152,7 +160,12 @@ export async function ensureHardChallengeReserve(session: {
   const created = await db.transaction(async (tx) => {
     await tx.execute(sql`select id from sessions where id = ${session.id} for update`);
     const live = await tx
-      .select({ id: assignmentsTable.id, title: assignmentsTable.title, status: assignmentsTable.status })
+      .select({
+      id: assignmentsTable.id,
+      title: assignmentsTable.title,
+      status: assignmentsTable.status,
+      hardChallengeReserve: assignmentsTable.hardChallengeReserve,
+    })
       .from(assignmentsTable)
       .where(
         and(
@@ -162,7 +175,7 @@ export async function ensureHardChallengeReserve(session: {
       );
     if (decideHardReserveWrite(live) === "keep") {
       const existing = live.find(
-        (row) => row.status !== "archived" && isHardChallengeSetTitle(row.title),
+        (row) => row.status !== "archived" && isHardChallengeReserve(row),
       );
       return { assignmentId: existing?.id ?? null, created: false as const };
     }
@@ -178,6 +191,7 @@ export async function ensureHardChallengeReserve(session: {
         status: "draft",
         timeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
         maxAttempts: 1,
+        hardChallengeReserve: true,
       })
       .returning();
     for (const [index, questionId] of questionIds.entries()) {

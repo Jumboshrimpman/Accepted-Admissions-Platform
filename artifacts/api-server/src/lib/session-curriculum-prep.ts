@@ -30,7 +30,11 @@ import {
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
 import { raisePreworkVisibilityAlertForSession } from "./prework-visibility";
-import { ensureHardChallengeReserve } from "./sat-hard-reserve";
+import {
+  duringSessionAcceptsSessionWork,
+  ensureHardChallengeReserve,
+  resolveDuringSessionAssignment,
+} from "./sat-hard-reserve";
 import { describeHardSatSessionPrep, satDifficultyForSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
@@ -46,7 +50,7 @@ function subjectFamily(subject: string): string {
 async function ensureDuringSessionAssignment(
   session: typeof sessionsTable.$inferSelect,
 ) {
-  const [existing] = await db
+  const rows = await db
     .select()
     .from(assignmentsTable)
     .where(
@@ -55,8 +59,8 @@ async function ensureDuringSessionAssignment(
         eq(assignmentsTable.deliveryPhase, "during_session"),
       ),
     )
-    .orderBy(asc(assignmentsTable.createdAt))
-    .limit(1);
+    .orderBy(asc(assignmentsTable.createdAt));
+  const existing = resolveDuringSessionAssignment(rows);
   if (existing) return existing;
   const [created] = await db
     .insert(assignmentsTable)
@@ -183,6 +187,12 @@ async function copyHomeworkIntoDuringSession(
   homeworkId: string,
   duringId: string,
 ): Promise<number> {
+  const [target] = await db
+    .select()
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, duringId))
+    .limit(1);
+  if (!duringSessionAcceptsSessionWork(target)) return 0;
   const source = await db
     .select({
       questionId: assignmentQuestionsTable.questionId,

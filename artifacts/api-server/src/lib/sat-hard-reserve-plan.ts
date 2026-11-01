@@ -59,11 +59,55 @@ export function isHardChallengeSetTitle(title?: string | null): boolean {
   return (title ?? "").trim().toLowerCase().startsWith(HARD_CHALLENGE_TITLE_PREFIX.toLowerCase());
 }
 
+/**
+ * The reserve is a separate during-session row. The column is the marker.
+ * The title remains a backstop for a row written before the column existed.
+ */
+export function isHardChallengeReserve(row: {
+  hardChallengeReserve?: boolean | null;
+  title?: string | null;
+} | null | undefined): boolean {
+  if (!row) return false;
+  return row.hardChallengeReserve === true || isHardChallengeSetTitle(row.title);
+}
+
+function createdAtMs(value: Date | string | number | null | undefined): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+/**
+ * Oldest during-session assignment that is not the hard reserve.
+ * A session whose only during-session row is the reserve has none yet.
+ */
+export function resolveDuringSessionAssignment<T extends {
+  hardChallengeReserve?: boolean | null;
+  title?: string | null;
+  createdAt?: Date | string | number | null;
+}>(rows: readonly T[]): T | null {
+  const candidates = rows.filter((row) => !isHardChallengeReserve(row));
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((left, right) => createdAtMs(left.createdAt) - createdAtMs(right.createdAt))[0] ?? null;
+}
+
+/** Homework copy and hard in-session writes must not land on the reserve. */
+export function duringSessionAcceptsSessionWork(row: {
+  hardChallengeReserve?: boolean | null;
+  title?: string | null;
+} | null | undefined): boolean {
+  return !isHardChallengeReserve(row);
+}
+
 export function decideHardReserveWrite(
-  existing: readonly { title?: string | null; status?: string | null }[],
+  existing: readonly { title?: string | null; status?: string | null; hardChallengeReserve?: boolean | null }[],
 ): "keep" | "create" {
   const live = existing.some(
-    (row) => (row.status ?? "").trim().toLowerCase() !== "archived" && isHardChallengeSetTitle(row.title),
+    (row) => (row.status ?? "").trim().toLowerCase() !== "archived" && isHardChallengeReserve(row),
   );
   return live ? "keep" : "create";
 }

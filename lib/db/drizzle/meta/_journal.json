@@ -561,6 +561,13 @@
       "when": 1792882000000,
       "tag": "0086_prework_reminder_sends",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792883000000,
+      "tag": "0087_assignment_hard_challenge_reserve",
+      "breakpoints": true
     }
   ]
 }

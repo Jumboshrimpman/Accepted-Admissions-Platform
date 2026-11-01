@@ -10,8 +10,10 @@ import {
   HARD_RESERVE_DEFAULT,
   HARD_RESERVE_MAX,
   decideHardReserveWrite,
+  duringSessionAcceptsSessionWork,
   hardChallengeSetTitle,
   hardChallengeTitleIsPrework,
+  resolveDuringSessionAssignment,
   selectHardReserve,
   type HardReserveCandidate,
 } from "./sat-hard-reserve-plan.ts";
@@ -129,6 +131,70 @@ test("a short hard pool records a shortfall and does not pad", () => {
   assert.equal(short.selected.length, 3);
   assert.equal(short.shortfall, 2);
   assert.equal(new Set(short.selected.map((row) => row.id)).size, 3);
+});
+
+test("a standard session keeps a separate during-session practice row beside the reserve", () => {
+  const reserve = {
+    id: "reserve",
+    title: hardChallengeSetTitle(5, "Sama’s SAT Session"),
+    hardChallengeReserve: true,
+    createdAt: "2026-11-01T00:00:00.000Z",
+    questions: ["hard-1", "hard-2", "hard-3", "hard-4", "hard-5"],
+  };
+  const practice = {
+    id: "practice",
+    title: "During session practice — Sama’s SAT Session",
+    hardChallengeReserve: false,
+    createdAt: "2026-11-01T00:01:00.000Z",
+    questions: ["prework-unanswered"],
+  };
+  assert.equal(resolveDuringSessionAssignment([reserve]), null);
+  assert.equal(resolveDuringSessionAssignment([reserve, practice])?.id, "practice");
+  assert.equal(duringSessionAcceptsSessionWork(reserve), false);
+  assert.equal(duringSessionAcceptsSessionWork(practice), true);
+  assert.deepEqual(reserve.questions, ["hard-1", "hard-2", "hard-3", "hard-4", "hard-5"]);
+  assert.equal(reserve.title, "Hard challenge set (5) — Sama’s SAT Session");
+});
+
+test("a hard session's in-session row is chosen and the reserve is not", () => {
+  const reserve = {
+    id: "reserve",
+    title: hardChallengeSetTitle(5, "Taito’s SAT Session with Eunice"),
+    hardChallengeReserve: true,
+    createdAt: "2026-11-20T00:00:00.000Z",
+  };
+  const hardInSession = {
+    id: "hard-in-session",
+    title: "Hard SAT in-session (20) — Taito’s SAT Session with Eunice",
+    hardChallengeReserve: false,
+    createdAt: "2026-11-20T00:05:00.000Z",
+  };
+  assert.equal(resolveDuringSessionAssignment([reserve, hardInSession])?.id, "hard-in-session");
+  assert.equal(resolveDuringSessionAssignment([hardInSession, reserve])?.id, "hard-in-session");
+  assert.equal(duringSessionAcceptsSessionWork(hardInSession), true);
+  const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
+  const platform = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const prepEnsure = prep.slice(
+    prep.indexOf("async function ensureDuringSessionAssignment"),
+    prep.indexOf("async function assignmentQuestionCount"),
+  );
+  const platformEnsure = platform.slice(
+    platform.indexOf("async function ensureDuringSessionAssignment"),
+    platform.indexOf("async function adaptiveCurriculumForSession"),
+  );
+  const copy = prep.slice(
+    prep.indexOf("async function copyHomeworkIntoDuringSession"),
+    prep.indexOf("async function ensureOriginalPracticeQuestion"),
+  );
+  const live = hardSets.slice(
+    hardSets.indexOf("async function liveDuringAssignments"),
+    hardSets.indexOf("async function markSessionNeedsHardQuestions"),
+  );
+  assert.match(prepEnsure, /resolveDuringSessionAssignment/);
+  assert.match(platformEnsure, /resolveDuringSessionAssignment/);
+  assert.match(copy, /duringSessionAcceptsSessionWork/);
+  assert.match(live, /isHardChallengeReserve/);
 });
 
 test("the reserve title is not SAT pre-work and not the in-session practice quiz", () => {

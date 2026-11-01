@@ -19,6 +19,7 @@ import {
 } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
 import { selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
+import { isHardChallengeReserve } from "./sat-hard-reserve-plan.ts";
 import { logger } from "./logger.ts";
 import {
   composeOct30HardPrework,
@@ -263,7 +264,7 @@ async function liveDuringAssignments(sessionId: string) {
       ),
     )
     .orderBy(asc(assignmentsTable.createdAt));
-  return rows.filter((row) => row.status !== "archived");
+  return rows.filter((row) => row.status !== "archived" && !isHardChallengeReserve(row));
 }
 
 async function markSessionNeedsHardQuestions(sessionId: string, summary: string) {
