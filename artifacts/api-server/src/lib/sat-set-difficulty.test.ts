@@ -469,8 +469,11 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.doesNotMatch(prep, /ensureHardSatSessionSets/);
   assert.match(prep, /describeHardSatSessionPrep/);
   const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const seenUsage = readFileSync(new URL("./sat-bank-usage.ts", import.meta.url), "utf8");
   assert.match(hardSets, /status: "attempted"/);
-  assert.match(hardSets, /satBankUsageCountsAsSeen/);
+  assert.match(seenUsage, /satBankUsageCountsAsSeen/);
+  assert.match(hardSets, /loadSeenSatBankUsage/);
+  assert.match(hardSets, /selectRoutinePreworkFromOneForm/);
   assert.match(hardSets, /ne\(assignmentsTable\.status, "archived"\)/);
   assert.match(hardSets, /raiseHardSatShortfallAlert/);
   assert.match(hardSets, /everyKeyIsHard/);

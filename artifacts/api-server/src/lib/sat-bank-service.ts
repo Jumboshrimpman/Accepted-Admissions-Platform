@@ -74,6 +74,11 @@ import {
   selectQuestionsForCountBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
+import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
+import {
+  selectRoutinePreworkFromOneForm,
+  type RoutineFormQuestion,
+} from "./sat-routine-form.ts";
 import {
   planBankReimportDiff,
   reimportApplySourceKeys,
@@ -1182,6 +1187,78 @@ async function archiveSessionPrework(sessionId: string) {
   }
 }
 
+/**
+ * Usable official SAT MCQs for the one-form pre-work draw.
+ * PSAT rows and original-hard rows stay out. Module 1 stays in.
+ */
+export async function loadRoutineSatFormPool(): Promise<RoutineFormQuestion[]> {
+  const rows = await db
+    .select()
+    .from(bankQuestionsTable)
+    .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber));
+  const usable = rows.filter((row) => {
+    if (row.sourceKind === "original_hard") return false;
+    if (!isOfficialSatExtract(row)) return false;
+    const choices = Array.isArray(row.choices) ? row.choices : [];
+    const extractGaps = (row.extractGaps ?? {}) as {
+      missingPrompt?: boolean;
+      missingChoices?: boolean;
+      figurePrimary?: boolean;
+    };
+    if (
+      !isAssignableBankItem({
+        prompt: row.prompt,
+        questionType: row.questionType,
+        choices,
+        correctAnswer: row.correctAnswer,
+        extractGaps,
+      })
+    ) {
+      return false;
+    }
+    if (!isTutorQuizMcq(row.questionType)) return false;
+    if (
+      !isMultipleChoiceQuizItem({
+        questionType: row.questionType,
+        choices,
+        correctAnswer: row.correctAnswer,
+      })
+    ) {
+      return false;
+    }
+    return isStudentUsableQuizItem(bankRowForDiagnostic(row));
+  });
+  return usable.map((row) => ({
+    id: row.id,
+    sourceKey: row.sourceKey,
+    section: row.section,
+    examFamily: row.examFamily,
+    practiceTestNumber: row.practiceTestNumber,
+    position: row.position,
+  }));
+}
+
+async function routineFormUsedPracticeTests(session: {
+  id: string;
+  clientUserId: string | null;
+}): Promise<Set<number>> {
+  if (!session.clientUserId) return new Set();
+  const own = await db
+    .select({ id: assignmentsTable.id })
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, session.id),
+        eq(assignmentsTable.deliveryPhase, "before_session"),
+      ),
+    );
+  const seen = await loadSeenSatBankUsage(
+    session.clientUserId,
+    own.map((row) => row.id),
+  );
+  return seen.practiceTests;
+}
+
 export async function assignPreworkFromBank(input: {
   sessionId: string;
   actorUserId?: string | null;
@@ -1191,7 +1268,10 @@ export async function assignPreworkFromBank(input: {
   targetMinutes?: number;
   skipArchiveExisting?: boolean;
   mcqOnly?: boolean;
-  /** Hard draws late module 2 items. Standard keeps the existing routine selector. */
+  /**
+   * Hard with explicit bank ids keeps the module 2 plan.
+   * Routine pre-work with no explicit ids draws one official SAT form.
+   */
   difficulty?: SatDifficulty;
   excludeSourceKeys?: ReadonlySet<string>;
   seenPracticeTests?: ReadonlySet<number>;
@@ -1344,23 +1424,39 @@ export async function assignPreworkFromBank(input: {
       assignBlocked: true,
     });
   }
+  const explicitOrder = explicitCollection || explicitIds;
+  const formDraw = homeworkKind === "routine" && !hardMode && !explicitOrder;
+  const usedPracticeTests = formDraw ? await routineFormUsedPracticeTests(session) : null;
   const selected =
     homeworkKind === "diagnostic"
       ? (composed?.selected ?? []).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
       : hardMode
         ? pool
-        : selectQuestionsForCountBudget(
-            pool.map((row) => ({
-              id: row.id,
-              section: row.section as "rw" | "math",
-              skill: row.skill,
-              estimatedSeconds: row.estimatedSeconds,
-              position: row.position,
-            })),
-            {
-              preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
-            },
-          ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
+        : formDraw
+          ? selectRoutinePreworkFromOneForm(
+              pool.map((row) => ({
+                id: row.id,
+                sourceKey: row.sourceKey,
+                section: row.section,
+                examFamily: row.examFamily,
+                practiceTestNumber: row.practiceTestNumber,
+                position: row.position,
+              })),
+              { seed: session.id, usedPracticeTests: usedPracticeTests ?? new Set() },
+            ).selected.flatMap((item) => {
+              const row = pool.find((candidate) => candidate.id === item.id);
+              return row ? [row] : [];
+            })
+          : selectQuestionsForCountBudget(
+              pool.map((row) => ({
+                id: row.id,
+                section: row.section as "rw" | "math",
+                skill: row.skill,
+                estimatedSeconds: row.estimatedSeconds,
+                position: row.position,
+              })),
+              { preferOriginalOrder: true },
+            ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
   const routineItems = hardMode
     ? selected.flatMap((row) => {
         const facing = hardSatStudentFacing(toRenderableHardSatInput(row));
