@@ -643,6 +643,26 @@ async function notifyOct30ReadingLeftInPlace(session: SessionRow): Promise<void>
   );
 }
 
+async function hardReserveSourceKeys(sessionId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ sourceKey: bankQuestionsTable.sourceKey })
+    .from(assignmentQuestionsTable)
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId))
+    .innerJoin(
+      bankQuestionsTable,
+      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
+    )
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, sessionId),
+        eq(assignmentsTable.deliveryPhase, "during_session"),
+        eq(assignmentsTable.hardChallengeReserve, true),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    );
+  return new Set(rows.map((row) => row.sourceKey).filter((key): key is string => Boolean(key)));
+}
+
 type ClassifiedRoutinePrework = {
   row: { id: string };
   keys: string[];
@@ -671,7 +691,9 @@ async function assignOfficialFormPrework(
     ? await loadSeenSatBankUsage(session.clientUserId, replaceableIds)
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
   const sections = await satSectionsForSession(session);
+  const reserveKeys = await hardReserveSourceKeys(session.id);
   const pool = (await loadRoutineSatFormPool()).filter((item) => {
+    if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
     if (sections.includes("rw") && sections.includes("math")) return true;
     return sections.includes(item.section === "math" ? "math" : "rw");
   });
@@ -710,6 +732,7 @@ async function assignOfficialFormPrework(
       skipArchiveExisting: false,
       bankQuestionIds: picked.selected.map((item) => item.id),
       archiveAssignmentIds: replaceableIds,
+      allowSingleSection: sectionRestricted,
     });
     if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
       await raiseHardSatShortfallAlert(

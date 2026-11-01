@@ -1281,6 +1281,8 @@ export async function assignPreworkFromBank(input: {
    * archive-all behavior for non-hard assigns.
    */
   archiveAssignmentIds?: readonly string[];
+  /** Skip the both-sections rule for a student limited to one section. */
+  allowSingleSection?: boolean;
 }): Promise<{
   planId: string;
   assignmentId: string;
@@ -1512,7 +1514,11 @@ export async function assignPreworkFromBank(input: {
       },
     );
   }
-  if (homeworkKind === "routine" && !hardMode && !canAssignCleanStudentQuizSet(routineItems)) {
+  if (
+    homeworkKind === "routine" &&
+    !hardMode &&
+    !canAssignCleanStudentQuizSet(routineItems, { allowSingleSection: input.allowSingleSection })
+  ) {
     throw Object.assign(
       new Error(
         formatDiagnosticAssignBlock(routineComposition ?? summarizeDiagnosticComposition([])).replace(
