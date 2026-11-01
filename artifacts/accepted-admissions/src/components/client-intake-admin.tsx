@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,50 +27,66 @@ type IntakeAssignment = {
   response: IntakeResponse | null;
 };
 
-export function ClientIntakeAdmin({
+export function submittedIntakeCount(rows: readonly IntakeAssignment[]): number {
+  return rows.filter((row) => row.status === "completed").length;
+}
+
+export function clientIntakeSummary(assigned: number, submitted: number): string {
+  if (assigned === 0) return "No intakes assigned yet.";
+  return `${assigned} client${assigned === 1 ? "" : "s"} · ${submitted} submitted`;
+}
+
+export function useClientIntakes() {
+  const [rows, setRows] = useState<IntakeAssignment[]>([]);
+
+  const reload = useCallback(() => {
+    if (typeof customFetch !== "function") return Promise.resolve();
+    return customFetch<{ assignments?: IntakeAssignment[] }>("/api/admin/client-intakes")
+      .then((payload) => setRows(payload.assignments ?? []))
+      .catch(() => setRows([]));
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const assign = useCallback(async (clientUserId: string) => {
+    if (!clientUserId || typeof customFetch !== "function") return;
+    await customFetch("/api/admin/client-intakes", {
+      method: "POST",
+      body: JSON.stringify({ clientUserId }),
+    });
+    await reload();
+  }, [reload]);
+
+  return { rows, assign };
+}
+
+function ClientIntakeBody({
   students,
+  rows,
+  onAssign,
 }: {
   students: Array<{ id: string; displayName: string }>;
+  rows: IntakeAssignment[];
+  onAssign: (clientUserId: string) => Promise<void>;
 }) {
-  const [rows, setRows] = useState<IntakeAssignment[]>([]);
   const [clientUserId, setClientUserId] = useState("");
   const [message, setMessage] = useState("");
 
-  const load = () => {
-    if (typeof customFetch !== "function") return;
-    customFetch<{ assignments?: IntakeAssignment[] }>("/api/admin/client-intakes")
-      .then((payload) => setRows(payload.assignments ?? []))
-      .catch(() => setRows([]));
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
   const assign = async () => {
-    if (!clientUserId || typeof customFetch !== "function") return;
+    if (!clientUserId) return;
     setMessage("");
     try {
-      await customFetch("/api/admin/client-intakes", {
-        method: "POST",
-        body: JSON.stringify({ clientUserId }),
-      });
+      await onAssign(clientUserId);
       setMessage("Intake assigned.");
-      load();
     } catch {
       setMessage("That client could not be assigned.");
     }
   };
 
   return (
-    <Card data-testid="card-client-intake">
-      <CardHeader>
-        <CardTitle>Client intake</CardTitle>
-        <CardDescription>
-          Assign the intake to any client. Neel and Sophia already see it in their portals. Answers stay on this dashboard.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
         <details className="rounded-xl border p-3">
           <summary className="cursor-pointer font-medium">Assign to a client</summary>
           <div className="mt-3 flex flex-col gap-2">
@@ -130,7 +146,46 @@ export function ClientIntakeAdmin({
             ))}
           </div>
         )}
+    </div>
+  );
+}
+
+function OwnedClientIntakeCard({
+  students,
+}: {
+  students: Array<{ id: string; displayName: string }>;
+}) {
+  const { rows, assign } = useClientIntakes();
+  return (
+    <Card data-testid="card-client-intake">
+      <CardHeader>
+        <CardTitle>Client intake</CardTitle>
+        <CardDescription>
+          Assign the intake to any client. Neel and Sophia already see it in their portals. Answers stay on this dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ClientIntakeBody students={students} rows={rows} onAssign={assign} />
       </CardContent>
     </Card>
   );
+}
+
+export function ClientIntakeAdmin(
+  props:
+    | {
+        contentOnly: true;
+        students: Array<{ id: string; displayName: string }>;
+        rows: IntakeAssignment[];
+        onAssign: (clientUserId: string) => Promise<void>;
+      }
+    | {
+        contentOnly?: false;
+        students: Array<{ id: string; displayName: string }>;
+      },
+) {
+  if (props.contentOnly) {
+    return <ClientIntakeBody students={props.students} rows={props.rows} onAssign={props.onAssign} />;
+  }
+  return <OwnedClientIntakeCard students={props.students} />;
 }

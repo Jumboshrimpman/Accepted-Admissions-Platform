@@ -163,10 +163,33 @@ const mocks = vi.hoisted(() => ({
       }>;
     }>,
   },
+  questionReports: [] as Array<{
+    id: string;
+    assignmentTitle: string;
+    questionIndex: number;
+    studentName: string;
+    studentEmail: string;
+    reason: string;
+    note: string | null;
+    stemSnippet: string;
+    status: string;
+    createdAt: string;
+  }>,
+  intakeAssignments: [] as Array<{
+    id: string;
+    clientUserId: string;
+    clientDisplayName: string;
+    status: string;
+    completedAt: string | null;
+    response: null;
+  }>,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  customFetch: async () => ({ reports: [] }),
+  customFetch: vi.fn(async (path: string) => {
+    if (String(path).includes("client-intakes")) return { assignments: mocks.intakeAssignments };
+    return { reports: mocks.questionReports };
+  }),
   getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
   getGetAdminCurriculumQueryKey: () => ["/api/admin/curriculum"],
   getListAdminAccessGrantsQueryKey: () => ["/api/admin/access-grants"],
@@ -271,12 +294,20 @@ afterEach(() => {
   mocks.overview.guidanceRequests = [];
   mocks.overview.consultingProvision = undefined;
   mocks.overview.calendarReconnectAlerts = [];
+  mocks.questionReports = [];
+  mocks.intakeAssignments = [];
   mocks.curriculum.clients = [];
   mocks.curriculum.tutors = [];
   mocks.curriculum.programs = [];
   mocks.curriculum.sessions = [];
   mocks.overview.users = [];
 });
+
+function openAdminSection(testId: string) {
+  const details = screen.getByTestId(testId) as HTMLDetailsElement;
+  fireEvent.click(details.querySelector("summary")!);
+  return details;
+}
 
 function assignmentNotification(
   id: string,
@@ -324,6 +355,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-admin-notifications");
 
     expect(screen.getByRole("heading", { name: "Needs attention" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Prior notifications" })).toBeTruthy();
@@ -358,6 +390,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-admin-notifications");
 
     expect(screen.getByTestId("notification-notification-3")).toBeTruthy();
     expect(screen.getByTestId("notification-notification-2")).toBeTruthy();
@@ -377,6 +410,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-admin-notifications");
 
     const priorDisclosure = screen.getByTestId("prior-notifications") as HTMLDetailsElement;
     expect(screen.getByTestId("notification-notification-unread")).toBeTruthy();
@@ -404,6 +438,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-admin-notifications");
 
     expect(screen.getByTestId("notification-notification-newest")).toBeTruthy();
     expect(screen.getByTestId("notification-notification-4")).toBeTruthy();
@@ -423,6 +458,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-admin-notifications");
 
     fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
     expect(screen.getByTestId("notification-notification-newest")).toBeTruthy();
@@ -513,6 +549,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-student-portals");
 
     expect(screen.getByTestId("card-student-portals").textContent).toMatch(/Student portals/);
     const preview = screen.getByTestId("link-preview-client-student-1");
@@ -539,6 +576,7 @@ describe("administrator overview", () => {
     ];
 
     render(<AdminDashboard />);
+    openAdminSection("card-student-portals");
 
     const preview = screen.getByTestId("link-preview-client-student-1");
     expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
@@ -691,14 +729,69 @@ describe("administrator overview", () => {
 
   test("shows the reported questions queue on admin home", async () => {
     render(<AdminDashboard />);
-    expect(await screen.findByTestId("card-question-reports")).toBeTruthy();
+    const section = await screen.findByTestId("card-question-reports");
+    expect((section as HTMLDetailsElement).open).toBe(false);
+    openAdminSection("card-question-reports");
     expect(screen.getByText(/No open question reports/i)).toBeTruthy();
     expect(screen.getByText(/admin@acceptedadmissions.org/i)).toBeTruthy();
   });
 
+  test("shows the open question-report count in the closed header", async () => {
+    mocks.questionReports = [{
+      id: "report-1",
+      assignmentTitle: "SAT Math",
+      questionIndex: 2,
+      studentName: "Sophia Sleiman",
+      studentEmail: "sophia@example.invalid",
+      reason: "incorrect",
+      note: null,
+      stemSnippet: "If x = 2",
+      status: "open",
+      createdAt: "2026-10-02T15:00:00.000Z",
+    }];
+
+    render(<AdminDashboard />);
+
+    const section = await screen.findByTestId("card-question-reports") as HTMLDetailsElement;
+    expect(await screen.findByText("1 open report")).toBeTruthy();
+    expect(section.open).toBe(false);
+    expect(section.querySelector("summary")?.textContent).toContain("1 open report");
+  });
+
+  test("shows assigned and submitted intake counts in the closed header", async () => {
+    mocks.intakeAssignments = [
+      {
+        id: "intake-1",
+        clientUserId: "student-1",
+        clientDisplayName: "Sophia Sleiman",
+        status: "completed",
+        completedAt: "2026-10-01T12:00:00.000Z",
+        response: null,
+      },
+      {
+        id: "intake-2",
+        clientUserId: "student-2",
+        clientDisplayName: "Neel Dharni",
+        status: "assigned",
+        completedAt: null,
+        response: null,
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    const section = await screen.findByTestId("card-client-intake") as HTMLDetailsElement;
+    expect(await screen.findByText("2 clients · 1 submitted")).toBeTruthy();
+    expect(section.open).toBe(false);
+    expect(section.querySelector("summary")?.textContent).toContain("2 clients · 1 submitted");
+  });
+
   test("shows an empty guidance request state and new total", () => {
     render(<AdminDashboard />);
+    openAdminSection("card-operations");
     const card = screen.getByTestId("card-guidance-requests");
+    expect((card as HTMLDetailsElement).open).toBe(false);
+    openAdminSection("card-guidance-requests");
     expect(card.getAttribute("id")).toBe("guidance-requests");
     expect(card.textContent).toMatch(/Get guidance \/ client-request/i);
     expect(screen.getByRole("link", { name: /Guidance requests/i }).getAttribute("href")).toBe("/admin#guidance-requests");
@@ -737,6 +830,7 @@ describe("administrator overview", () => {
     }];
 
     render(<AdminDashboard />);
+    openAdminSection("card-guidance-requests");
 
     expect(screen.getByTestId("text-guidance-request-student-request-1").textContent).toBe("Taito Goto");
     expect(screen.getByTestId("count-new-guidance-requests").textContent).toBe("1 new");
@@ -801,6 +895,7 @@ describe("administrator overview", () => {
     });
 
     render(<AdminDashboard />);
+    openAdminSection("card-guidance-requests");
     fireEvent.click(screen.getByTestId("details-guidance-request-request-1").querySelector("summary")!);
 
     const saveButton = screen.getByTestId("save-guidance-request-request-1") as HTMLButtonElement;
@@ -881,6 +976,7 @@ describe("administrator overview", () => {
     });
 
     render(<AdminDashboard />);
+    openAdminSection("card-guidance-requests");
     fireEvent.click(screen.getByTestId("details-guidance-request-request-1").querySelector("summary")!);
     fireEvent.change(screen.getByLabelText("Assigned administrator"), { target: { value: "administrator-1" } });
     fireEvent.click(screen.getByTestId("save-guidance-request-request-1"));
@@ -968,6 +1064,7 @@ describe("administrator overview", () => {
       "2026-10-02T15:00:00.000Z",
     );
 
+    openAdminSection("card-guidance-requests");
     fireEvent.click(screen.getByTestId("resolve-form-submission-sleiman"));
     expect(mocks.updateGuidanceRequest).toHaveBeenCalledWith(
       { requestId: "sleiman", data: { resolved: true } },
@@ -1015,6 +1112,9 @@ describe("administrator overview", () => {
     };
 
     render(<AdminDashboard />);
+    const notice = screen.getByTestId("consulting-provision-notice");
+    expect((notice.querySelector("details") as HTMLDetailsElement).open).toBe(false);
+    openAdminSection("details-consulting-provision");
 
     const neel = screen.getByTestId("consulting-neel-email-owner");
     expect(neel.textContent).toContain("Existing Student");
@@ -1048,6 +1148,7 @@ describe("administrator overview", () => {
     };
 
     render(<AdminDashboard />);
+    openAdminSection("details-consulting-provision");
 
     expect(screen.getByText(/victoriawije7@gmail.com at \/login, then \/tutor/)).toBeTruthy();
     expect(screen.getByText(/Google sign-in uses that address/)).toBeTruthy();
@@ -1079,6 +1180,7 @@ describe("administrator overview", () => {
     expect(alert.textContent).toContain(message);
     expect(screen.getByTestId("resolve-manual-calendar-invite-manual-invite").textContent).toBe("Resolve");
     expect(screen.queryByTestId("notification-manual-invite")).toBeNull();
+    openAdminSection("card-admin-notifications");
     expect(screen.getByTestId("notification-assignment-unread")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("resolve-manual-calendar-invite-manual-invite"));
@@ -1108,5 +1210,91 @@ describe("administrator overview", () => {
     expect(screen.getByTestId("link-calendar-reconnect-eunice-profile").getAttribute("href")).toBe(
       "/admin/connections",
     );
+  });
+
+  test("puts upcoming sessions first and starts every other section collapsed", () => {
+    mocks.overview.notifications = [
+      assignmentNotification("notification-1", "2026-09-01T12:00:00.000Z"),
+    ];
+    mocks.overview.consultingProvision = {
+      nikaEmail: "nika.raiffe@gmail.com",
+      nikaClerkUserId: null,
+      nikaBookable: true,
+      nikaSkipReason: null,
+      neelLinked: true,
+      neelUserId: "neel-1",
+      neelEmail: "ndharni300@gmail.com",
+      neelStoppedReason: null,
+      neelEmailOwner: null,
+      victoriaLinked: true,
+      victoriaUserId: "victoria-1",
+      victoriaPlaceholderEmail: "samakubba@icloud.com",
+      victoriaIntendedEmail: "victoriawije7@gmail.com",
+      victoriaEmail: "victoriawije7@gmail.com",
+      victoriaStoppedReason: null,
+      victoriaEmailOwner: null,
+    };
+
+    render(<AdminDashboard />);
+
+    const heading = screen.getByRole("heading", { name: "Admin overview" });
+    const upcoming = screen.getByTestId("card-upcoming-sessions");
+    expect(heading.parentElement?.nextElementSibling).toBe(upcoming);
+    expect(upcoming.querySelector("details")).toBeNull();
+    expect(upcoming.textContent).toContain("Next scheduled appointments.");
+    expect(screen.queryByTestId("essay-requests-admin")).toBeNull();
+
+    let previous: HTMLElement = upcoming;
+    for (const testId of [
+      "card-question-reports",
+      "card-client-intake",
+      "card-operations",
+      "card-student-portals",
+      "card-admin-notifications",
+      "details-consulting-provision",
+      "card-guidance-requests",
+      "card-login-activity",
+    ]) {
+      const details = screen.getByTestId(testId) as HTMLDetailsElement;
+      expect(details.tagName).toBe("DETAILS");
+      expect(details.open).toBe(false);
+      expect(previous.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      previous = details;
+    }
+  });
+
+  test("hides college consulting provisioning when there is nothing to report", () => {
+    render(<AdminDashboard />);
+    expect(screen.queryByTestId("consulting-provision-notice")).toBeNull();
+    expect(screen.queryByTestId("details-consulting-provision")).toBeNull();
+  });
+
+  test("shows a stopped consulting provision in the collapsed summary", () => {
+    mocks.overview.consultingProvision = {
+      nikaEmail: "nika.raiffe@gmail.com",
+      nikaClerkUserId: null,
+      nikaBookable: true,
+      nikaSkipReason: null,
+      neelLinked: false,
+      neelUserId: "neel-1",
+      neelEmail: "samakubba@gmail.com",
+      neelStoppedReason: "email_owned_by_other_user",
+      neelEmailOwner: null,
+      victoriaLinked: false,
+      victoriaUserId: "victoria-1",
+      victoriaPlaceholderEmail: "samakubba@icloud.com",
+      victoriaIntendedEmail: "victoriawije7@gmail.com",
+      victoriaEmail: "samakubba@icloud.com",
+      victoriaStoppedReason: "email_owned_by_other_user",
+      victoriaEmailOwner: null,
+    };
+
+    render(<AdminDashboard />);
+
+    const notice = screen.getByTestId("consulting-provision-notice");
+    const details = screen.getByTestId("details-consulting-provision") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(notice.className).toMatch(/bg-amber-50/);
+    expect(details.querySelector("summary")?.textContent).toContain("Neel and Victoria need attention.");
   });
 });
