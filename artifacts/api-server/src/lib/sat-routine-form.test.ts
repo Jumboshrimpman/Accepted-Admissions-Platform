@@ -177,3 +177,53 @@ test("official SAT packs yield 40 from one form and never a PSAT item", async ()
   const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
   assert.match(hardSets, /if \(!oct30\) \{\s*return assignOfficialFormPrework/);
 });
+
+test("rw-only selection skips a form that cannot fill 40 reading items", async () => {
+  const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
+  const files = await listOfficialExtractFiles(root);
+  const records = [];
+  for (const file of files) {
+    const parsed = parseCollegeBoardPayload(await readFile(file, "utf8"), path.basename(file));
+    records.push(...parsed.records);
+  }
+  const usable = records
+    .filter((row) => isOfficialSatExtract(row) && isStudentUsableQuizItem(row))
+    .map((row) => ({ ...row, id: row.sourceKey }));
+  const forms = [4, 5, 6, 7, 8, 9, 10, 11];
+  const rwPool = usable.filter((row) => row.section === "rw");
+  const rwByForm = new Map<number, number>();
+  for (const row of rwPool) {
+    const practiceTestNumber = row.practiceTestNumber ?? 0;
+    rwByForm.set(practiceTestNumber, (rwByForm.get(practiceTestNumber) ?? 0) + 1);
+  }
+  assert.ok((rwByForm.get(8) ?? 0) < 40, "form 8 cannot fill a 40-item reading set");
+  for (const practiceTestNumber of forms) {
+    if (practiceTestNumber === 8) continue;
+    assert.ok((rwByForm.get(practiceTestNumber) ?? 0) >= 40, `form ${practiceTestNumber} rw`);
+  }
+  const othersUsed = new Set(forms.filter((form) => form !== 8));
+  const unrestricted = selectRoutinePreworkFromOneForm(usable, {
+    seed: "form-8-open",
+    usedPracticeTests: othersUsed,
+  });
+  assert.equal(unrestricted.practiceTestNumber, 8);
+  assert.equal(unrestricted.selected.length, 40);
+  assert.equal(unrestricted.recycled, false);
+  const restricted = selectRoutinePreworkFromOneForm(rwPool, {
+    seed: "form-8-open",
+    usedPracticeTests: othersUsed,
+    requireFullCount: true,
+  });
+  assert.notEqual(restricted.practiceTestNumber, 8);
+  assert.equal(restricted.selected.length, 40);
+  assert.equal(restricted.selected.every((row) => row.section === "rw"), true);
+  assert.equal(restricted.recycled, true);
+  const onlyShortUnused = selectRoutinePreworkFromOneForm(rwPool, {
+    seed: "short-unused",
+    usedPracticeTests: new Set([4, 5, 6, 7, 9, 10, 11]),
+    requireFullCount: true,
+  });
+  assert.notEqual(onlyShortUnused.practiceTestNumber, 8);
+  assert.equal(onlyShortUnused.selected.length, 40);
+  assert.equal(onlyShortUnused.selected.every((row) => row.section === "rw"), true);
+});

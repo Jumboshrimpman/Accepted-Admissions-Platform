@@ -112,6 +112,12 @@ export function selectRoutinePreworkFromOneForm<T extends RoutineFormQuestion>(
     seed: string;
     usedPracticeTests?: ReadonlySet<number>;
     targetCount?: number;
+    /**
+     * Skip a form that cannot fill the target, including when it is the last
+     * unused form, and take the next form that can. Used for a section-restricted
+     * student whose filtered pool is short on one form. Omit for the mixed draw.
+     */
+    requireFullCount?: boolean;
   },
 ): RoutineFormPick<T> {
   const target = Math.min(
@@ -128,17 +134,41 @@ export function selectRoutinePreworkFromOneForm<T extends RoutineFormQuestion>(
     byForm.set(practiceTestNumber, list);
   }
   const forms = [...byForm.keys()].sort((left, right) => left - right);
-  const unused = forms.filter((practiceTestNumber) => !used.has(practiceTestNumber));
-  const recycled = unused.length === 0 && forms.length > 0;
-  const candidates = unused.length > 0 ? unused : forms;
-  let best: RoutineFormPick<T> | null = null;
-  for (const practiceTestNumber of candidates) {
+  const drawn = new Map<number, T[]>();
+  const draw = (practiceTestNumber: number) => {
+    const cached = drawn.get(practiceTestNumber);
+    if (cached) return cached;
     const selected = drawBalancedFromForm(
       byForm.get(practiceTestNumber) ?? [],
       options.seed,
       practiceTestNumber,
       target,
     );
+    drawn.set(practiceTestNumber, selected);
+    return selected;
+  };
+  if (options.requireFullCount) {
+    const unusedFull = forms.filter(
+      (practiceTestNumber) => !used.has(practiceTestNumber) && draw(practiceTestNumber).length >= target,
+    );
+    const full = unusedFull.length > 0
+      ? unusedFull
+      : forms.filter((practiceTestNumber) => draw(practiceTestNumber).length >= target);
+    const practiceTestNumber = full[0];
+    if (practiceTestNumber != null) {
+      return {
+        selected: draw(practiceTestNumber),
+        practiceTestNumber,
+        recycled: used.has(practiceTestNumber),
+      };
+    }
+  }
+  const unused = forms.filter((practiceTestNumber) => !used.has(practiceTestNumber));
+  const recycled = unused.length === 0 && forms.length > 0;
+  const candidates = unused.length > 0 ? unused : forms;
+  let best: RoutineFormPick<T> | null = null;
+  for (const practiceTestNumber of candidates) {
+    const selected = draw(practiceTestNumber);
     if (selected.length >= target) {
       return { selected, practiceTestNumber, recycled };
     }

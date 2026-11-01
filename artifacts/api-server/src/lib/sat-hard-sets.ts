@@ -675,9 +675,13 @@ async function assignOfficialFormPrework(
     if (sections.includes("rw") && sections.includes("math")) return true;
     return sections.includes(item.section === "math" ? "math" : "rw");
   });
+  const sectionRestricted =
+    (sections.includes("rw") && !sections.includes("math")) ||
+    (sections.includes("math") && !sections.includes("rw"));
   const picked = selectRoutinePreworkFromOneForm(pool, {
     seed: session.id,
     usedPracticeTests: seen.practiceTests,
+    requireFullCount: sectionRestricted,
   });
   if (picked.selected.length !== HARD_SAT_PREWORK_QUESTIONS) {
     await raiseHardSatShortfallAlert(
