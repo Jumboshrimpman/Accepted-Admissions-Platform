@@ -164,6 +164,63 @@ test("a generic title with a session tail never leaks the client or tutor", () =
   assert.equal(taito.text.includes(taitoTitle), false);
   assert.equal(taito.subject.includes("Eunice"), false);
   assert.equal(taito.text.includes("Taito's"), false);
+  assert.equal(taito.subject, "Before your session: quiz");
+  assert.equal(taito.subject.includes("SAT"), false);
+});
+
+test("a hand-typed topic after a dash is kept", () => {
+  const { subject, text, html } = preworkReminderEmail({
+    studentName: "Michelle Makarem",
+    assignmentTitle: "Quiz — WWI causes",
+    subject: "SAT Math",
+    sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
+    sessionTimezone: "America/New_York",
+    clientTimezone: "America/New_York",
+    dueAt: new Date("2026-11-01T13:00:00.000Z"),
+    dueSource: "session_start",
+    assignmentId: "assignment-wwi",
+    questionCount: null,
+  });
+  assert.match(subject, /WWI causes/);
+  assert.match(text, /WWI causes/);
+  assert.match(html, /WWI causes/);
+  assert.equal(
+    preworkReminderQuizLabel("Quiz - WWI causes", null),
+    "Quiz - WWI causes",
+  );
+});
+
+test("generated session titles do not leak a client or tutor name", () => {
+  const names = ["Michelle", "Xavier", "Taito", "Eunice"];
+  const titles = [
+    "SAT pre-work (30–50 questions) — Michelle's SAT Session with Xavier",
+    "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+    "SAT diagnostic (40 clean questions) — Michelle's SAT Session with Xavier",
+    "During session practice — Michelle's SAT Session with Xavier",
+    "60-minute SAT pre-work — Michelle's SAT Session with Xavier",
+    "Hard In-Session Set (20 questions) — Michelle's SAT Session with Xavier",
+    "SAT capability test — Xavier",
+    "SAT capability test — Xavier spelling abc",
+  ];
+  for (const assignmentTitle of titles) {
+    const { subject, text, html } = preworkReminderEmail({
+      studentName: "Alex Student",
+      assignmentTitle,
+      subject: "SAT Math",
+      sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
+      sessionTimezone: "America/New_York",
+      clientTimezone: "America/New_York",
+      dueAt: new Date("2026-11-01T13:00:00.000Z"),
+      dueSource: "session_start",
+      assignmentId: "assignment-generated",
+      questionCount: 40,
+    });
+    for (const name of names) {
+      assert.equal(subject.includes(name), false, subject);
+      assert.equal(text.includes(name), false, `${assignmentTitle} → ${text}`);
+      assert.equal(html.includes(name), false, assignmentTitle);
+    }
+  }
 });
 
 test("the subject is the quiz name, with no client or tutor in it", () => {
