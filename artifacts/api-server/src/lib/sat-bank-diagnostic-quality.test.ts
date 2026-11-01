@@ -1848,6 +1848,60 @@ test("fail-closed student quiz set rejects junk, SPR, and one-section sets", () 
   );
 });
 
+test("a clean 40-item reading-only set assigns only when a single section is allowed", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const reading = Array.from({ length: 40 }, (_, index) => ({
+    id: `rw-${index + 1}`,
+    section: "rw",
+    prompt: "Which choice completes the text with the most logical and precise word or phrase?",
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  }));
+  assert.equal(canAssignCleanStudentQuizSet(reading), false);
+  assert.equal(canAssignCleanStudentQuizSet(reading, { allowSingleSection: true }), true);
+});
+
+test("a single-section allowance still rejects junk and leaked SPR", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const rw = {
+    id: "rw-1",
+    section: "rw",
+    prompt: "Which choice completes the text with the most logical and precise word or phrase?",
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const junk = {
+    id: "rw-junk",
+    section: "rw",
+    prompt: "2 –4x –7x = –36",
+    choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const spr = {
+    ...rw,
+    id: "spr",
+    questionType: "spr",
+    correctAnswer: "9; 9.0",
+    choices: [],
+  };
+  assert.equal(canAssignCleanStudentQuizSet([rw, junk], { allowSingleSection: true }), false);
+  assert.equal(canAssignCleanStudentQuizSet([rw, spr], { allowSingleSection: true }), false);
+  assert.equal(canAssignCleanStudentQuizSet([rw], { allowSingleSection: false }), false);
+});
+
 test("routine SAT pre-work from official SAT packs is a short clean mixed set", async () => {
   const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
   const files = (await listOfficialExtractFiles(root)).filter((file) =>

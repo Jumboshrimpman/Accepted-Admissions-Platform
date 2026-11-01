@@ -757,15 +757,19 @@ export function isOfficialSatExtract(row: {
 /**
  * Same fail-closed assign bar for diagnostics and routine SAT pre-work:
  * residual junk, leaked SPR, or an empty RW/Math section cannot ship.
+ * `allowSingleSection` skips only the both-sections requirement, for a student
+ * whose hard bank is configured to one section. Junk and SPR still block.
  */
 export function canAssignCleanStudentQuizSet(
   selected: readonly DiagnosticQualityInput[],
+  options?: { allowSingleSection?: boolean },
 ): boolean {
   if (selected.length === 0) return false;
   if (auditQuizItems(selected).residualJunk > 0) return false;
   if (selected.some((item) => isTrueSprQuizItem(item) || !auditStudentQuizItem(item).ok)) {
     return false;
   }
+  if (options?.allowSingleSection === true) return true;
   let rwCount = 0;
   let mathCount = 0;
   for (const item of selected) {

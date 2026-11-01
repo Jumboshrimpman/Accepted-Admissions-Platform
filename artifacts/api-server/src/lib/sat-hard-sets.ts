@@ -710,6 +710,7 @@ async function assignOfficialFormPrework(
       skipArchiveExisting: false,
       bankQuestionIds: picked.selected.map((item) => item.id),
       archiveAssignmentIds: replaceableIds,
+      allowSingleSection: sectionRestricted,
     });
     if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
       await raiseHardSatShortfallAlert(
