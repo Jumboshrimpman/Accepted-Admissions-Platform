@@ -11,6 +11,7 @@ export type HardReserveCandidate = {
   sourceKey: string;
   examFamily?: string | null;
   sourceKind?: string | null;
+  section?: string | null;
   /** False when the row is not from the renderable module-2 hard bank. */
   inHardPool?: boolean;
 };
@@ -123,15 +124,20 @@ export function selectHardReserve<T extends HardReserveCandidate>(
     target?: number;
     excludeSourceKeys?: ReadonlySet<string>;
     excludeIds?: ReadonlySet<string>;
+    /** Omit for both sections. A single section drops the other. */
+    sections?: readonly ("rw" | "math")[] | null;
   },
 ): HardReservePick<T> {
   const target = hardReserveTarget(options.target);
   const excludeKeys = options.excludeSourceKeys ?? new Set<string>();
   const excludeIds = options.excludeIds ?? new Set<string>();
+  const allowed = options.sections?.filter((section) => section === "rw" || section === "math") ?? [];
+  const restrict = allowed.length === 1 ? allowed[0] : null;
   const unique = new Map<string, T>();
   for (const item of items) {
     if (!item.sourceKey || unique.has(item.sourceKey)) continue;
     if (item.inHardPool === false) continue;
+    if (restrict && item.section !== restrict) continue;
     if (excludeKeys.has(item.sourceKey) || excludeIds.has(item.id)) continue;
     if (
       !isOfficialSatExtract({

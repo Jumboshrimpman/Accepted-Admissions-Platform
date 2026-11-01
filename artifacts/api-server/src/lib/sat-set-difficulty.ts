@@ -15,6 +15,8 @@ import {
   routinePreworkTimeLimitMinutes,
 } from "./sat-bank-timing.ts";
 import { MAX_IN_SESSION_HOMEWORK_QUESTIONS } from "./session-homework.ts";
+import { SOPHIA_SLEIMAN_DISPLAY_NAME } from "./portal-login-aliases.ts";
+import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import {
   TAITO_FALL_2026_SESSIONS,
   TAITO_STUDENT_DISPLAY_NAME,
@@ -31,8 +33,12 @@ import {
  */
 export type SatDifficulty = "standard" | "hard";
 
+export type SatPracticeSection = "rw" | "math";
+
 export type SatDifficultySetting = {
   email?: string;
+  /** Portal user id. Matches even when the contact email is not on the setting. */
+  userId?: string;
   /** Used only when the session has no student email yet. */
   nameIncludes?: string;
   difficulty: SatDifficulty;
@@ -42,9 +48,15 @@ export type SatDifficultySetting = {
    * homework-copy cap. This does not raise that cap for other students.
    */
   inSessionQuestionTarget?: number;
+  /**
+   * Hard-bank sections for this student. Omit for both reading-and-writing and math.
+   */
+  sections?: readonly SatPracticeSection[];
 };
 
 export const HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-10-16";
+
+export const SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY = "2026-10-31";
 
 export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
   {
@@ -53,6 +65,13 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
     difficulty: "hard",
     effectiveAfterDateKey: HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
     inSessionQuestionTarget: 20,
+  },
+  {
+    userId: SOPHIA_SLEIMAN_SAT_USER_ID,
+    nameIncludes: SOPHIA_SLEIMAN_DISPLAY_NAME,
+    difficulty: "hard",
+    effectiveAfterDateKey: SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY,
+    sections: ["rw"],
   },
 ];
 
@@ -290,8 +309,14 @@ export function originalHardSatDateKeyForSession(
 export function hardSatSectionQuotas(
   count: number,
   balance: HardSatBalance = "sat",
+  sections?: readonly SatPracticeSection[] | null,
 ): { rw: number; math: number } {
   if (!Number.isFinite(count) || count <= 0) return { rw: 0, math: 0 };
+  if (sections && sections.length > 0) {
+    const allowed = new Set(sections);
+    if (allowed.has("rw") && !allowed.has("math")) return { rw: count, math: 0 };
+    if (allowed.has("math") && !allowed.has("rw")) return { rw: 0, math: count };
+  }
   if (balance === "even") {
     const math = Math.floor(count / 2);
     return { rw: count - math, math };
@@ -525,10 +550,16 @@ export function toRenderableHardSatInput(row: {
 
 function settingMatchesStudent(
   setting: SatDifficultySetting,
-  input: { email?: string | null; displayName?: string | null; sessionTitle?: string | null },
+  input: {
+    email?: string | null;
+    displayName?: string | null;
+    sessionTitle?: string | null;
+    userId?: string | null;
+  },
 ): boolean {
   const email = input.email?.trim().toLowerCase() ?? "";
   const settingEmail = setting.email?.trim().toLowerCase() ?? "";
+  if (setting.userId && input.userId && setting.userId === input.userId) return true;
   if (settingEmail && email === settingEmail) return true;
   if (email) return false;
   const needle = setting.nameIncludes?.trim().toLowerCase() ?? "";
@@ -556,48 +587,52 @@ function dateKeyForSetting(
   return sessionLocalDateKey(session.dateTime, session.timezone || "UTC");
 }
 
-export function satDifficultyForStudent(input: {
+type StudentSatSettingInput = {
   email?: string | null;
   displayName?: string | null;
   sessionTitle?: string | null;
   subject?: string | null;
   sessionDateKey?: string | null;
   session?: { dateTime: Date; timezone?: string | null } | null;
+  userId?: string | null;
   settings?: readonly SatDifficultySetting[];
-}): SatDifficulty {
-  if (input.subject && normalizedSessionSubject(input.subject) !== "SAT") return "standard";
+};
+
+function activeSatSetting(input: StudentSatSettingInput): SatDifficultySetting | null {
+  if (input.subject && normalizedSessionSubject(input.subject) !== "SAT") return null;
   const settings = input.settings ?? SAT_DIFFICULTY_SETTINGS;
   for (const setting of settings) {
     if (!settingMatchesStudent(setting, input)) continue;
     const dateKey = dateKeyForSetting(input.session, input.sessionDateKey, setting);
-    if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return "standard";
-    return setting.difficulty;
+    if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return null;
+    return setting;
   }
-  return "standard";
+  return null;
+}
+
+export function satDifficultyForStudent(input: StudentSatSettingInput): SatDifficulty {
+  return activeSatSetting(input)?.difficulty ?? "standard";
+}
+
+/** Both sections when the student has no restriction. Taito stays on both. */
+export function satSectionsForStudent(input: StudentSatSettingInput): readonly SatPracticeSection[] {
+  const sections = activeSatSetting(input)?.sections;
+  if (!sections || sections.length === 0) return ["rw", "math"];
+  const allowed = sections.filter(
+    (section): section is SatPracticeSection => section === "rw" || section === "math",
+  );
+  return allowed.length > 0 ? [...new Set(allowed)] : ["rw", "math"];
 }
 
 /** Per-student hard in-session length. Other students stay on the shared cap. */
-export function inSessionQuestionTargetForStudent(input: {
-  email?: string | null;
-  displayName?: string | null;
-  sessionTitle?: string | null;
-  subject?: string | null;
-  sessionDateKey?: string | null;
-  session?: { dateTime: Date; timezone?: string | null } | null;
-  settings?: readonly SatDifficultySetting[];
-}): number {
+export function inSessionQuestionTargetForStudent(input: StudentSatSettingInput): number {
   if (input.subject && normalizedSessionSubject(input.subject) !== "SAT") {
     return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
   }
-  const settings = input.settings ?? SAT_DIFFICULTY_SETTINGS;
-  for (const setting of settings) {
-    if (!settingMatchesStudent(setting, input)) continue;
-    const dateKey = dateKeyForSetting(input.session, input.sessionDateKey, setting);
-    if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
-    const target = setting.inSessionQuestionTarget ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
-    return Number.isFinite(target) && target > 0 ? target : HARD_SAT_IN_SESSION_MAX_QUESTIONS;
-  }
-  return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  const setting = activeSatSetting(input);
+  if (!setting) return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  const target = setting.inSessionQuestionTarget ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  return Number.isFinite(target) && target > 0 ? target : HARD_SAT_IN_SESSION_MAX_QUESTIONS;
 }
 
 export function coercePracticeTestNumber(value: unknown): number | null {
@@ -622,15 +657,30 @@ function byHardestFirst<T extends HardSatCandidate>(left: T, right: T): number {
  * Fill a balanced RW/math quota from the hardest remaining items.
  * A short section is topped up from the other section's next-hardest items.
  */
+function restrictToSections<T extends { section: string }>(
+  items: readonly T[],
+  sections?: readonly SatPracticeSection[] | null,
+): readonly T[] {
+  if (!sections || sections.length === 0) return items;
+  const allowed = new Set(sections);
+  if (allowed.has("rw") && allowed.has("math")) return items;
+  return items.filter((item) => {
+    const section = satSection(item.section);
+    return section != null && allowed.has(section);
+  });
+}
+
 function takeBalancedHardestFirst<T extends HardSatCandidate>(
   items: readonly T[],
   limit: number,
   balance: HardSatBalance = "sat",
+  sections?: readonly SatPracticeSection[] | null,
 ): T[] {
   if (limit <= 0) return [];
-  const rw = items.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
-  const math = items.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
-  const quota = hardSatSectionQuotas(limit, balance);
+  const pool = restrictToSections(items, sections);
+  const rw = pool.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
+  const math = pool.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
+  const quota = hardSatSectionQuotas(limit, balance, sections);
   const selectedRw = rw.slice(0, quota.rw);
   const selectedMath = math.slice(0, quota.math);
   const rwShort = quota.rw - selectedRw.length;
@@ -674,6 +724,7 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
     seenPracticeTests?: ReadonlySet<number>;
     originalDateKey?: string | null;
     balance?: HardSatBalance;
+    sections?: readonly SatPracticeSection[] | null;
   } = {},
 ): T[] {
   const maxCount = options.maxCount ?? options.targetCount ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS;
@@ -683,13 +734,13 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
   void options.minCount;
   const unique: T[] = [];
   const seenKeys = new Set<string>();
-  for (const item of items) {
+  for (const item of restrictToSections(items, options.sections)) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
     if (!hardSatPoolEligible(item, options.originalDateKey)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
-  return takeBalancedHardestFirst(unique, targetCount, options.balance ?? "sat").slice(0, maxCount);
+  return takeBalancedHardestFirst(unique, targetCount, options.balance ?? "sat", options.sections).slice(0, maxCount);
 }
 
 function shareScarceSection<T>(
@@ -744,9 +795,10 @@ function allocateHardSatSets<T extends HardSatCandidate>(
   preCount: number,
   inCount: number,
   balance: HardSatBalance = "sat",
+  sections?: readonly SatPracticeSection[] | null,
 ): { prework: T[]; inSession: T[] } {
-  const preQuota = hardSatSectionQuotas(preCount, balance);
-  const inQuota = hardSatSectionQuotas(inCount, balance);
+  const preQuota = hardSatSectionQuotas(preCount, balance, sections);
+  const inQuota = hardSatSectionQuotas(inCount, balance, sections);
   const rwShare = shareScarceSection(rw, preQuota.rw, inQuota.rw, preCount, inCount);
   const mathShare = shareScarceSection(math, preQuota.math, inQuota.math, preCount, inCount);
   const prework = [...rwShare.pre, ...mathShare.pre];
@@ -769,6 +821,7 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
     /** When set, draw only original_hard items for this session date. */
     originalDateKey?: string | null;
     balance?: HardSatBalance;
+    sections?: readonly SatPracticeSection[] | null;
   } = {},
 ): {
   prework: T[];
@@ -790,9 +843,17 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
-  const rw = unique.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
-  const math = unique.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
-  const allocated = allocateHardSatSets(rw, math, preCount, inCount, options.balance ?? "sat");
+  const restricted = restrictToSections(unique, options.sections);
+  const rw = restricted.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
+  const math = restricted.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
+  const allocated = allocateHardSatSets(
+    rw,
+    math,
+    preCount,
+    inCount,
+    options.balance ?? "sat",
+    options.sections,
+  );
   return {
     prework: allocated.prework,
     inSession: allocated.inSession,

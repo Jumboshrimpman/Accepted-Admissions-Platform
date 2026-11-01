@@ -67,6 +67,35 @@ test("hard reserve stays on official SAT hard-pool items and skips PSAT", () => 
   assert.equal(picked.selected.some((row) => row.examFamily === "psat"), false);
 });
 
+test("a reading-only reserve drops math and a both-sections reserve does not", () => {
+  const items = [
+    ...pool(6).map((row) => ({ ...row, section: "rw" as const })),
+    ...pool(6).map((row, index) => ({
+      ...row,
+      id: `sat-math-${index + 1}`,
+      sourceKey: `sat-math-${index + 1}`,
+      section: "math" as const,
+    })),
+  ];
+  const rwOnly = selectHardReserve(items, { seed: "sophia-session", sections: ["rw"] });
+  assert.equal(rwOnly.selected.length, 5);
+  assert.equal(rwOnly.selected.every((row) => row.section === "rw"), true);
+  assert.equal(rwOnly.selected.some((row) => row.section === "math"), false);
+  const both = selectHardReserve(
+    [
+      { ...item(1), section: "rw" },
+      { ...item(2), section: "math" },
+      { ...item(3), section: "math" },
+      { ...item(4), section: "math" },
+      { ...item(5), section: "math" },
+    ],
+    { seed: "taito-session" },
+  );
+  assert.equal(both.selected.length, 5);
+  assert.equal(both.selected.some((row) => row.section === "math"), true);
+  assert.equal(both.selected.some((row) => row.section === "rw"), true);
+});
+
 test("hard reserve does not overlap pre-work or in-session ids", () => {
   const items = pool(12);
   const prework = new Set([items[0]!.id, items[1]!.id]);

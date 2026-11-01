@@ -39,7 +39,9 @@ import {
   planHardSatSessionSets,
   sameSourceKeySet,
   satDifficultyForStudent,
+  satSectionsForStudent,
   toRenderableHardSatInput,
+  type SatPracticeSection,
   type HardSatCandidate,
   type SatDifficulty,
 } from "./sat-set-difficulty.ts";
@@ -60,33 +62,57 @@ function hardInSessionInstructions(target: number, original: boolean): string {
   return `${source} Work through them with your tutor. This is not a timed prediction quiz.`;
 }
 
+async function studentIdentity(clientUserId?: string | null): Promise<{
+  email: string | null;
+  displayName: string | null;
+  userId: string | null;
+}> {
+  if (!clientUserId) return { email: null, displayName: null, userId: null };
+  const [user] = await db
+    .select({ email: usersTable.email, displayName: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, clientUserId))
+    .limit(1);
+  return {
+    email: user?.email ?? null,
+    displayName: user?.displayName ?? null,
+    userId: clientUserId,
+  };
+}
+
 async function hardPlanOptionsForSession(session: {
   dateTime?: Date;
   timezone?: string | null;
   clientUserId?: string | null;
+  subject?: string | null;
+  title?: string | null;
 }): Promise<{
   originalDateKey: string | null;
   balance: "sat" | "even";
+  sections: readonly SatPracticeSection[];
 }> {
-  let email: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   const originalDateKey =
-    session.dateTime && email
+    session.dateTime && identity.email
       ? originalHardSatDateKeyForSession({
           dateTime: session.dateTime,
           timezone: session.timezone,
-          email,
+          email: identity.email,
           clientUserId: session.clientUserId,
         })
       : null;
-  return { originalDateKey, balance: originalDateKey ? "even" : "sat" };
+  return {
+    originalDateKey,
+    balance: originalDateKey ? "even" : "sat",
+    sections: satSectionsForStudent({
+      email: identity.email,
+      displayName: identity.displayName,
+      userId: identity.userId,
+      sessionTitle: session.title,
+      subject: session.subject ?? "SAT",
+      session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
+    }),
+  };
 }
 
 export const HARD_SAT_NEEDS_QUESTIONS_SUMMARY =
@@ -102,23 +128,32 @@ export async function satDifficultyForSession(session: {
   clientUserId?: string | null;
 }): Promise<SatDifficulty> {
   if (normalizedSessionSubject(session.subject) !== "SAT") return "standard";
-  let email: string | null = null;
-  let displayName: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email, displayName: usersTable.displayName })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-    displayName = user?.displayName ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   return satDifficultyForStudent({
-    email,
-    displayName,
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
     sessionTitle: session.title,
     subject: session.subject,
     session,
+  });
+}
+
+export async function satSectionsForSession(session: {
+  subject?: string | null;
+  title?: string | null;
+  dateTime?: Date;
+  timezone?: string | null;
+  clientUserId?: string | null;
+}): Promise<readonly SatPracticeSection[]> {
+  const identity = await studentIdentity(session.clientUserId);
+  return satSectionsForStudent({
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
+    sessionTitle: session.title,
+    subject: session.subject ?? "SAT",
+    session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
   });
 }
 
@@ -129,20 +164,11 @@ async function inSessionTargetForSession(session: {
   timezone?: string | null;
   clientUserId?: string | null;
 }): Promise<number> {
-  let email: string | null = null;
-  let displayName: string | null = null;
-  if (session.clientUserId) {
-    const [user] = await db
-      .select({ email: usersTable.email, displayName: usersTable.displayName })
-      .from(usersTable)
-      .where(eq(usersTable.id, session.clientUserId))
-      .limit(1);
-    email = user?.email ?? null;
-    displayName = user?.displayName ?? null;
-  }
+  const identity = await studentIdentity(session.clientUserId);
   return inSessionQuestionTargetForStudent({
-    email,
-    displayName,
+    email: identity.email,
+    displayName: identity.displayName,
+    userId: identity.userId,
     sessionTitle: session.title,
     subject: session.subject,
     session,
@@ -644,7 +670,11 @@ async function assignOfficialFormPrework(
   const seen = session.clientUserId
     ? await loadSeenSatBankUsage(session.clientUserId, replaceableIds)
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
-  const pool = await loadRoutineSatFormPool();
+  const sections = await satSectionsForSession(session);
+  const pool = (await loadRoutineSatFormPool()).filter((item) => {
+    if (sections.includes("rw") && sections.includes("math")) return true;
+    return sections.includes(item.section === "math" ? "math" : "rw");
+  });
   const picked = selectRoutinePreworkFromOneForm(pool, {
     seed: session.id,
     usedPracticeTests: seen.practiceTests,
