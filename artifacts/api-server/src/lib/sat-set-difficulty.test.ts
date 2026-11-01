@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   canAssignCleanStudentQuizSet,
   composeDiagnosticItems,
+  isOfficialSatExtract,
   isStudentUsableQuizItem,
 } from "./sat-bank-diagnostic-quality.ts";
 import {
@@ -45,6 +46,7 @@ import {
   type HardSatCandidate,
   type RenderableHardSatInput,
 } from "./sat-set-difficulty.ts";
+import { selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
 import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import { TAITO_STUDENT_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
 
@@ -215,6 +217,77 @@ test("Taito stays on both sections and Sophia's hard bank is reading and writing
     inSessionMax: 10,
   });
   assert.equal(both.inSession.some((item) => item.section === "math"), true);
+});
+
+test("rw-only hard pre-work passes the assign gate and is written instead of shortfall", async () => {
+  const sections = satSectionsForStudent({
+    userId: SOPHIA_SLEIMAN_SAT_USER_ID,
+    subject: "SAT",
+    sessionDateKey: "2026-11-04",
+  });
+  assert.deepEqual(sections, ["rw"]);
+  const sectionRestricted =
+    (sections.includes("rw") && !sections.includes("math")) ||
+    (sections.includes("math") && !sections.includes("rw"));
+  assert.equal(sectionRestricted, true);
+
+  const root = resolveCollegeBoardRoot();
+  const files = (await readdir(root))
+    .filter((name) => /^sat-practice-test-\d+-digital\.jsonl$/.test(name))
+    .sort();
+  const records: ParsedBankRecord[] = [];
+  for (const file of files) {
+    const parsed = parseCollegeBoardPayload(await readFile(path.join(root, file), "utf8"), file);
+    records.push(...parsed.records);
+  }
+  const rwPool = records
+    .filter((record) => studentUsableRecord(record) && record.section === "rw" && isOfficialSatExtract(record))
+    .map((record) => ({ ...record, id: record.sourceKey }));
+  const picked = selectRoutinePreworkFromOneForm(rwPool, {
+    seed: "sophia-nov-4",
+    requireFullCount: true,
+  });
+  assert.equal(picked.selected.length, HARD_SAT_PREWORK_QUESTIONS);
+  assert.equal(picked.selected.every((row) => row.section === "rw"), true);
+  assert.equal(picked.selected.some((row) => row.section === "math"), false);
+  const facing = picked.selected.map((row) => {
+    const content = materializedQuestionContent(row);
+    return {
+      id: row.id,
+      sourceKey: row.sourceKey,
+      section: row.section,
+      examFamily: row.examFamily,
+      prompt: content.prompt,
+      stimulus: content.stimulus,
+      choices: content.choices,
+      figures: row.figures,
+      questionType: content.questionType,
+      correctAnswer: content.correctAnswer,
+      extractGaps: row.extractGaps,
+    };
+  });
+  assert.equal(canAssignCleanStudentQuizSet(facing), false);
+  assert.equal(canAssignCleanStudentQuizSet(facing, { allowSingleSection: sectionRestricted }), true);
+
+  const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const formPrework = hardSets.slice(
+    hardSets.indexOf("async function assignOfficialFormPrework"),
+    hardSets.indexOf("export async function ensureHardSatPrework"),
+  );
+  const assignCall = formPrework.slice(
+    formPrework.indexOf("await assignPreworkFromBank({"),
+    formPrework.indexOf("});", formPrework.indexOf("await assignPreworkFromBank({")) + 3,
+  );
+  assert.match(assignCall, /homeworkKind:\s*"routine"/);
+  assert.match(assignCall, /allowSingleSection:\s*sectionRestricted/);
+  assert.doesNotMatch(assignCall, /difficulty:\s*"hard"/);
+  const service = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
+  const guardAt = service.indexOf("!canAssignCleanStudentQuizSet(routineItems");
+  const insertAt = service.indexOf("const [assignment] = await db", guardAt);
+  assert.ok(guardAt > 0 && insertAt > guardAt);
+  const between = service.slice(guardAt, insertAt);
+  assert.match(between, /allowSingleSection:\s*input\.allowSingleSection/);
+  assert.doesNotMatch(between, /shortfall/);
 });
 
 test("hard selection takes the hardest official module 2 items and balances sections", () => {
