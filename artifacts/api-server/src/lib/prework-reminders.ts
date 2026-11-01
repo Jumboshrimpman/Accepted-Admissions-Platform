@@ -167,10 +167,22 @@ function withSubjectTag(name: string, subjectTag: string): string {
   return `${tag} ${name}`;
 }
 
+function hasSessionTail(title: string): boolean {
+  return /\s+[—–-]\s+/.test(title);
+}
+
+function genericNoun(remainder: string): string {
+  const normalized = remainder.trim().toLowerCase();
+  if (normalized === "quiz" || normalized === "the quiz") return "quiz";
+  if (normalized === "homework") return "homework";
+  return "pre-work";
+}
+
 /**
  * Inbox quiz name. Drops the staff session tail and a repeated question count,
  * and keeps the subject tag so the message still says which session it is.
- * If stripping leaves nothing identifying, the full stored title is used.
+ * A generic remainder never falls back to the raw title, because that title
+ * still contains the client and tutor names.
  */
 function quizName(assignmentTitle: string | null | undefined, subjectTag?: string | null): string {
   const full = cleanText(assignmentTitle);
@@ -178,7 +190,14 @@ function quizName(assignmentTitle: string | null | undefined, subjectTag?: strin
     .replace(/\s*\(\s*\d+\s+questions?\s*\)\s*$/i, "")
     .replace(/\s+[—–-]\s+\d+\s+questions?\s*$/i, "")
     .trim();
-  if (!identifiesQuiz(stripped)) return full || "your pre-work";
+  if (!identifiesQuiz(stripped)) {
+    if (!full || hasSessionTail(full)) {
+      const tag = cleanText(subjectTag);
+      const noun = genericNoun(stripped);
+      return tag ? `${tag} ${noun}` : `SAT ${noun}`;
+    }
+    return full;
+  }
   return withSubjectTag(stripped, subjectTag ?? "");
 }
 

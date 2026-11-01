@@ -125,12 +125,13 @@ test("the quiz label drops the staff session title and does not repeat a count",
   assert.equal(preworkReminderQuizLabel(null, null), "your pre-work");
 });
 
-test("a title that strips to nothing identifying keeps the full quiz name", () => {
-  const title = "pre-work — Michelle's SAT Session with Xavier";
-  const { subject } = preworkReminderEmail({
+test("a generic title with a session tail never leaks the client or tutor", () => {
+  const sessionTitle = "Michelle's SAT Session with Xavier";
+  const title = `pre-work — ${sessionTitle}`;
+  const { subject, text } = preworkReminderEmail({
     studentName: "Michelle Makarem",
     assignmentTitle: title,
-    subject: "SAT Math",
+    subject: "SAT",
     sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
     sessionTimezone: "America/New_York",
     clientTimezone: "America/New_York",
@@ -139,7 +140,30 @@ test("a title that strips to nothing identifying keeps the full quiz name", () =
     assignmentId: "assignment-generic",
     questionCount: 40,
   });
-  assert.equal(subject, `Before your session: ${title}`);
+  assert.equal(subject, "Before your session: SAT pre-work");
+  assert.match(text, /SAT pre-work — 40 questions\./);
+  assert.equal(subject.includes(sessionTitle), false);
+  assert.equal(text.includes(sessionTitle), false);
+  assert.equal(subject.includes("Xavier"), false);
+  assert.equal(text.includes("Xavier"), false);
+
+  const taitoTitle = "Taito's SAT Session with Eunice Chon";
+  const taito = preworkReminderEmail({
+    studentName: "Taito Goto",
+    assignmentTitle: `quiz — ${taitoTitle}`,
+    subject: "",
+    sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
+    sessionTimezone: "America/New_York",
+    clientTimezone: "America/New_York",
+    dueAt: new Date("2026-11-01T13:00:00.000Z"),
+    dueSource: "session_start",
+    assignmentId: "assignment-taito",
+    questionCount: null,
+  });
+  assert.equal(taito.subject.includes(taitoTitle), false);
+  assert.equal(taito.text.includes(taitoTitle), false);
+  assert.equal(taito.subject.includes("Eunice"), false);
+  assert.equal(taito.text.includes("Taito's"), false);
 });
 
 test("the subject is the quiz name, with no client or tutor in it", () => {
