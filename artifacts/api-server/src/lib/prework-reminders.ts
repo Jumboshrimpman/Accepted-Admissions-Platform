@@ -307,7 +307,6 @@ export function preworkReminderHtml(input: {
               <td style="border-top:1px solid #eae6de;padding:20px 32px 28px 32px;">
                 <p style="margin:0;font-size:12px;line-height:1.6;color:#8b949e;">
                   You are receiving this because you have an upcoming session with Accepted Admissions.
-                  Questions? Just reply to this email.
                 </p>
               </td>
             </tr>
