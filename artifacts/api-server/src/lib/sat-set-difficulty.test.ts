@@ -44,6 +44,7 @@ import {
   toRenderableHardSatInput,
   type HardSatCandidate,
   type RenderableHardSatInput,
+  isOfficialOneFormPreworkSet,
 } from "./sat-set-difficulty.ts";
 import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import { TAITO_STUDENT_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
@@ -1066,4 +1067,37 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
   assert.match(pt5.officialExplanation, /6x = 48/);
   assert.equal(pt5.correctAnswer.trim().toUpperCase(), "B");
   assert.doesNotMatch(pt5.officialExplanation, /yields 2x\s*=\s*4/);
+});
+
+test("routine pre-work: 40 official SAT RW items from one form across modules counts as complete", () => {
+  const officialFormByKey = new Map<string, number>();
+  const keys: string[] = [];
+  for (const module of [1, 2]) {
+    for (let q = 1; q <= 33; q += 1) {
+      const key = `sat-pt5-rw-m${module}-q${q}`;
+      officialFormByKey.set(key, 5);
+      if (keys.length < 40) keys.push(key);
+    }
+  }
+  officialFormByKey.set("sat-pt6-rw-m1-q1", 6);
+  const base = { questionCount: 40, fullCount: 40, officialFormByKey };
+  assert.ok(keys.some((key) => key.includes("-m1-")));
+  assert.equal(isOfficialOneFormPreworkSet({ ...base, keys }), true);
+  // A PSAT or non-bank item is absent from the official map, so the set fails.
+  assert.equal(
+    isOfficialOneFormPreworkSet({ ...base, keys: [...keys.slice(0, 39), "psat-pt1-rw-m1-q1"] }),
+    false,
+  );
+  // Fewer bank keys than questions means a non-bank question is attached.
+  assert.equal(isOfficialOneFormPreworkSet({ ...base, keys: keys.slice(0, 39) }), false);
+  // Mixed forms fail.
+  assert.equal(
+    isOfficialOneFormPreworkSet({ ...base, keys: [...keys.slice(0, 39), "sat-pt6-rw-m1-q1"] }),
+    false,
+  );
+  // Short sets fail.
+  assert.equal(
+    isOfficialOneFormPreworkSet({ ...base, questionCount: 39, keys: keys.slice(0, 39) }),
+    false,
+  );
 });

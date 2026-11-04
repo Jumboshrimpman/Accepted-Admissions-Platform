@@ -861,3 +861,29 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
     inSessionTimeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   };
 }
+
+/**
+ * Routine SAT pre-work is drawn from one official SAT form and may span
+ * module 1 and module 2 (a form holds 33 RW items per module), so it can never
+ * pass the module-2-only hard-pool check. It counts as a complete pre-work set
+ * when it has at least `fullCount` items and every item is an official SAT
+ * (not PSAT) bank item from a single practice form. Section-restricted
+ * (RW-only or math-only) sets are allowed.
+ */
+export function isOfficialOneFormPreworkSet(input: {
+  keys: readonly string[];
+  questionCount: number;
+  fullCount: number;
+  /** Official SAT bank source key -> practice test number. PSAT and non-bank keys are absent. */
+  officialFormByKey: ReadonlyMap<string, number>;
+}): boolean {
+  if (input.fullCount <= 0 || input.questionCount < input.fullCount) return false;
+  if (input.keys.length !== input.questionCount) return false;
+  const forms = new Set<number>();
+  for (const key of input.keys) {
+    const form = input.officialFormByKey.get(key);
+    if (form == null) return false;
+    forms.add(form);
+  }
+  return forms.size === 1;
+}

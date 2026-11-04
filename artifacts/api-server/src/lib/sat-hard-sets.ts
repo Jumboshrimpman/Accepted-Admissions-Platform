@@ -44,6 +44,7 @@ import {
   type SatPracticeSection,
   type HardSatCandidate,
   type SatDifficulty,
+  isOfficialOneFormPreworkSet,
 } from "./sat-set-difficulty.ts";
 import {
   EUNICE_TUTOR_EMAIL,
@@ -230,6 +231,16 @@ async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> 
   return rows.map((row) => row.sourceKey);
 }
 
+/** Official SAT (not PSAT) routine-form bank items, keyed to their practice form. */
+async function officialSatFormByKey(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  for (const item of await loadRoutineSatFormPool()) {
+    const form = Number(item.practiceTestNumber);
+    if (item.sourceKey && Number.isFinite(form) && form > 0) map.set(item.sourceKey, form);
+  }
+  return map;
+}
+
 async function hardPoolSourceKeys(): Promise<Set<string>> {
   const pool = await loadRenderableHardBank();
   return new Set(pool.map((item) => item.sourceKey));
@@ -400,12 +411,20 @@ async function assignedHardSetChecks(sessionId: string): Promise<{
   const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(sessionId);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  const officialForms = await officialSatFormByKey();
   const preworkSets: HardSatAssignedSetCheck[] = [];
   for (const row of routine) {
     const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
     preworkSets.push({
       questionCount: info.questionCount,
-      everyKeyIsHard: info.everyKeyIsHard,
+      everyKeyIsHard:
+        info.everyKeyIsHard ||
+        isOfficialOneFormPreworkSet({
+          keys: info.keys,
+          questionCount: info.questionCount,
+          fullCount: HARD_SAT_PREWORK_QUESTIONS,
+          officialFormByKey: officialForms,
+        }),
     });
   }
   const inSessionSets: HardSatAssignedSetCheck[] = [];
@@ -496,13 +515,21 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  const officialForms = await officialSatFormByKey();
   const preworkSets: HardSatAssignedSetCheck[] = [];
   let preworkCount = 0;
   for (const row of routine) {
     const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
     preworkSets.push({
       questionCount: info.questionCount,
-      everyKeyIsHard: info.everyKeyIsHard,
+      everyKeyIsHard:
+        info.everyKeyIsHard ||
+        isOfficialOneFormPreworkSet({
+          keys: info.keys,
+          questionCount: info.questionCount,
+          fullCount: HARD_SAT_PREWORK_QUESTIONS,
+          officialFormByKey: officialForms,
+        }),
     });
     preworkCount += info.questionCount;
   }
