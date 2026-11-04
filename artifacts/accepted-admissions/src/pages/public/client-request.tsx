@@ -43,6 +43,14 @@ const fieldGroups = [
   },
 ] as const;
 
+/** Matches the server window: up to a year back (a recent sitting) and three years ahead. */
+function plannedTestDateBounds(now = new Date()): { min: string; max: string } {
+  const day = (date: Date) => date.toISOString().slice(0, 10);
+  const min = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const max = new Date(Date.UTC(now.getUTCFullYear() + 3, now.getUTCMonth(), now.getUTCDate()));
+  return { min: day(min), max: day(max) };
+}
+
 export default function ClientRequest() {
   const [form, setForm] = useState<RequestForm>({ consentToContact: false, privacyAcknowledged: false });
   const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
@@ -105,6 +113,10 @@ export default function ClientRequest() {
               ) : (
                 <form onSubmit={submit} className="space-y-6" autoComplete="on" aria-describedby="request-form-help">
                   <p id="request-form-help" className="text-sm text-muted-foreground">Required fields are marked by your browser. Optional score and test-date fields can be left blank. Your answers stay in place if a recoverable error occurs.</p>
+                  <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden" }}>
+                    <label htmlFor="request-website">Leave this field empty</label>
+                    <input id="request-website" data-testid="input-request-website" name="website" type="text" tabIndex={-1} autoComplete="off" value={String(form.website || "")} onChange={(event) => update("website", event.target.value)} />
+                  </div>
                   {fieldGroups.map((group) => (
                     <fieldset key={group.title} className="space-y-4 rounded-lg border p-5">
                       <legend className="font-metadata px-2 text-accent">{group.title}</legend>
@@ -120,6 +132,7 @@ export default function ClientRequest() {
                               type={type}
                               autoComplete={key === "guardianName" ? "name" : key === "studentName" ? "off" : key === "email" ? "email" : key === "phone" ? "tel" : "on"}
                               required={!["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore", "plannedTestDate"].includes(key)}
+                              {...(key === "plannedTestDate" ? plannedTestDateBounds() : {})}
                               value={String(form[key] || "")}
                               onChange={(event) => update(key, event.target.value)}
                               className="mt-2 h-11 rounded-xl"

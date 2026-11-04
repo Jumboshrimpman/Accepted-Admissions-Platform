@@ -59,4 +59,28 @@ describe("Guidance request form", () => {
     expect(success.textContent).not.toMatch(/email/i);
     expect(success.textContent).not.toMatch(/inbox/i);
   });
+
+  it("has a hidden honeypot field that is sent with the request and a bounded test date", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "x", status: "received", message: "Thanks — we received your request." }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ClientRequest />);
+    const trap = screen.getByTestId("input-request-website") as HTMLInputElement;
+    expect(trap.name).toBe("website");
+    expect(trap.tabIndex).toBe(-1);
+    expect(trap.required).toBe(false);
+    expect(trap.closest("[aria-hidden='true']")).toBeTruthy();
+    const date = screen.getByTestId("input-request-plannedTestDate") as HTMLInputElement;
+    expect(date.min).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(date.max > date.min).toBe(true);
+
+    fireEvent.change(trap, { target: { value: "spam" } });
+    fireEvent.submit(screen.getByRole("button", { name: /submit guidance request/i }).closest("form")!);
+    await screen.findByTestId("status-request-success");
+    const sent = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(sent.website).toBe("spam");
+  });
 });
