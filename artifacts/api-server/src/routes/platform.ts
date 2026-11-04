@@ -375,6 +375,7 @@ import {
   satTutorProductSortKey,
 } from "../lib/sat-tutor-pricing";
 import {
+  VICTORIA_BOOKING_ENABLED,
   satBookingTutorChoiceMessage,
   victoriaBookingRefused,
 } from "../lib/victoria-booking";
@@ -851,7 +852,14 @@ function satPortalTutorNames(user: {
 } | null | undefined): string[] {
   const names: string[] = sharedSatBookingTutorNames();
   if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
-  if (user?.id === SOPHIA_SLEIMAN_SAT_USER_ID) names.push(VICTORIA_DISPLAY_NAME);
+  // Sophia's Victoria carve-out follows the kill switch (VICTORIA_BOOKING_ENABLED).
+  if (
+    VICTORIA_BOOKING_ENABLED &&
+    user?.id === SOPHIA_SLEIMAN_SAT_USER_ID &&
+    !names.includes(VICTORIA_DISPLAY_NAME)
+  ) {
+    names.push(VICTORIA_DISPLAY_NAME);
+  }
   return names;
 }
 
@@ -3595,6 +3603,12 @@ async function courseShape(courseId: string, user?: AppUser) {
       .length,
     tutors: tutorMemberships
       .filter(({ user: tutor }) => tutor.role === "tutor")
+      // Clients do not see Victoria on their tutor card while she is switched off.
+      .filter(
+        ({ user: tutor }) =>
+          !(user?.role === "student" || user?.role === "viewer") ||
+          !victoriaBookingRefused({ userId: tutor.id, email: tutor.email, name: tutor.displayName }),
+      )
       .map(({ user: tutor, subject }) => {
         const shape = tutorShape(tutor)!;
         const family = subjectFamily(subject ?? "");
@@ -8379,7 +8393,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
             eq(tutorProfilesTable.bookingEligible, true),
             inArray(tutorProfilesTable.name, satPortalTutorNames(req.appUser)),
           ),
-          req.appUser?.id === SOPHIA_SLEIMAN_SAT_USER_ID
+          VICTORIA_BOOKING_ENABLED && req.appUser?.id === SOPHIA_SLEIMAN_SAT_USER_ID
             ? eq(tutorProfilesTable.name, VICTORIA_DISPLAY_NAME)
             : sql`false`,
         ),

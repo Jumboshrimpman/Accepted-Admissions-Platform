@@ -172,7 +172,7 @@ export function SophiaClientPreview({ dashboard }: { dashboard: AdminClientDashb
         <div>
           <p className="font-semibold">Read-only SAT preview</p>
           <p className="mt-1 text-amber-800">
-            Booking, checkout, and email stay off. Victoria becomes bookable on Sophia&apos;s portal when her Google Calendar connects.
+            Booking, checkout, and email stay off. Victoria is hidden from Sophia&apos;s portal while her booking switch is off.
           </p>
         </div>
       </div>
