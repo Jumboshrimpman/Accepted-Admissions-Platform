@@ -57,6 +57,7 @@ import {
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
+import { AdminSessionQuizLinks } from "@/components/admin-session-quiz-links";
 import {
   SessionTutorMaterials,
   viewerMayDownloadSessionPdfs,
@@ -708,7 +709,11 @@ export default function TutorSession() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     Incomplete homework can still be worked through during the session.
                   </p>
-                  {beforeAssignmentId ? (
+                  {currentUser?.role === "administrator" ? (
+                    <div className="mt-4">
+                      <AdminSessionQuizLinks assignments={session.assignments} />
+                    </div>
+                  ) : beforeAssignmentId ? (
                     <div className="mt-4">
                       <TutorSessionQuizEditor
                         assignmentId={beforeAssignmentId}

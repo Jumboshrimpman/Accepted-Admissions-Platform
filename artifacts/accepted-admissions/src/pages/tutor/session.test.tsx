@@ -307,6 +307,24 @@ afterEach(() => {
 });
 
 describe("tutor session review page", () => {
+  test("admin sees Open quiz links instead of the full homework question list", () => {
+    currentUserState.id = "admin-sama";
+    currentUserState.role = "administrator";
+    sessionPageState.cleanIelts = true;
+    render(<TutorSession />);
+
+    const links = screen.getByTestId("admin-session-quiz-links");
+    expect(screen.queryByText("Homework questions for this session")).toBeNull();
+    const prework = screen.getByTestId("admin-session-quiz-prework");
+    expect(prework.textContent).toMatch(/IELTS-style diagnostic reading/);
+    expect(prework.textContent).toMatch(/24 questions/);
+    expect(
+      screen.getByRole("link", { name: "Open pre-work" }).getAttribute("href"),
+    ).toBe("/portal/assignments/quiz-ielts");
+    expect(screen.getByTestId("admin-session-quiz-in_session").textContent).toMatch(/18 questions/);
+    expect(links.textContent).toMatch(/Open in-session practice/);
+  });
+
   test("keeps session pages light and opens the submitted attempt for review", () => {
     render(<TutorSession />);
 
