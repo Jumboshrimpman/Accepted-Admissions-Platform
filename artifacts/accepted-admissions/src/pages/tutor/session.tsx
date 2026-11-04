@@ -63,6 +63,7 @@ import {
 } from "@/components/session-tutor-materials";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
+import { tutorPreworkStatus } from "@/lib/tutor-prework-status";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import {
@@ -279,6 +280,30 @@ export default function TutorSession() {
           <Badge variant="outline">{session.status}</Badge>
         </div>
       </div>
+
+      {(() => {
+        const prework = tutorPreworkStatus(
+          session.homework ?? [],
+          liveBeforeAssignments.map((assignment) => assignment.id),
+        );
+        const tone =
+          prework.kind === "submitted"
+            ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+            : prework.kind === "none"
+              ? "border-muted bg-muted/40 text-muted-foreground"
+              : "border-amber-300 bg-amber-50 text-amber-900";
+        return (
+          <div
+            className={`rounded-xl border-2 px-5 py-4 ${tone}`}
+            data-testid="tutor-prework-status"
+            data-status={prework.kind}
+            role="status"
+          >
+            <p className="text-lg font-semibold">{prework.label}</p>
+            {prework.detail ? <p className="mt-1 text-sm">{prework.detail}</p> : null}
+          </div>
+        );
+      })()}
 
       <Card className="border-primary/20 bg-primary/[0.03] shadow-sm">
         <CardHeader className="border-b bg-card/80 px-6 py-5">
