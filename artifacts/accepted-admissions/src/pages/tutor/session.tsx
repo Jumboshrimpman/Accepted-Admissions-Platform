@@ -64,6 +64,7 @@ import {
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { tutorPreworkStatus } from "@/lib/tutor-prework-status";
+import { MANUAL_AUTO_PREPARE_ENABLED } from "@/lib/manual-auto-prepare";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import {
@@ -318,6 +319,7 @@ export default function TutorSession() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {MANUAL_AUTO_PREPARE_ENABLED ? (
               <Button
                 variant="secondary"
                 disabled={refreshAdaptive.isPending}
@@ -340,6 +342,7 @@ export default function TutorSession() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 {refreshAdaptive.isPending ? "Preparing…" : "Auto-prepare session"}
               </Button>
+              ) : null}
               <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} size="default" />
             </div>
           </div>
@@ -348,7 +351,9 @@ export default function TutorSession() {
           <div className="border-b bg-muted/40 px-6 py-4" data-testid="session-not-prepared">
             <p className="text-sm font-medium">This session has not been prepared yet.</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use Auto-prepare to build the plan. Opening this page does not assign questions.
+              {MANUAL_AUTO_PREPARE_ENABLED
+                ? "Use Auto-prepare to build the plan. Opening this page does not assign questions."
+                : "Auto-prepare is turned off for now. Opening this page does not assign questions."}
             </p>
           </div>
         ) : adaptive?.sessionPrep ? (
@@ -618,6 +623,7 @@ export default function TutorSession() {
                     extracts.
                   </p>
                 </div>
+                {MANUAL_AUTO_PREPARE_ENABLED ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -632,6 +638,7 @@ export default function TutorSession() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   {refreshAdaptive.isPending ? "Refreshing…" : "Refresh from latest result"}
                 </Button>
+                ) : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
