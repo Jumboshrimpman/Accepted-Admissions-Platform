@@ -119,6 +119,14 @@ async function hardPlanOptionsForSession(session: {
 export const HARD_SAT_NEEDS_QUESTIONS_SUMMARY =
   "This session still needs questions. The hard SAT bank could not fill the full pre-work set and the full in-session set, so no partial set was assigned and standard items were not used.";
 
+/**
+ * Smallest one-form official pre-work that counts as complete for the
+ * "needs questions" check. New sets are still drawn at 40; this only stops a
+ * deliberately shorter set (a form with fewer unseen items left, 30-50 per the
+ * pre-work title) from being reported as missing questions.
+ */
+export const HARD_SAT_PREWORK_MIN_COMPLETE = 30;
+
 type SessionRow = typeof sessionsTable.$inferSelect;
 
 export async function satDifficultyForSession(session: {
@@ -422,7 +430,7 @@ async function assignedHardSetChecks(sessionId: string): Promise<{
         isOfficialOneFormPreworkSet({
           keys: info.keys,
           questionCount: info.questionCount,
-          fullCount: HARD_SAT_PREWORK_QUESTIONS,
+          fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
           officialFormByKey: officialForms,
         }),
     });
@@ -494,7 +502,7 @@ async function suppressShortfallWhenAssigned(session: SessionRow, target: number
     !hardSatShortfallBlockedByAssignedSet({
       preworkSets: sets.preworkSets,
       inSessionSets: sets.inSessionSets,
-      fullPrework: HARD_SAT_PREWORK_QUESTIONS,
+      fullPrework: HARD_SAT_PREWORK_MIN_COMPLETE,
       fullInSession: target,
     })
   ) {
@@ -527,7 +535,7 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
         isOfficialOneFormPreworkSet({
           keys: info.keys,
           questionCount: info.questionCount,
-          fullCount: HARD_SAT_PREWORK_QUESTIONS,
+          fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
           officialFormByKey: officialForms,
         }),
     });
@@ -551,7 +559,7 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   const needsQuestions = !hardSatShortfallBlockedByAssignedSet({
     preworkSets,
     inSessionSets,
-    fullPrework: HARD_SAT_PREWORK_QUESTIONS,
+    fullPrework: HARD_SAT_PREWORK_MIN_COMPLETE,
     fullInSession: target,
   });
   if (duringAttempted && !needsQuestions) {
@@ -565,7 +573,7 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   }
   const summary = needsQuestions
     ? `${HARD_SAT_NEEDS_QUESTIONS_SUMMARY} Assigned now: ${preworkCount} pre-work and ${questionCount} in-session; a full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`
-    : `Hard SAT set: ${HARD_SAT_PREWORK_QUESTIONS} pre-work questions and ${target} in-session module 2 questions. The in-session set is not timed.`;
+    : `Hard SAT set: ${preworkCount} pre-work questions and ${questionCount} in-session module 2 questions. The in-session set is not timed.`;
   return { summary, duringAssignmentId, questionCount, preworkCount, needsQuestions };
 }
 
