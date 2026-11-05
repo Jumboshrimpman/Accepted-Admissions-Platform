@@ -742,6 +742,7 @@ import {
   updateQuestionReportStatus,
 } from "../lib/question-reports";
 import { sendGuidanceRequestAdminEmail } from "../lib/guidance-request-email";
+import { clientRequestSpamVerdict } from "../lib/client-request-spam";
 import {
   QUIZ_SUBMISSION_NOTIFICATION_KIND,
   quizSubmissionAlertEmail,
@@ -7484,6 +7485,18 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
     return;
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
+  const verdict = clientRequestSpamVerdict(body);
+  if (verdict.kind === "honeypot") {
+    // Hidden field filled: look like a normal success, but save and send nothing.
+    requestRateLimit.set(ip, now);
+    console.warn({ event: "client_request.honeypot", msg: "Client request dropped by honeypot" });
+    res.status(201).json({
+      id: randomUUID(),
+      status: "received",
+      message: "Thanks — we received your request.",
+    });
+    return;
+  }
   const requiredFields = [
     "guardianName",
     "studentName",
@@ -7513,6 +7526,10 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
     phone.replace(/\D/g, "").length < 10
   ) {
     res.status(400).json({ error: "Enter a valid email address and phone number." });
+    return;
+  }
+  if (verdict.kind === "invalid") {
+    res.status(400).json({ error: verdict.error });
     return;
   }
   const lead = {

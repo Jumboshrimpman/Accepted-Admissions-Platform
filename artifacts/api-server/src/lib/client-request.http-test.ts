@@ -255,3 +255,47 @@ test("admin overview lists a guidance submit that succeeded without RESEND_API_K
     else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdminIds;
   }
 });
+
+test("public guidance honeypot looks successful but saves and sends nothing", async () => {
+  let sendAttempts = 0;
+  setTransactionalEmailTestTransport(async () => {
+    sendAttempts += 1;
+    return { status: "sent", id: "email_honeypot" };
+  });
+  const payload = guidancePayload({ hp_zx7q: "https://spam.example" });
+  const server = await startPublicServer();
+  try {
+    const posted = await postGuidance(server.baseUrl, payload);
+    assert.equal(posted.response.status, 201, JSON.stringify(posted.body));
+    assert.equal(posted.body.status, "received");
+    assert.equal(typeof posted.body.id, "string");
+    assert.equal(sendAttempts, 0);
+    const rows = await db
+      .select({ id: clientRequestsTable.id })
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.email, String(payload.email)));
+    assert.equal(rows.length, 0);
+  } finally {
+    setTransactionalEmailTestTransport(undefined);
+    await server.close();
+    await deleteByEmail(String(payload.email));
+  }
+});
+
+test("public guidance rejects a 1970 planned test date without saving", async () => {
+  const payload = guidancePayload({ plannedTestDate: "1970-01-01" });
+  const server = await startPublicServer();
+  try {
+    const posted = await postGuidance(server.baseUrl, payload);
+    assert.equal(posted.response.status, 400, JSON.stringify(posted.body));
+    assert.match(String(posted.body.error), /test date/i);
+    const rows = await db
+      .select({ id: clientRequestsTable.id })
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.email, String(payload.email)));
+    assert.equal(rows.length, 0);
+  } finally {
+    await server.close();
+    await deleteByEmail(String(payload.email));
+  }
+});
