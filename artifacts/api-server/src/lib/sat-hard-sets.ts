@@ -67,10 +67,15 @@ async function studentIdentity(clientUserId?: string | null): Promise<{
   email: string | null;
   displayName: string | null;
   userId: string | null;
+  clerkUserId: string | null;
 }> {
-  if (!clientUserId) return { email: null, displayName: null, userId: null };
+  if (!clientUserId) return { email: null, displayName: null, userId: null, clerkUserId: null };
   const [user] = await db
-    .select({ email: usersTable.email, displayName: usersTable.displayName })
+    .select({
+      email: usersTable.email,
+      displayName: usersTable.displayName,
+      clerkUserId: usersTable.clerkUserId,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, clientUserId))
     .limit(1);
@@ -78,6 +83,7 @@ async function studentIdentity(clientUserId?: string | null): Promise<{
     email: user?.email ?? null,
     displayName: user?.displayName ?? null,
     userId: clientUserId,
+    clerkUserId: user?.clerkUserId ?? null,
   };
 }
 
@@ -109,6 +115,7 @@ async function hardPlanOptionsForSession(session: {
       email: identity.email,
       displayName: identity.displayName,
       userId: identity.userId,
+      clerkUserId: identity.clerkUserId,
       sessionTitle: session.title,
       subject: session.subject ?? "SAT",
       session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
@@ -142,6 +149,7 @@ export async function satDifficultyForSession(session: {
     email: identity.email,
     displayName: identity.displayName,
     userId: identity.userId,
+    clerkUserId: identity.clerkUserId,
     sessionTitle: session.title,
     subject: session.subject,
     session,
@@ -160,6 +168,7 @@ export async function satSectionsForSession(session: {
     email: identity.email,
     displayName: identity.displayName,
     userId: identity.userId,
+    clerkUserId: identity.clerkUserId,
     sessionTitle: session.title,
     subject: session.subject ?? "SAT",
     session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
@@ -178,6 +187,7 @@ async function inSessionTargetForSession(session: {
     email: identity.email,
     displayName: identity.displayName,
     userId: identity.userId,
+    clerkUserId: identity.clerkUserId,
     sessionTitle: session.title,
     subject: session.subject,
     session,

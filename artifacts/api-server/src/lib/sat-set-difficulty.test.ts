@@ -1152,3 +1152,24 @@ test("effectiveThroughDateKey is an inclusive end date", () => {
   assert.equal(at("2026-11-03"), "hard");
   assert.equal(at("2026-11-04"), "standard");
 });
+
+test("Michelle's Nov 15 hard setting also matches her Clerk user id", () => {
+  const byClerk = (sessionDateKey: string) =>
+    satDifficultyForStudent({
+      email: "changed-address@example.invalid",
+      clerkUserId: "user_3JCRGfBj8dgWSjO1r2zeKovFVE7",
+      subject: "SAT",
+      sessionDateKey,
+    });
+  assert.equal(byClerk("2026-11-15"), "hard");
+  assert.equal(byClerk("2026-11-16"), "standard");
+  assert.equal(
+    satDifficultyForStudent({
+      email: "changed-address@example.invalid",
+      clerkUserId: "user_someone_else",
+      subject: "SAT",
+      sessionDateKey: "2026-11-15",
+    }),
+    "standard",
+  );
+});

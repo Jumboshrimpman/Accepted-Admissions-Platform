@@ -39,6 +39,8 @@ export type SatDifficultySetting = {
   email?: string;
   /** Portal user id. Matches even when the contact email is not on the setting. */
   userId?: string;
+  /** Clerk user id. Matches even when the portal email changes. */
+  clerkUserId?: string;
   /** Used only when the session has no student email yet. */
   nameIncludes?: string;
   difficulty: SatDifficulty;
@@ -70,6 +72,8 @@ export const SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY = "2026-10-31";
  * or replacing those sets. Her other sessions stay standard.
  */
 export const MICHELLE_HARD_SAT_STUDENT_EMAIL = "makaremmichelle7@gmail.com";
+/** Same Clerk user as MICHELLE_MAKAREM_CLERK_USER_ID. */
+export const MICHELLE_HARD_SAT_CLERK_USER_ID = "user_3JCRGfBj8dgWSjO1r2zeKovFVE7";
 export const MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-11-14";
 export const MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY = "2026-11-15";
 
@@ -90,6 +94,7 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
   },
   {
     email: MICHELLE_HARD_SAT_STUDENT_EMAIL,
+    clerkUserId: MICHELLE_HARD_SAT_CLERK_USER_ID,
     difficulty: "hard",
     effectiveAfterDateKey: MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
     effectiveThroughDateKey: MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY,
@@ -576,11 +581,15 @@ function settingMatchesStudent(
     displayName?: string | null;
     sessionTitle?: string | null;
     userId?: string | null;
+    clerkUserId?: string | null;
   },
 ): boolean {
   const email = input.email?.trim().toLowerCase() ?? "";
   const settingEmail = setting.email?.trim().toLowerCase() ?? "";
   if (setting.userId && input.userId && setting.userId === input.userId) return true;
+  if (setting.clerkUserId && input.clerkUserId && setting.clerkUserId === input.clerkUserId) {
+    return true;
+  }
   if (settingEmail && email === settingEmail) return true;
   if (email) return false;
   const needle = setting.nameIncludes?.trim().toLowerCase() ?? "";
@@ -610,6 +619,7 @@ function dateKeyForSetting(
 
 type StudentSatSettingInput = {
   email?: string | null;
+  clerkUserId?: string | null;
   displayName?: string | null;
   sessionTitle?: string | null;
   subject?: string | null;
