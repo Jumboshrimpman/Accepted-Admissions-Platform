@@ -344,3 +344,20 @@ test("in-session work, a cancelled session, and anything outside the window are 
   assert.equal(shouldSendPreworkReminder({ ...ready, role: "tutor" }), false);
   assert.equal(shouldSendPreworkReminder({ ...ready, role: "administrator" }), false);
 });
+
+test("the reminder does not invite replies to this email", () => {
+  const { text, html } = preworkReminderEmail({
+    studentName: "Ava Student",
+    assignmentTitle: "SAT pre-work (40 questions)",
+    subject: "SAT Math",
+    sessionDateTime: new Date("2026-11-11T13:00:00.000Z"),
+    sessionTimezone: "America/New_York",
+    clientTimezone: "America/New_York",
+    dueAt: new Date("2026-11-11T13:00:00.000Z"),
+    dueSource: "session_start",
+    assignmentId: "assignment-reply-check",
+    questionCount: 40,
+  });
+  assert.doesNotMatch(html, /reply to this email/i);
+  assert.doesNotMatch(text, /reply to this email/i);
+});
