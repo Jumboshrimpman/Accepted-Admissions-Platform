@@ -7,9 +7,11 @@ import {
   serverTimeLimitReached,
 } from "./in-session-time-limit.ts";
 import {
+  HARD_SAT_PREWORK_MIN_COMPLETE,
   hardSatShortfallBlockedByAssignedSet,
   taitoOct30PreworkAllowsInSession,
 } from "./sat-hard-sets.ts";
+import { HARD_SAT_PREWORK_QUESTIONS } from "./sat-set-difficulty.ts";
 
 test("in-session work never reaches the server time limit", () => {
   assert.equal(inSessionDeliverySkipsTimeLimit("during_session"), true);
@@ -139,4 +141,23 @@ test("shortfall auto-resolve requires one full hard set, not a sum", () => {
   assert.match(oct30Startup, /taitoOct30PreworkAllowsInSession\(result\.action\)/);
   assert.match(oct30Startup, /ensureHardSatInSession\(session\)/);
   assert.doesNotMatch(oct30Startup, /sendEmail|sendTransactionalEmail/);
+});
+
+test("a one-form pre-work of 30-39 counts as complete for the needs-questions check", () => {
+  assert.equal(HARD_SAT_PREWORK_MIN_COMPLETE, 30);
+  assert.ok(HARD_SAT_PREWORK_MIN_COMPLETE <= HARD_SAT_PREWORK_QUESTIONS);
+  const set = (questionCount: number, everyKeyIsHard: boolean) => ({ questionCount, everyKeyIsHard });
+  const check = (prework: number) =>
+    hardSatShortfallBlockedByAssignedSet({
+      preworkSets: [set(prework, true)],
+      inSessionSets: [set(20, true)],
+      fullPrework: HARD_SAT_PREWORK_MIN_COMPLETE,
+      fullInSession: 20,
+    });
+  assert.equal(check(38), true);
+  assert.equal(check(30), true);
+  assert.equal(check(29), false);
+  const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(hardSets, /fullPrework: HARD_SAT_PREWORK_QUESTIONS/);
+  assert.doesNotMatch(hardSets, /fullCount: HARD_SAT_PREWORK_QUESTIONS/);
 });
