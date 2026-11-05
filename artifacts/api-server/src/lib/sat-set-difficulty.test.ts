@@ -25,6 +25,7 @@ import {
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   HARD_SAT_PREWORK_QUESTIONS,
+  MICHELLE_HARD_SAT_STUDENT_EMAIL,
   SAT_DIFFICULTY_SETTINGS,
   hardSatFacingTextIsGarbled,
   hardSatSectionQuotas,
@@ -1100,4 +1101,54 @@ test("routine pre-work: 40 official SAT RW items from one form across modules co
     isOfficialOneFormPreworkSet({ ...base, questionCount: 39, keys: keys.slice(0, 39) }),
     false,
   );
+});
+
+test("Michelle is a hard SAT student only for her Nov 15 session, on both sections", () => {
+  const michelle = { email: MICHELLE_HARD_SAT_STUDENT_EMAIL, subject: "SAT Math" };
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-15" }), "hard");
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-14" }), "standard");
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-16" }), "standard");
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-22" }), "standard");
+  assert.equal(
+    satDifficultyForStudent({ ...michelle, subject: "IELTS", sessionDateKey: "2026-11-15" }),
+    "standard",
+  );
+  // Sun Nov 15 12:00 ET is still Nov 15 in her session time zone.
+  assert.equal(
+    satDifficultyForStudent({
+      ...michelle,
+      session: { dateTime: new Date("2026-11-15T17:00:00.000Z"), timezone: "America/New_York" },
+    }),
+    "hard",
+  );
+  assert.deepEqual(
+    satSectionsForStudent({ ...michelle, sessionDateKey: "2026-11-15" }),
+    ["rw", "math"],
+  );
+  assert.equal(
+    inSessionQuestionTargetForStudent({ ...michelle, sessionDateKey: "2026-11-15" }),
+    15,
+  );
+  // Her hard setting does not apply to someone else.
+  assert.equal(
+    satDifficultyForStudent({ email: "other@example.com", subject: "SAT", sessionDateKey: "2026-11-15" }),
+    "standard",
+  );
+});
+
+test("effectiveThroughDateKey is an inclusive end date", () => {
+  const settings = [
+    {
+      email: "window@example.com",
+      difficulty: "hard" as const,
+      effectiveAfterDateKey: "2026-11-01",
+      effectiveThroughDateKey: "2026-11-03",
+    },
+  ];
+  const at = (sessionDateKey: string) =>
+    satDifficultyForStudent({ email: "window@example.com", subject: "SAT", sessionDateKey, settings });
+  assert.equal(at("2026-11-01"), "standard");
+  assert.equal(at("2026-11-02"), "hard");
+  assert.equal(at("2026-11-03"), "hard");
+  assert.equal(at("2026-11-04"), "standard");
 });

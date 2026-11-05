@@ -44,6 +44,11 @@ export type SatDifficultySetting = {
   difficulty: SatDifficulty;
   effectiveAfterDateKey: string;
   /**
+   * Optional inclusive last local session date for this setting. Later
+   * sessions fall back to standard. Omit to keep the setting open-ended.
+   */
+  effectiveThroughDateKey?: string;
+  /**
    * Hard in-session length for this student. Omit to keep the shared
    * homework-copy cap. This does not raise that cap for other students.
    */
@@ -57,6 +62,16 @@ export type SatDifficultySetting = {
 export const HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-10-16";
 
 export const SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY = "2026-10-31";
+
+/**
+ * Michelle's Nov 15 session has hand-built hard SAT sets (40 one-form pre-work,
+ * 15 hard in-session, 5 reserve). Treating only that session as hard keeps the
+ * standard prep path (run when pre-work is submitted) from adding to, renaming,
+ * or replacing those sets. Her other sessions stay standard.
+ */
+export const MICHELLE_HARD_SAT_STUDENT_EMAIL = "makaremmichelle7@gmail.com";
+export const MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-11-14";
+export const MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY = "2026-11-15";
 
 export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
   {
@@ -72,6 +87,12 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
     difficulty: "hard",
     effectiveAfterDateKey: SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY,
     sections: ["rw"],
+  },
+  {
+    email: MICHELLE_HARD_SAT_STUDENT_EMAIL,
+    difficulty: "hard",
+    effectiveAfterDateKey: MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
+    effectiveThroughDateKey: MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY,
   },
 ];
 
@@ -605,6 +626,7 @@ function activeSatSetting(input: StudentSatSettingInput): SatDifficultySetting |
     if (!settingMatchesStudent(setting, input)) continue;
     const dateKey = dateKeyForSetting(input.session, input.sessionDateKey, setting);
     if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return null;
+    if (setting.effectiveThroughDateKey && dateKey > setting.effectiveThroughDateKey) return null;
     return setting;
   }
   return null;
