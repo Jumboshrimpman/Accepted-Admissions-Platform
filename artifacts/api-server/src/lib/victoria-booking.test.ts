@@ -42,18 +42,43 @@ test("Victoria is hidden from every booking client while her hour pool stays", (
   assert.match(satBookingTutorChoiceMessage(), /Eunice or Xavier/);
   assert.doesNotMatch(satBookingTutorChoiceMessage(), /Victoria/);
   const victoria = { name: "Victoria Wijerathnayapa", calendarStatus: "disconnected" };
-  assert.equal(sophiaVictoriaComingSoon(victoria, sophia.id), true);
+  const connected = { ...victoria, calendarStatus: "connected" };
+  // The kill switch is off, so Sophia's carve-out is off too.
+  assert.equal(sophiaVictoriaIdentity(victoria, sophia.id), false);
+  assert.equal(sophiaVictoriaComingSoon(victoria, sophia.id), false);
   assert.equal(sophiaMayBookVictoria(victoria, sophia.id), false);
-  assert.equal(sophiaVictoriaComingSoon({ ...victoria, calendarStatus: "connected" }, sophia.id), false);
-  assert.equal(sophiaMayBookVictoria({ ...victoria, calendarStatus: "connected" }, sophia.id), true);
-  assert.equal(sophiaVictoriaIdentity(victoria, other.id), false);
-  assert.equal(sophiaVictoriaComingSoon(victoria, other.id), false);
-  assert.equal(sophiaMayBookVictoria({ ...victoria, calendarStatus: "connected" }, other.id), false);
-  assert.equal(sophiaVictoriaComingSoon({ name: "Eunice Chon" }, sophia.id), false);
+  assert.equal(sophiaMayBookVictoria(connected, sophia.id), false);
+  assert.equal(sophiaVictoriaComingSoon(connected, sophia.id), false);
+  // With the switch on, Sophia's carve-out comes back as before.
+  assert.equal(sophiaVictoriaComingSoon(victoria, sophia.id, true), true);
+  assert.equal(sophiaMayBookVictoria(victoria, sophia.id, true), false);
+  assert.equal(sophiaVictoriaComingSoon(connected, sophia.id, true), false);
+  assert.equal(sophiaMayBookVictoria(connected, sophia.id, true), true);
+  assert.equal(sophiaVictoriaIdentity(victoria, other.id, true), false);
+  assert.equal(sophiaVictoriaComingSoon(victoria, other.id, true), false);
+  assert.equal(sophiaMayBookVictoria(connected, other.id, true), false);
+  assert.equal(sophiaVictoriaComingSoon({ name: "Eunice Chon" }, sophia.id, true), false);
 });
 
-test("Sophia's preview shows Victoria at $130 until her calendar connects", () => {
+test("Sophia's preview leaves Victoria out while the switch is off", () => {
+  const cards = sophiaPreviewTutors({
+    profiles: [
+      { id: "victoria-profile", name: "Victoria Wijerathnayapa", calendarStatus: "connected" },
+      { id: "xavier-profile", name: "Xavier Morales", calendarStatus: "connected" },
+      { id: "nika-profile", name: "Nika Raiffe", calendarStatus: "connected" },
+      { id: "eunice-profile", name: "Eunice Chon", calendarStatus: "connected" },
+    ],
+    calendars: { xavier: true, nika: true, eunice: true, victoria: true },
+  });
+  assert.deepEqual(
+    cards.map((tutor) => tutor.tutorKey),
+    ["xavier", "nika", "eunice"],
+  );
+});
+
+test("with the switch on, Sophia's preview shows Victoria at $130 until her calendar connects", () => {
   const disconnected = sophiaPreviewTutors({
+    victoriaEnabled: true,
     profiles: [
       { id: "victoria-profile", name: "Victoria Wijerathnayapa", calendarStatus: "disconnected" },
       { id: "xavier-profile", name: "Xavier Morales", calendarStatus: "connected" },
@@ -77,6 +102,7 @@ test("Sophia's preview shows Victoria at $130 until her calendar connects", () =
     ],
   );
   const connected = sophiaPreviewTutors({
+    victoriaEnabled: true,
     profiles: [{ id: "victoria-profile", name: "Victoria Wijerathnayapa", calendarStatus: "connected" }],
     calendars: { victoria: true },
   });
@@ -93,6 +119,11 @@ test("booking APIs refuse Victoria and the portal copy does not offer her", asyn
   assert.match(platform, /if \(victoriaBookingRefused\(tutor\)\)/);
   assert.match(platform, /victoriaBookingRefused\(\{ slug: product\.slug \}\)/);
   assert.doesNotMatch(platform, /Choose Eunice, Victoria, or Xavier for an SAT session/);
+  // Sophia's roster and tutor-list carve-outs follow the single kill switch.
+  assert.match(platform, /VICTORIA_BOOKING_ENABLED &&\s+user\?\.id === SOPHIA_SLEIMAN_SAT_USER_ID/);
+  assert.match(platform, /VICTORIA_BOOKING_ENABLED && req\.appUser\?\.id === SOPHIA_SLEIMAN_SAT_USER_ID/);
+  assert.doesNotMatch(platform, /if \(user\?\.id === SOPHIA_SLEIMAN_SAT_USER_ID\) names\.push\(VICTORIA_DISPLAY_NAME\)/);
+  assert.match(platform, /!victoriaBookingRefused\(\{ userId: tutor\.id, email: tutor\.email, name: tutor\.displayName \}\)/);
   const satPage = await readFile(
     fileURLToPath(new URL("../../../accepted-admissions/src/pages/portal/sat.tsx", import.meta.url)),
     "utf8",

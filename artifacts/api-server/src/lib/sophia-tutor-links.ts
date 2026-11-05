@@ -15,7 +15,7 @@ import {
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
 import { EUNICE_TUTOR_EMAIL, NIKA_TUTOR_EMAIL } from "./session-schedule.ts";
 import { displayedSatHourlyCents, SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
-import { isVictoriaBookingProfile } from "./victoria-booking.ts";
+import { VICTORIA_BOOKING_ENABLED, isVictoriaBookingProfile } from "./victoria-booking.ts";
 
 /** Same course title as FALL_SAT_COURSE_TITLE. Inlined so this seed does not load the SAT bank. */
 const SOPHIA_FALL_COURSE_TITLE = "Fall 2026 SAT & IELTS";
@@ -23,7 +23,8 @@ const SOPHIA_FALL_COURSE_TITLE = "Fall 2026 SAT & IELTS";
 /**
  * Sophia Sleiman's SAT roster. Inserts tutor_assignments only.
  * Does not email, notify, invite, or change any other student's links.
- * Victoria stays unbookable for every other client.
+ * Victoria's link row stays, but she is hidden from Sophia's portal while
+ * VICTORIA_BOOKING_ENABLED is false.
  */
 export const SOPHIA_TUTOR_LINK_SUBJECT = "SAT";
 
@@ -58,27 +59,43 @@ type VictoriaBookerProfile = {
   calendarStatus?: string | null;
 };
 
+/**
+ * Sophia's Victoria carve-out. Off while VICTORIA_BOOKING_ENABLED is false, so
+ * the single kill switch hides Victoria from Sophia like every other client.
+ * `enabled` exists for tests; callers use the switch.
+ */
 export function sophiaVictoriaIdentity(
   profile: VictoriaBookerProfile,
   bookerUserId?: string | null,
+  enabled: boolean = VICTORIA_BOOKING_ENABLED,
 ): boolean {
-  return bookerUserId === SOPHIA_SLEIMAN_SAT_USER_ID && isVictoriaBookingProfile(profile);
+  return (
+    enabled && bookerUserId === SOPHIA_SLEIMAN_SAT_USER_ID && isVictoriaBookingProfile(profile)
+  );
 }
 
 /** Connected calendar: Sophia books Victoria like her other SAT tutors. */
 export function sophiaMayBookVictoria(
   profile: VictoriaBookerProfile,
   bookerUserId?: string | null,
+  enabled: boolean = VICTORIA_BOOKING_ENABLED,
 ): boolean {
-  return sophiaVictoriaIdentity(profile, bookerUserId) && profile.calendarStatus === "connected";
+  return (
+    sophiaVictoriaIdentity(profile, bookerUserId, enabled) &&
+    profile.calendarStatus === "connected"
+  );
 }
 
 /** Disconnected calendar: Sophia sees Victoria as Coming soon, with no slots. */
 export function sophiaVictoriaComingSoon(
   profile: VictoriaBookerProfile,
   bookerUserId?: string | null,
+  enabled: boolean = VICTORIA_BOOKING_ENABLED,
 ): boolean {
-  return sophiaVictoriaIdentity(profile, bookerUserId) && profile.calendarStatus !== "connected";
+  return (
+    sophiaVictoriaIdentity(profile, bookerUserId, enabled) &&
+    profile.calendarStatus !== "connected"
+  );
 }
 
 function normalizeEmail(email: string | null | undefined): string {
@@ -218,8 +235,10 @@ export type SophiaPreviewTutorCard = {
 };
 
 /**
- * Sophia's admin-preview roster. Victoria is visible at $130 and stays
- * non-bookable until her Google Calendar is connected. No emails or writes.
+ * Sophia's admin-preview roster. While VICTORIA_BOOKING_ENABLED is false,
+ * Victoria is left out (matching Sophia's portal). When it is on, she shows at
+ * $130 and stays non-bookable until her Google Calendar is connected.
+ * No emails or writes.
  */
 export function sophiaPreviewTutors(input: {
   profiles: Array<{
@@ -237,11 +256,17 @@ export function sophiaPreviewTutors(input: {
   }>;
   prepaidHours?: Partial<Record<CollegeConsultingTutorKey, number>>;
   calendars?: Partial<Record<CollegeConsultingTutorKey, boolean>>;
+  /** Defaults to VICTORIA_BOOKING_ENABLED. When off, Victoria is left out like on Sophia's portal. */
+  victoriaEnabled?: boolean;
 }): SophiaPreviewTutorCard[] {
   const byKey = new Map(
     consultingPreviewTutors(input).map((tutor) => [tutor.tutorKey, tutor]),
   );
-  return SOPHIA_PREVIEW_TUTOR_ORDER.map((tutorKey) => {
+  const victoriaEnabled = input.victoriaEnabled ?? VICTORIA_BOOKING_ENABLED;
+  const order = SOPHIA_PREVIEW_TUTOR_ORDER.filter(
+    (tutorKey) => tutorKey !== "victoria" || victoriaEnabled,
+  );
+  return order.map((tutorKey) => {
     const card = byKey.get(tutorKey);
     if (!card) {
       throw new Error(`Missing Sophia preview tutor ${tutorKey}`);

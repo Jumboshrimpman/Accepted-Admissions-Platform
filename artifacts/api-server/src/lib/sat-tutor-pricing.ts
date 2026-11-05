@@ -295,8 +295,11 @@ export function previewOffersFromSatTutorProducts(
       if (!tutorKey || !isStandardSatTutorProduct(product) || Number(product.durationHours) !== 1) {
         return false;
       }
-      // Victoria stays off every other client's preview. Sophia still sees her $130 hour.
-      if (tutorKey === "victoria") return user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
+      // Victoria is off every preview while VICTORIA_BOOKING_ENABLED is false.
+      // When it is on, only Sophia's preview shows her $130 hour.
+      if (tutorKey === "victoria") {
+        return VICTORIA_BOOKING_ENABLED && user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
+      }
       return canBookSatTutor(tutorKey, user);
     })
     .slice()

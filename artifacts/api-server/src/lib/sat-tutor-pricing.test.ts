@@ -347,12 +347,12 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
     offers.map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents, durationMinutes: offer.durationMinutes })),
     [
       { slug: "sat-eunice-60", priceCents: 13_000, durationMinutes: 60 },
-      { slug: "sat-victoria-60", priceCents: 13_000, durationMinutes: 60 },
       { slug: "sat-xavier-60", priceCents: 20_000, durationMinutes: 60 },
       { slug: "sat-nika-60", priceCents: 13_000, durationMinutes: 60 },
     ],
   );
-  assert.equal(offers.some((offer) => offer.slug.startsWith("sat-victoria")), true);
+  // VICTORIA_BOOKING_ENABLED is false, so Sophia's preview hides Victoria too.
+  assert.equal(offers.some((offer) => offer.slug.startsWith("sat-victoria")), false);
   const strangerOffers = previewOffersFromSatTutorProducts(
     SAT_TUTOR_PRODUCTS.map((item) => ({ ...item, active: true })),
     otherSatClient,

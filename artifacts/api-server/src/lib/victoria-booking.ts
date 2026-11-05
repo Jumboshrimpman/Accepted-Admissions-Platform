@@ -8,6 +8,8 @@ import {
 /**
  * Victoria's profile, rates, grants, and past sessions stay in place.
  * Set this to true to show her in booking pickers and accept new bookings again.
+ * This is the single switch: while false she is also hidden from Sophia's
+ * roster, tutor card, pricing tiles, availability, checkout, and admin preview.
  * Hour-pool rules are not controlled by this flag.
  */
 export const VICTORIA_BOOKING_ENABLED = false;
