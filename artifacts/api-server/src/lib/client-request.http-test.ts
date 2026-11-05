@@ -262,7 +262,7 @@ test("public guidance honeypot looks successful but saves and sends nothing", as
     sendAttempts += 1;
     return { status: "sent", id: "email_honeypot" };
   });
-  const payload = guidancePayload({ website: "https://spam.example" });
+  const payload = guidancePayload({ hp_zx7q: "https://spam.example" });
   const server = await startPublicServer();
   try {
     const posted = await postGuidance(server.baseUrl, payload);

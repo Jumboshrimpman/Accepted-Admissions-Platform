@@ -68,8 +68,9 @@ describe("Guidance request form", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ClientRequest />);
-    const trap = screen.getByTestId("input-request-website") as HTMLInputElement;
-    expect(trap.name).toBe("website");
+    const trap = screen.getByTestId("input-request-honeypot") as HTMLInputElement;
+    expect(trap.name).toBe("hp_zx7q");
+    expect(trap.autocomplete).toBe("off");
     expect(trap.tabIndex).toBe(-1);
     expect(trap.required).toBe(false);
     expect(trap.closest("[aria-hidden='true']")).toBeTruthy();
@@ -81,6 +82,28 @@ describe("Guidance request form", () => {
     fireEvent.submit(screen.getByRole("button", { name: /submit guidance request/i }).closest("form")!);
     await screen.findByTestId("status-request-success");
     const sent = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
-    expect(sent.website).toBe("spam");
+    expect(sent.hp_zx7q).toBe("spam");
+    expect(sent.website).toBeUndefined();
+  });
+
+  it("caps input lengths at the server limits", () => {
+    render(<ClientRequest />);
+    for (const key of ["guardianName", "email", "phone", "studentName", "currentSchool", "serviceRequested", "currentSatTotal", "referralSource"]) {
+      expect((screen.getByTestId(`input-request-${key}`) as HTMLInputElement).maxLength).toBe(200);
+    }
+    expect((screen.getByTestId("input-request-goals") as HTMLTextAreaElement).maxLength).toBe(5000);
+    expect((screen.getByTestId("input-request-availability") as HTMLTextAreaElement).maxLength).toBe(5000);
+  });
+
+  it("uses the same date-key bounds as the server", () => {
+    vi.useFakeTimers({ now: new Date("2026-11-04T23:59:59.000Z"), toFake: ["Date"] });
+    try {
+      render(<ClientRequest />);
+      const date = screen.getByTestId("input-request-plannedTestDate") as HTMLInputElement;
+      expect(date.min).toBe("2025-11-04");
+      expect(date.max).toBe("2029-11-04");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

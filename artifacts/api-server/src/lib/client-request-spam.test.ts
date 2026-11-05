@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   CLIENT_REQUEST_HONEYPOT_FIELD,
+  CLIENT_REQUEST_LONG_FIELD_MAX,
+  CLIENT_REQUEST_SHORT_FIELD_MAX,
   clientRequestSpamVerdict,
+  clientRequestTestDateBounds,
   parseClientRequestDate,
 } from "./client-request-spam.ts";
 
@@ -87,4 +91,58 @@ test("parseClientRequestDate accepts real calendar dates only", () => {
   assert.equal(parseClientRequestDate("2027-03-13")?.toISOString(), "2027-03-13T00:00:00.000Z");
   assert.equal(parseClientRequestDate("2027-02-29"), null);
   assert.equal(parseClientRequestDate("03/13/2027"), null);
+});
+
+test("free-text score answers are accepted; only bare out-of-range numbers fail", () => {
+  for (const answer of ["1350 (Oct 2025)", "1st try 1150", "650 on 3/8", "ACT 31", "PSAT 160"]) {
+    for (const field of ["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore"]) {
+      assert.equal(
+        clientRequestSpamVerdict(payload({ [field]: answer }), now).kind,
+        "ok",
+        `${field}: ${answer}`,
+      );
+    }
+  }
+  for (const answer of ["99999", "50"]) {
+    for (const field of ["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore"]) {
+      assert.equal(
+        clientRequestSpamVerdict(payload({ [field]: answer }), now).kind,
+        "invalid",
+        `${field}: ${answer}`,
+      );
+    }
+  }
+  assert.equal(clientRequestSpamVerdict(payload({ currentSatTotal: " 1350 " }), now).kind, "ok");
+  assert.equal(clientRequestSpamVerdict(payload({ currentMath: "650" }), now).kind, "ok");
+});
+
+test("the form's earliest and latest allowed test dates pass; one day outside fails", () => {
+  // Late in the day UTC, where a minute-precise comparison used to reject the min date.
+  for (const at of [now, new Date("2026-11-04T00:00:30.000Z"), new Date("2026-11-04T23:59:59.000Z")]) {
+    const { min, max } = clientRequestTestDateBounds(at);
+    assert.equal(clientRequestSpamVerdict(payload({ plannedTestDate: min }), at).kind, "ok", `min ${min}`);
+    assert.equal(clientRequestSpamVerdict(payload({ plannedTestDate: max }), at).kind, "ok", `max ${max}`);
+    const dayBefore = new Date(Date.parse(`${min}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    const dayAfter = new Date(Date.parse(`${max}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    assert.equal(clientRequestSpamVerdict(payload({ plannedTestDate: dayBefore }), at).kind, "invalid");
+    assert.equal(clientRequestSpamVerdict(payload({ plannedTestDate: dayAfter }), at).kind, "invalid");
+  }
+  assert.deepEqual(clientRequestTestDateBounds(now), { min: "2025-11-04", max: "2029-11-04" });
+});
+
+test("the honeypot field has a name password managers do not autofill", () => {
+  assert.notEqual(CLIENT_REQUEST_HONEYPOT_FIELD, "website");
+  assert.doesNotMatch(CLIENT_REQUEST_HONEYPOT_FIELD, /web|url|site|email|name|phone|address|pass/i);
+  assert.equal(clientRequestSpamVerdict(payload({ website: "https://example.com" }), now).kind, "ok");
+});
+
+test("the form uses the server's honeypot name and length caps", () => {
+  const form = readFileSync(
+    new URL("../../../accepted-admissions/src/pages/public/client-request.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(form, new RegExp(`const HONEYPOT_FIELD = "${CLIENT_REQUEST_HONEYPOT_FIELD}"`));
+  assert.match(form, new RegExp(`const SHORT_FIELD_MAX = ${CLIENT_REQUEST_SHORT_FIELD_MAX};`));
+  assert.match(form, new RegExp(`const LONG_FIELD_MAX = ${CLIENT_REQUEST_LONG_FIELD_MAX};`));
+  assert.doesNotMatch(form, /name="website"/);
 });

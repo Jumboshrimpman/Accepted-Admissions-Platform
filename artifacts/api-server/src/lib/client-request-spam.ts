@@ -4,16 +4,21 @@
  * parent or student would type.
  */
 
-/** Hidden form field. People never see it; simple bots fill every input. */
-export const CLIENT_REQUEST_HONEYPOT_FIELD = "website";
+/**
+ * Hidden form field. People never see it; simple bots fill every input.
+ * A nonsense name so browsers and password managers do not autofill it.
+ */
+export const CLIENT_REQUEST_HONEYPOT_FIELD = "hp_zx7q";
 
 /** Planned test dates may be up to this many days in the past (a recent sitting). */
 export const CLIENT_REQUEST_TEST_DATE_MAX_PAST_DAYS = 365;
 /** ...and up to this many years ahead. */
 export const CLIENT_REQUEST_TEST_DATE_MAX_FUTURE_YEARS = 3;
 
-const SHORT_FIELD_MAX = 200;
-const LONG_FIELD_MAX = 5000;
+export const CLIENT_REQUEST_SHORT_FIELD_MAX = 200;
+export const CLIENT_REQUEST_LONG_FIELD_MAX = 5000;
+const SHORT_FIELD_MAX = CLIENT_REQUEST_SHORT_FIELD_MAX;
+const LONG_FIELD_MAX = CLIENT_REQUEST_LONG_FIELD_MAX;
 const LONG_FIELDS = new Set(["goals", "schedulingAvailability"]);
 const CHECKED_FIELDS = [
   "guardianName",
@@ -64,14 +69,31 @@ export function parseClientRequestDate(value: string): Date | null {
 }
 
 function scoreOutOfRange(value: string, min: number, max: number): boolean {
-  if (!value) return false;
-  // Free text like "around 1300" or "1250-1300" is allowed; only check every number in it.
-  const numbers = value.match(/\d+/g);
-  if (!numbers) return false;
-  return numbers.some((raw) => {
-    const n = Number(raw);
-    return n < min || n > max;
-  });
+  // Only a bare number is range-checked. Free text such as "1350 (Oct 2025)",
+  // "ACT 31", or "PSAT 160" is accepted (the length cap still applies).
+  if (!/^\d+$/.test(value)) return false;
+  const n = Number(value);
+  return n < min || n > max;
+}
+
+function utcDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Allowed planned test dates as YYYY-MM-DD keys (inclusive). The form's
+ * date input uses the same min/max, so its earliest date always passes.
+ */
+export function clientRequestTestDateBounds(now: Date = new Date()): { min: string; max: string } {
+  const min = new Date(now.getTime() - CLIENT_REQUEST_TEST_DATE_MAX_PAST_DAYS * DAY_MS);
+  const max = new Date(
+    Date.UTC(
+      now.getUTCFullYear() + CLIENT_REQUEST_TEST_DATE_MAX_FUTURE_YEARS,
+      now.getUTCMonth(),
+      now.getUTCDate(),
+    ),
+  );
+  return { min: utcDateKey(min), max: utcDateKey(max) };
 }
 
 export function clientRequestSpamVerdict(
@@ -91,13 +113,8 @@ export function clientRequestSpamVerdict(
   const testDate = text(body, "plannedTestDate");
   if (testDate) {
     const parsed = parseClientRequestDate(testDate);
-    const earliest = now.getTime() - CLIENT_REQUEST_TEST_DATE_MAX_PAST_DAYS * DAY_MS;
-    const latest = Date.UTC(
-      now.getUTCFullYear() + CLIENT_REQUEST_TEST_DATE_MAX_FUTURE_YEARS,
-      now.getUTCMonth(),
-      now.getUTCDate(),
-    );
-    if (!parsed || parsed.getTime() < earliest || parsed.getTime() > latest) {
+    const bounds = clientRequestTestDateBounds(now);
+    if (!parsed || testDate < bounds.min || testDate > bounds.max) {
       return {
         kind: "invalid",
         error: "Enter a planned test date within the next few years, or leave it blank.",
