@@ -283,7 +283,7 @@ test("checkout charges Michelle $130 for Xavier SAT and $200 for everyone else",
     assert.equal(Number(nikaNinety?.totalPriceCents), 22_500);
     assert.equal(Number(nikaTwoHours?.totalPriceCents), 30_000);
     const michelleEunice = michelleProducts.find((product) => product.slug === "sat-eunice-60");
-    assert.equal(Number(michelleEunice?.totalPriceCents), 18_000);
+    assert.equal(Number(michelleEunice?.totalPriceCents), 13_000);
     const sophiaLamasHour = michelleProducts.find((product) => product.slug === "sat-sophia-lamas-60");
     assert.equal(sophiaLamasHour?.name, "SAT 1 hour with Sophia");
     assert.equal(Number(sophiaLamasHour?.totalPriceCents), 18_000);

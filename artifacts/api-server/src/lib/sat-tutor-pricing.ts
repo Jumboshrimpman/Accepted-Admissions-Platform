@@ -15,9 +15,9 @@
  * another tutor. Sophia Sleiman's legacy $130 pool can also book Nika, one
  * ledger hour per session hour. Neel's College Consulting prices are a separate catalog.
  *
- * Michelle Makarem's rates are computed per request: Xavier $130, Nika $150,
- * Eunice $180. Sophia Lamas's SAT English rows are $180/hour and are offered
- * to Michelle only. Sophia Lamas never accepts the legacy $130 pool.
+ * Michelle Makarem's rates are computed per request: Xavier $130, Nika $150.
+ * Eunice stays at the standard $130. Sophia Lamas's SAT English rows are
+ * $180/hour and are offered to Michelle only. Sophia Lamas never accepts the legacy $130 pool.
  */
 
 import {
@@ -42,14 +42,12 @@ export const SOPHIA_SLEIMAN_SAT_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e"
 
 export const MICHELLE_XAVIER_SAT_HOURLY_CENTS = 13_000;
 export const MICHELLE_NIKA_SAT_HOURLY_CENTS = 15_000;
-export const MICHELLE_EUNICE_SAT_HOURLY_CENTS = 18_000;
 export const SOPHIA_LAMAS_SAT_HOURLY_CENTS = 18_000;
 
 /** Michelle-only hourly overrides. Stored catalog rows and Stripe prices keep the standard rate. */
 const MICHELLE_SAT_HOURLY_OVERRIDES: Partial<Record<SatTutorKey, number>> = {
   xavier: MICHELLE_XAVIER_SAT_HOURLY_CENTS,
   nika: MICHELLE_NIKA_SAT_HOURLY_CENTS,
-  eunice: MICHELLE_EUNICE_SAT_HOURLY_CENTS,
 };
 
 const SAT_TUTORS = [

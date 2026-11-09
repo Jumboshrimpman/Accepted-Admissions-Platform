@@ -1,7 +1,7 @@
 /**
  * Direct booking checkout. The server picks the catalog row for the tutor and
  * length. Client-sent prices are ignored. Michelle Makarem's Xavier SAT rate
- * (and her Nika and Eunice rates) are applied by displayedSatPriceCents, not by
+ * (and her Nika rate) are applied by displayedSatPriceCents, not by
  * a price from the browser.
  */
 

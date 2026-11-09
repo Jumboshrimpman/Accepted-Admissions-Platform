@@ -86,7 +86,7 @@ test("per-tutor SAT catalog stores the standard rates", () => {
   }), false);
 });
 
-test("Michelle keeps Xavier at $130, pays $180 for Eunice, and Sophia sees $200", () => {
+test("Michelle keeps Xavier and Eunice at $130 and Sophia sees $200", () => {
   assert.equal(isMichelleMakaremUser(michelle), true);
   assert.equal(isMichelleMakaremUser({ email: "makaremmichelle7@gmail.com" }), true);
   assert.equal(isMichelleMakaremUser(michelleEmail), true);
@@ -100,11 +100,11 @@ test("Michelle keeps Xavier at $130, pays $180 for Eunice, and Sophia sees $200"
     assert.equal(displayedSatPriceCents(product("sat-xavier-90"), user), 19_500);
     assert.equal(displayedSatPriceCents(product("sat-xavier-120"), user), 26_000);
     assert.match(displayedSatDescription(product("sat-xavier-60"), user), /\$130\/hour/);
-    assert.equal(displayedSatHourlyCents("eunice", user), 18_000);
-    assert.equal(displayedSatPriceCents(product("sat-eunice-60"), user), 18_000);
-    assert.equal(displayedSatPriceCents(product("sat-eunice-90"), user), 27_000);
-    assert.equal(displayedSatPriceCents(product("sat-eunice-120"), user), 36_000);
-    assert.match(displayedSatDescription(product("sat-eunice-60"), user), /with Eunice at \$180\/hour/);
+    assert.equal(displayedSatHourlyCents("eunice", user), 13_000);
+    assert.equal(displayedSatPriceCents(product("sat-eunice-60"), user), 13_000);
+    assert.equal(displayedSatPriceCents(product("sat-eunice-90"), user), 19_500);
+    assert.equal(displayedSatPriceCents(product("sat-eunice-120"), user), 26_000);
+    assert.equal(displayedSatDescription(product("sat-eunice-60"), user), product("sat-eunice-60").description);
     assert.equal(displayedSatPriceCents(product("sat-victoria-90"), user), 19_500);
   }
 
@@ -383,7 +383,7 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-xavier-60")?.priceCents, 13_000);
   assert.match(michelleOffers.find((offer) => offer.slug === "sat-xavier-60")?.description ?? "", /\$130\/hour/);
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-nika-60")?.priceCents, 15_000);
-  assert.equal(michelleOffers.find((offer) => offer.slug === "sat-eunice-60")?.priceCents, 18_000);
+  assert.equal(michelleOffers.find((offer) => offer.slug === "sat-eunice-60")?.priceCents, 13_000);
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-sophia-lamas-60")?.priceCents, 18_000);
   assert.equal(
     michelleOffers.find((offer) => offer.slug === "sat-sophia-lamas-60")?.name,
@@ -497,43 +497,48 @@ test("other clients keep standard SAT prices", () => {
   }
 });
 
-test("Michelle's $180 Eunice checkout uses price_data, not the $130 catalog price id", () => {
-  const eunice = product("sat-eunice-60");
-  assert.equal(eunice.totalPriceCents, 13_000);
-  assert.equal(isStandardSatTutorProduct({ ...eunice, active: true }), true);
-  assert.deepEqual(
-    checkoutLineItemFields({
-      catalogPriceCents: eunice.totalPriceCents,
-      unitAmountCents: displayedSatPriceCents(eunice, michelle),
-      stripeProductId: "prod_eunice",
-      priceId: "price_eunice_130",
-    }),
-    {
-      "line_items[0][price_data][currency]": "usd",
-      "line_items[0][price_data][unit_amount]": 18_000,
-      "line_items[0][price_data][product]": "prod_eunice",
-      "line_items[0][quantity]": 1,
-    },
-  );
+test("Michelle's $150 Nika checkout uses price_data; her Eunice checkout keeps the $130 price id", () => {
   const nika = product("sat-nika-60");
+  assert.equal(nika.totalPriceCents, 13_000);
+  assert.equal(isStandardSatTutorProduct({ ...nika, active: true }), true);
   assert.deepEqual(
     checkoutLineItemFields({
       catalogPriceCents: nika.totalPriceCents,
       unitAmountCents: displayedSatPriceCents(nika, michelle),
       stripeProductId: "prod_nika",
       priceId: "price_nika_130",
-    })["line_items[0][price_data][unit_amount]"],
-    15_000,
-  );
-  assert.deepEqual(
-    checkoutLineItemFields({
-      catalogPriceCents: eunice.totalPriceCents,
-      unitAmountCents: displayedSatPriceCents(eunice, otherSatClient),
-      priceId: "price_eunice_130",
     }),
     {
-      "line_items[0][price]": "price_eunice_130",
+      "line_items[0][price_data][currency]": "usd",
+      "line_items[0][price_data][unit_amount]": 15_000,
+      "line_items[0][price_data][product]": "prod_nika",
       "line_items[0][quantity]": 1,
     },
   );
+  const sophiaLamas = product("sat-sophia-lamas-60");
+  assert.deepEqual(
+    checkoutLineItemFields({
+      catalogPriceCents: sophiaLamas.totalPriceCents,
+      unitAmountCents: displayedSatPriceCents(sophiaLamas, michelle),
+      priceId: "price_sophia_lamas_180",
+    }),
+    {
+      "line_items[0][price]": "price_sophia_lamas_180",
+      "line_items[0][quantity]": 1,
+    },
+  );
+  const eunice = product("sat-eunice-60");
+  for (const user of [michelle, otherSatClient]) {
+    assert.deepEqual(
+      checkoutLineItemFields({
+        catalogPriceCents: eunice.totalPriceCents,
+        unitAmountCents: displayedSatPriceCents(eunice, user),
+        priceId: "price_eunice_130",
+      }),
+      {
+        "line_items[0][price]": "price_eunice_130",
+        "line_items[0][quantity]": 1,
+      },
+    );
+  }
 });
