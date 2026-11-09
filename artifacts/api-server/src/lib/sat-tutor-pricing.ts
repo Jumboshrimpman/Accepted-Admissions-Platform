@@ -14,6 +14,10 @@
  * Michelle Makarem, and Sama's test student. Nika-tagged hours do not book
  * another tutor. Sophia Sleiman's legacy $130 pool can also book Nika, one
  * ledger hour per session hour. Neel's College Consulting prices are a separate catalog.
+ *
+ * Michelle Makarem's rates are computed per request: Xavier $130, Nika $150,
+ * Eunice $180. Sophia Lamas's SAT English rows are $180/hour and are offered
+ * to Michelle only. Sophia Lamas never accepts the legacy $130 pool.
  */
 
 import {
@@ -30,13 +34,23 @@ import {
 } from "./credit-hours.ts";
 import { VICTORIA_BOOKING_ENABLED } from "./victoria-booking.ts";
 
-export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
+export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika", "sophia-lamas"] as const;
 export type SatTutorKey = (typeof SAT_TUTOR_KEYS)[number];
 
 /** Sophia Sleiman. Nika's SAT portal also includes Michelle and Sama's test student. */
 export const SOPHIA_SLEIMAN_SAT_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e";
 
 export const MICHELLE_XAVIER_SAT_HOURLY_CENTS = 13_000;
+export const MICHELLE_NIKA_SAT_HOURLY_CENTS = 15_000;
+export const MICHELLE_EUNICE_SAT_HOURLY_CENTS = 18_000;
+export const SOPHIA_LAMAS_SAT_HOURLY_CENTS = 18_000;
+
+/** Michelle-only hourly overrides. Stored catalog rows and Stripe prices keep the standard rate. */
+const MICHELLE_SAT_HOURLY_OVERRIDES: Partial<Record<SatTutorKey, number>> = {
+  xavier: MICHELLE_XAVIER_SAT_HOURLY_CENTS,
+  nika: MICHELLE_NIKA_SAT_HOURLY_CENTS,
+  eunice: MICHELLE_EUNICE_SAT_HOURLY_CENTS,
+};
 
 const SAT_TUTORS = [
   { key: "eunice" as const, firstName: "Eunice", fullName: "Eunice Chon", hourlyCents: 13_000 },
@@ -48,6 +62,12 @@ const SAT_TUTORS = [
   },
   { key: "xavier" as const, firstName: "Xavier", fullName: "Xavier Morales", hourlyCents: 20_000 },
   { key: "nika" as const, firstName: "Nika", fullName: "Nika Raiffe", hourlyCents: 13_000 },
+  {
+    key: "sophia-lamas" as const,
+    firstName: "Sophia",
+    fullName: "Sophia Lamas",
+    hourlyCents: SOPHIA_LAMAS_SAT_HOURLY_CENTS,
+  },
 ];
 
 const SAT_LENGTHS = [
@@ -117,12 +137,14 @@ export type SatTutorViewer = MichelleIdentity & { id?: string | null };
  * Eunice and Xavier stay on the shared SAT roster.
  * Victoria is omitted while VICTORIA_BOOKING_ENABLED is false. Her hour-pool rules stay.
  * Nika is bookable for Sophia Sleiman, Michelle Makarem, and Sama's test student.
+ * Sophia Lamas is bookable for Michelle Makarem only.
  */
 export function canBookSatTutor(
   tutorKey: SatTutorKey,
   user: SatTutorViewer | null | undefined,
 ): boolean {
   if (tutorKey === "victoria" && !VICTORIA_BOOKING_ENABLED) return false;
+  if (tutorKey === "sophia-lamas") return isMichelleMakaremUser(user);
   if (tutorKey !== "nika") return true;
   if (!user) return false;
   if (user.id === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
@@ -172,7 +194,10 @@ export function displayedSatHourlyCents(
   tutorKey: SatTutorKey,
   user: MichelleIdentity | null | undefined,
 ): number {
-  if (tutorKey === "xavier" && isMichelleMakaremUser(user)) return MICHELLE_XAVIER_SAT_HOURLY_CENTS;
+  if (isMichelleMakaremUser(user)) {
+    const override = MICHELLE_SAT_HOURLY_OVERRIDES[tutorKey];
+    if (override !== undefined) return override;
+  }
   return SAT_TUTORS.find((tutor) => tutor.key === tutorKey)!.hourlyCents;
 }
 
@@ -200,11 +225,13 @@ export function displayedSatDescription(
 /**
  * Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle.
  * Nika does only for Sophia Sleiman, matched by portal user id, one ledger hour per session hour.
+ * Sophia Lamas never does: her hours are bought at $180 and tagged to her.
  */
 export function allowsLegacySatPool(
   tutorKey: SatTutorKey,
   user: (MichelleIdentity & { id?: string | null }) | null | undefined,
 ): boolean {
+  if (tutorKey === "sophia-lamas") return false;
   if (tutorKey === "nika") return user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
   if (tutorKey === "eunice" || tutorKey === "victoria") return true;
   return isMichelleMakaremUser(user);

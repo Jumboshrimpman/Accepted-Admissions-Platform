@@ -841,6 +841,8 @@ const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME, VICTORIA_DISPLAY_NAME
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
+/** SAT English tutor offered to Michelle Makarem only (canBookSatTutor). */
+const SOPHIA_LAMAS_NAME = "Sophia Lamas";
 
 function sharedSatBookingTutorNames(): string[] {
   return SAT_BOOKING_TUTOR_NAMES.filter((name) => !victoriaBookingRefused({ name }));
@@ -853,6 +855,7 @@ function satPortalTutorNames(user: {
 } | null | undefined): string[] {
   const names: string[] = sharedSatBookingTutorNames();
   if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
+  if (canBookSatTutor("sophia-lamas", user)) names.push(SOPHIA_LAMAS_NAME);
   // Sophia's Victoria carve-out follows the kill switch (VICTORIA_BOOKING_ENABLED).
   if (
     VICTORIA_BOOKING_ENABLED &&
@@ -877,6 +880,20 @@ async function bookerMayBookNika(bookerUserId: string | undefined): Promise<bool
     .where(eq(usersTable.id, bookerUserId))
     .limit(1);
   return canBookSatTutor("nika", booker);
+}
+
+async function bookerMayBookSophiaLamas(bookerUserId: string | undefined): Promise<boolean> {
+  if (!bookerUserId) return false;
+  const [booker] = await db
+    .select({
+      id: usersTable.id,
+      clerkUserId: usersTable.clerkUserId,
+      email: usersTable.email,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, bookerUserId))
+    .limit(1);
+  return canBookSatTutor("sophia-lamas", booker);
 }
 
 const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
@@ -5583,7 +5600,10 @@ function tutorOfferedToClients(tutor: {
   return (
     tutor.active &&
     tutor.bookingEligible &&
-    (onSharedRoster || tutor.name === NIKA_NAME || consultingTutorAllowed(tutor))
+    (onSharedRoster ||
+      tutor.name === NIKA_NAME ||
+      tutor.name === SOPHIA_LAMAS_NAME ||
+      consultingTutorAllowed(tutor))
   );
 }
 
@@ -5610,6 +5630,10 @@ async function bookingTutor(
       tutor.bookingEligible &&
       tutor.name === NIKA_NAME &&
       (await bookerMayBookNika(bookerUserId));
+    const onSophiaLamasRoster =
+      tutor.bookingEligible &&
+      tutor.name === SOPHIA_LAMAS_NAME &&
+      (await bookerMayBookSophiaLamas(bookerUserId));
     const onSophiaVictoriaRoster = sophiaMayBookVictoria(tutor, bookerUserId);
     if (isNeelDharniUser(bookerUserId) && !consultingTutorAllowed(tutor)) {
       throw new BookingError(
@@ -5620,7 +5644,7 @@ async function bookingTutor(
     }
     const allowed = isNeelDharniUser(bookerUserId)
       ? consultingTutorAllowed(tutor)
-      : onSharedRoster || onNikaRoster || onSophiaVictoriaRoster;
+      : onSharedRoster || onNikaRoster || onSophiaLamasRoster || onSophiaVictoriaRoster;
     if (!allowed) {
       throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
     }
@@ -6865,7 +6889,8 @@ async function offeredAvailabilityForProfile(
   // The client gates who may book this tutor. Slot math does not change.
   // Nika and consulting-only tutors are limited to approved clients.
   const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
-  const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
+  const availabilityDependsOnClient =
+    profile.name === NIKA_NAME || profile.name === SOPHIA_LAMAS_NAME || consultingOnly;
   const offeredToClients = tutorOfferedToClients(profile);
   if (!offeredToClients) {
     const [rule] = await db
@@ -14157,7 +14182,7 @@ async function dashboardDataForUser(
     const legacyIds = catalogRows
       .filter((product) => ACCEPTED_SAT_CATALOG_SLUGS.has(product.slug))
       .map((product) => product.id);
-    const taggedHours = (tutorKey: "eunice" | "victoria" | "xavier" | "nika") =>
+    const taggedHours = (tutorKey: "eunice" | "victoria" | "xavier" | "nika" | "sophia-lamas") =>
       remainingCreditHoursForProducts(
         summaryEntries,
         catalogRows
@@ -14180,6 +14205,7 @@ async function dashboardDataForUser(
             { name: "Victoria", hours: taggedHours("victoria") },
             { name: "Xavier", hours: taggedHours("xavier") },
             { name: "Nika", hours: taggedHours("nika") },
+            { name: "Sophia", hours: taggedHours("sophia-lamas") },
           ],
         });
   }
@@ -14458,7 +14484,7 @@ router.get(
       }
       for (const profile of tutorProfiles) {
         const tutorKey = satTutorKeyForName(profile.name);
-        if (!tutorKey || profile.calendarStatus !== "connected") continue;
+        if (!tutorKey || tutorKey === "sophia-lamas" || profile.calendarStatus !== "connected") continue;
         calendars[tutorKey] = true;
       }
       previewSatTutors = sophiaPreviewTutors({
