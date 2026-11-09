@@ -1,7 +1,8 @@
 /**
  * Direct booking checkout. The server picks the catalog row for the tutor and
  * length. Client-sent prices are ignored. Michelle Makarem's Xavier SAT rate
- * is applied by displayedSatPriceCents, not by a price from the browser.
+ * (and her Nika rate) are applied by displayedSatPriceCents, not by
+ * a price from the browser.
  */
 
 export const BOOKING_CHECKOUT_SLOT_TAKEN =
@@ -10,7 +11,7 @@ export const BOOKING_CHECKOUT_SLOT_TAKEN =
 export const BOOKING_CHECKOUT_PAYMENT_PENDING =
   "Stripe has not confirmed this payment yet. Your time was not booked.";
 
-const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
+const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika", "sophia-lamas"] as const;
 export type SatBookingTutorKey = (typeof SAT_TUTOR_KEYS)[number];
 export type ConsultingBookingTutorKey = "nika" | "victoria" | "xavier" | "eunice";
 
@@ -62,8 +63,8 @@ export function sharedSatSlugForDuration(durationMinutes: number): string | null
 
 /**
  * Per-tutor SAT slugs win when those rows exist. Shared duration rows are the
- * fallback for Eunice, Victoria, and Xavier. Nika never falls back to that
- * shared pool, so a missing sat-nika row cannot sell untagged hours.
+ * fallback for Eunice, Victoria, and Xavier. Nika and Sophia Lamas never fall
+ * back to that shared pool, so a missing per-tutor row cannot sell untagged hours.
  */
 export function satCheckoutSlugCandidates(
   tutorKey: SatBookingTutorKey,
@@ -73,13 +74,13 @@ export function satCheckoutSlugCandidates(
     durationMinutes === 60 || durationMinutes === 90 || durationMinutes === 120
       ? `sat-${tutorKey}-${durationMinutes}`
       : null;
-  if (tutorKey === "nika") return specific ? [specific] : [];
+  if (tutorKey === "nika" || tutorKey === "sophia-lamas") return specific ? [specific] : [];
   const shared = sharedSatSlugForDuration(durationMinutes);
   return [specific, shared].filter((slug): slug is string => Boolean(slug));
 }
 
 export function isPerTutorSatSlug(slug: string): boolean {
-  return /^sat-(eunice|victoria|xavier|nika)-(60|90|120)$/.test(slug);
+  return /^sat-(eunice|victoria|xavier|nika|sophia-lamas)-(60|90|120)$/.test(slug);
 }
 
 export function selectBookingCheckoutProduct(args: {

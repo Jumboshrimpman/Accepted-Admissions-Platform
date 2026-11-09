@@ -119,6 +119,8 @@ test("Sophia is an SAT client and prefers a per-tutor product when that row exis
   ]);
   assert.equal(isPerTutorSatSlug("sat-eunice-60"), true);
   assert.equal(isPerTutorSatSlug("sat-nika-60"), true);
+  assert.equal(isPerTutorSatSlug("sat-sophia-lamas-60"), true);
+  assert.deepEqual(satCheckoutSlugCandidates("sophia-lamas", 90), ["sat-sophia-lamas-90"]);
   assert.equal(isPerTutorSatSlug("single-sat-session"), false);
   assert.equal(isPerTutorSatSlug("college-consulting-nika-hour"), false);
 });

@@ -42,6 +42,7 @@ const TUTOR_LABELS: Record<string, string> = {
   victoria: "Victoria",
   xavier: "Xavier",
   eunice: "Eunice",
+  "sophia-lamas": "Sophia",
 };
 
 export type BillingHistoryEntry = {
