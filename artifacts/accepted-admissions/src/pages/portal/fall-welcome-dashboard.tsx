@@ -29,6 +29,7 @@ import {
   optionalClientTimezone,
   sessionDateKey,
   sessionSubjectLabel,
+  splitSessionsByEnd,
   uniqueListedSessions,
   withDisplayTimezone,
 } from "@/lib/session-display";
@@ -163,6 +164,12 @@ function readinessLabel(session: CurriculumSession): string {
   return session.latestResult ? "Ready · result available" : "Ready";
 }
 
+/** Status for a meeting that has already ended. Prep-due and in-progress labels no longer apply. */
+function pastReadinessLabel(session: CurriculumSession): string {
+  if (session.readiness === "complete") return "Complete";
+  return session.latestResult ? "Ended · result available" : "Ended";
+}
+
 export default function FallWelcomeDashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
 
@@ -292,14 +299,16 @@ export function ClientDashboardView({
     ),
   );
   const sessionList = collapsedListedSessions(sessions, false);
-  const roadmapCanToggle = sessionList.upcoming.length > 3;
-  const roadmapHiddenCount = roadmapCanToggle
-    ? sessionList.upcoming.length - 3 + sessionList.past.length
-    : 0;
+  // The roadmap lists only meetings whose end time is still ahead. Ended
+  // meetings move to the collapsed Past sessions list below it.
+  const roadmapSplit = splitSessionsByEnd(sessions, now);
+  const roadmapCanToggle = roadmapSplit.upcoming.length > 3;
+  const roadmapHiddenCount = roadmapCanToggle ? roadmapSplit.upcoming.length - 3 : 0;
   const roadmapSessions =
     roadmapCanToggle && !showAllSessions
-      ? sessionList.upcoming.slice(0, 3)
-      : [...sessionList.upcoming, ...sessionList.past];
+      ? roadmapSplit.upcoming.slice(0, 3)
+      : roadmapSplit.upcoming;
+  const pastRoadmapSessions = roadmapSplit.past;
   const hasUpcomingReservedSession = [
     ...sessionList.upcoming,
     ...(dashboard.upcomingSessions ?? []),
@@ -345,6 +354,69 @@ export function ClientDashboardView({
     creditsRemainingLabel: dashboard.credits.creditsRemainingLabel,
     tutors: dashboard.credits.collegeConsultingTutors,
   });
+  const renderRoadmapRow = (session: (typeof sessions)[number], past = false) => {
+                const index = sessions.findIndex((candidate) => candidate.id === session.id);
+                return (
+                <li
+                  key={session.id}
+                  className={!past && session.id === nextSession?.id ? "bg-primary/[0.035]" : ""}
+                  data-testid={past ? `portal-past-session-${session.id}` : undefined}
+                >
+                  <div className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
+                    <div>
+                      <p className="font-semibold">{formatSessionDate(withDisplayTimezone(session, clientTimezone))}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(session, clientTimezone))}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={sessionSubjectLabel(session.subject) === "English" ? "secondary" : "outline"}>{sessionSubjectLabel(session.subject)}</Badge>
+                        <span className="truncate text-sm font-medium">{displaySessionFocus(session.currentFocus, session.latestResult?.analysis, "Open the session to review the focus.")}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {session.preparation
+                          ? `Before: ${studentFacingCopy(session.preparation.title) || "assigned pre-work"}`
+                          : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
+                      </p>
+                      <PreworkDeadlineNote
+                        label={
+                          session.preparation
+                            ? studentPreworkDeadlineCopy({
+                                assignment: session.preparation,
+                                session,
+                                pastSessionDay: calendarDayPast(session),
+                                clientTimezone,
+                              })
+                            : null
+                        }
+                        testId={`roadmap-prework-deadline-${session.id}`}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      {session.readiness === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-4 w-4 text-amber-600" /> : <BookOpenCheck className="h-4 w-4 text-primary" />}
+                      <span>{past ? pastReadinessLabel(session) : readinessLabel(session)}</span>
+                    </div>
+                    {adminPreview ? (
+                      <Button disabled variant="ghost" size="sm">Read only</Button>
+                    ) : (
+                      <div className="flex flex-col items-stretch gap-2 lg:items-end">
+                        {past ? null : (
+                          <SessionJoinActions
+                            meetingUrl={session.meetingUrl}
+                            calendarEventUrl={session.calendarEventUrl}
+                          />
+                        )}
+                        <Button asChild variant={!past && session.id === nextSession?.id ? "default" : "ghost"} size="sm">
+                          <Link href={`/portal/courses/${session.courseId}/sessions/${session.id}`}>
+                            Open <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </li>
+                );
+  };
   const upcomingMeeting = nextSession ? (
         <Card className="border-primary/25 shadow-sm" data-testid="client-upcoming-meeting">
           <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_1fr_auto] lg:items-center">
@@ -875,73 +947,23 @@ export function ClientDashboardView({
           <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />{twelveSessionPlan ? "Twelve-session roadmap" : "Session roadmap"}</CardTitle>
           <CardDescription>
             {twelveSessionPlan
-              ? "The next three upcoming dates are shown first. Open any date to see its before, during, and after learning loop."
-              : "The next three upcoming meetings are shown first. Open any meeting to see its before, during, and after learning loop."}
+              ? "The next three upcoming dates are shown first. Open any date to see its before, during, and after learning loop. Past dates are under Past sessions."
+              : "The next three upcoming meetings are shown first. Open any meeting to see its before, during, and after learning loop. Past meetings are under Past sessions."}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {sessions.length > 0 ? (
+          {roadmapSplit.upcoming.length > 0 ? (
             <ol id="portal-session-roadmap" className="divide-y">
-              {roadmapSessions.map((session) => {
-                const index = sessions.findIndex((candidate) => candidate.id === session.id);
-                return (
-                <li key={session.id} className={session.id === nextSession?.id ? "bg-primary/[0.035]" : ""}>
-                  <div className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
-                    <div>
-                      <p className="font-semibold">{formatSessionDate(withDisplayTimezone(session, clientTimezone))}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(session, clientTimezone))}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={sessionSubjectLabel(session.subject) === "English" ? "secondary" : "outline"}>{sessionSubjectLabel(session.subject)}</Badge>
-                        <span className="truncate text-sm font-medium">{displaySessionFocus(session.currentFocus, session.latestResult?.analysis, "Open the session to review the focus.")}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {session.preparation
-                          ? `Before: ${studentFacingCopy(session.preparation.title) || "assigned pre-work"}`
-                          : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
-                      </p>
-                      <PreworkDeadlineNote
-                        label={
-                          session.preparation
-                            ? studentPreworkDeadlineCopy({
-                                assignment: session.preparation,
-                                session,
-                                pastSessionDay: calendarDayPast(session),
-                                clientTimezone,
-                              })
-                            : null
-                        }
-                        testId={`roadmap-prework-deadline-${session.id}`}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      {session.readiness === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-4 w-4 text-amber-600" /> : <BookOpenCheck className="h-4 w-4 text-primary" />}
-                      <span>{readinessLabel(session)}</span>
-                    </div>
-                    {adminPreview ? (
-                      <Button disabled variant="ghost" size="sm">Read only</Button>
-                    ) : (
-                      <div className="flex flex-col items-stretch gap-2 lg:items-end">
-                        <SessionJoinActions
-                          meetingUrl={session.meetingUrl}
-                          calendarEventUrl={session.calendarEventUrl}
-                        />
-                        <Button asChild variant={session.id === nextSession?.id ? "default" : "ghost"} size="sm">
-                          <Link href={`/portal/courses/${session.courseId}/sessions/${session.id}`}>
-                            Open <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </li>
-                );
-              })}
+              {roadmapSessions.map((session) => renderRoadmapRow(session))}
             </ol>
           ) : (
-            <p className="px-6 py-10 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "No Fall sessions are visible for this account." : "No sessions are visible for this account."}</p>
+            <p className="px-6 py-10 text-center text-sm text-muted-foreground" data-testid="portal-session-roadmap-empty">
+              {sessions.length > 0
+                ? "No upcoming sessions are scheduled. Past sessions are listed below."
+                : twelveSessionPlan
+                  ? "No Fall sessions are visible for this account."
+                  : "No sessions are visible for this account."}
+            </p>
           )}
           {roadmapCanToggle ? (
             <div className="border-t px-5 py-4 sm:px-6">
@@ -953,6 +975,16 @@ export function ClientDashboardView({
                 controlsId="portal-session-roadmap"
               />
             </div>
+          ) : null}
+          {pastRoadmapSessions.length > 0 ? (
+            <details className="border-t" data-testid="portal-past-sessions">
+              <summary className="cursor-pointer px-5 py-4 text-base font-semibold sm:px-6">
+                Past sessions ({pastRoadmapSessions.length})
+              </summary>
+              <ol id="portal-past-sessions-list" className="divide-y border-t">
+                {pastRoadmapSessions.map((session) => renderRoadmapRow(session, true))}
+              </ol>
+            </details>
           ) : null}
         </CardContent>
       </Card>

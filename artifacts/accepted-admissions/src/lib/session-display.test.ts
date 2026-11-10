@@ -6,6 +6,7 @@ import {
   canCancelOrRescheduleSession,
   displaySessionTitle,
   collapsedListedSessions,
+  splitSessionsByEnd,
   collapsedItems,
   disclosedSessions,
   listedSessionMeetingKey,
@@ -398,5 +399,33 @@ test("keeps English as the user-facing label for IELTS sessions", () => {
   assert.equal(
     displaySessionTitle("IELTS session with Nika Raiffe", "IELTS"),
     "English session with Nika Raiffe",
+  );
+});
+test("splitSessionsByEnd keeps a session upcoming until its end time and orders past newest first", () => {
+  const now = new Date("2026-11-10T12:00:00.000Z");
+  const session = (id: string, dateTime: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    dateTime,
+    timezone: "Asia/Dubai",
+    durationMinutes: 60,
+    ...extra,
+  });
+  const { upcoming, past } = splitSessionsByEnd(
+    [
+      session("sep20", "2026-09-20T17:00:00.000Z", { readiness: "in_progress" }),
+      session("live", "2026-11-10T11:30:00.000Z"),
+      session("nov1", "2026-11-01T17:00:00.000Z", { readiness: "not_started" }),
+      session("justEnded", "2026-11-10T11:00:00.000Z"),
+      session("nov15", "2026-11-15T17:00:00.000Z", { readiness: "complete" }),
+    ],
+    now,
+  );
+  assert.deepEqual(
+    upcoming.map((item) => item.id),
+    ["live", "nov15"],
+  );
+  assert.deepEqual(
+    past.map((item) => item.id),
+    ["justEnded", "nov1", "sep20"],
   );
 });
