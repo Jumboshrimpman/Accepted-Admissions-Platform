@@ -57,7 +57,14 @@ export function FinancialCard({
     );
   }
 
-  const { invoices, payments, credits } = data;
+  const { credits } = data;
+  // An abandoned Stripe checkout (expired, never paid) is canceled with no charge. Leave it out of the lists.
+  const payments = data.payments.filter(
+    (payment) => !(payment.status === "canceled" && payment.method === "stripe_checkout"),
+  );
+  const invoices = data.invoices.filter(
+    (invoice) => !(invoice.status === "canceled" && invoice.provider === "stripe_checkout"),
+  );
   const remainingHours = asCreditHours(data.remainingHours) ?? 0;
   const purchasedHours = asCreditHours(data.purchasedHours) ?? 0;
   const usedHours = asCreditHours(data.usedHours) ?? 0;

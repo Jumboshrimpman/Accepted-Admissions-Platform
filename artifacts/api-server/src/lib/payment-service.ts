@@ -1028,6 +1028,8 @@ export type ReconcileCheckoutResult = {
   scanned: number;
   fulfilled: Array<{ paymentId: string; hours: number; inserted: boolean }>;
   skipped: Array<{ paymentId: string; reason: string }>;
+  /** Unpaid checkouts Stripe already expired, now canceled like the checkout.session.expired webhook. */
+  canceled: Array<{ paymentId: string }>;
 };
 
 export async function reconcilePendingStripeCheckouts(options: {
@@ -1064,6 +1066,7 @@ export async function reconcilePendingStripeCheckouts(options: {
 
   const fulfilled: ReconcileCheckoutResult["fulfilled"] = [];
   const skipped: ReconcileCheckoutResult["skipped"] = [];
+  const canceled: ReconcileCheckoutResult["canceled"] = [];
 
   if (options.paymentId && pending.length === 0) {
     skipped.push({ paymentId: options.paymentId, reason: "not_a_pending_checkout_payment" });
@@ -1085,7 +1088,45 @@ export async function reconcilePendingStripeCheckouts(options: {
       });
       continue;
     }
-    if (!stripeCheckoutObjectIsPaid("checkout.session.completed", recordString(session, "payment_status"))) {
+    const sessionPaid = stripeCheckoutObjectIsPaid(
+      "checkout.session.completed",
+      recordString(session, "payment_status"),
+    );
+    if (!sessionPaid && recordString(session, "status") === "expired") {
+      // Same outcome as the checkout.session.expired webhook: no credits, hold released.
+      const wasCanceled = await db.transaction(async (tx) => {
+        await tx.execute(sql`select id from payments where id = ${row.payment.id} for update`);
+        const [payment] = await tx
+          .select()
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, row.payment.id))
+          .limit(1);
+        if (!payment || payment.status !== "pending") return false;
+        await releaseSlotHoldForPayment(tx, payment.id);
+        await tx
+          .update(paymentsTable)
+          .set({
+            status: "canceled",
+            providerCheckoutSessionId: recordString(session, "id") ?? payment.providerCheckoutSessionId,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentsTable.id, payment.id));
+        if (payment.invoiceId) {
+          await tx
+            .update(invoicesTable)
+            .set({ status: "canceled" })
+            .where(eq(invoicesTable.id, payment.invoiceId));
+        }
+        return true;
+      });
+      if (wasCanceled) {
+        canceled.push({ paymentId: row.payment.id });
+      } else {
+        skipped.push({ paymentId: row.payment.id, reason: "checkout_expired_not_pending" });
+      }
+      continue;
+    }
+    if (!sessionPaid) {
       skipped.push({
         paymentId: row.payment.id,
         reason: `checkout_unpaid:${recordString(session, "payment_status") ?? "unknown"}`,
@@ -1145,6 +1186,7 @@ export async function reconcilePendingStripeCheckouts(options: {
     scanned: pending.length,
     fulfilled,
     skipped,
+    canceled,
   };
 }
 
