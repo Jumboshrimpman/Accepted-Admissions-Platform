@@ -52,6 +52,7 @@ import {
   matchesTaitoScheduledDate,
   normalizedSessionSubject,
 } from "./session-schedule.ts";
+import { skipsAutoPrework } from "./no-auto-prework-clients.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 const HARD_SAT_SHORTFALL_TITLE = "Hard SAT set needs questions";
@@ -1265,9 +1266,12 @@ export async function ensureHardSatSessionSets(
 }> {
   const difficulty = await satDifficultyForSession(session);
   if (difficulty !== "hard") return { difficulty, inSessionStatus: null };
-  const prework = await ensureHardSatPrework(session, actorUserId);
+  // Clients with no automatic pre-work keep their in-session set only.
+  const prework = skipsAutoPrework(session)
+    ? null
+    : await ensureHardSatPrework(session, actorUserId);
   const inSession = await ensureHardSatInSession(session);
-  if (prework.action === "shortfall" || inSession.status === "unavailable") {
+  if (prework?.action === "shortfall" || inSession.status === "unavailable") {
     return { difficulty, inSessionStatus: "unavailable" };
   }
   return { difficulty, inSessionStatus: inSession.status };
