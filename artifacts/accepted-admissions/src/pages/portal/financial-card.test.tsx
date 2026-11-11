@@ -49,4 +49,41 @@ describe("SAT session payment and receipts", () => {
     expect(screen.getByText("Recent payments")).toBeTruthy();
     expect(screen.getByText("1 hour remaining")).toBeTruthy();
   });
+
+  test("leaves expired, unpaid Stripe checkouts out of Recent payments and Invoices", () => {
+    const base = { tutorShareCents: 0, platformShareCents: 13000, refundedAmountCents: 0 };
+    const invoiceBase = {
+      description: "SAT 1 hour with Eunice",
+      subtotalCents: 13000,
+      discountCents: 0,
+      taxCents: 0,
+      totalCents: 13000,
+      issuerName: "Accepted Admissions",
+      issuerEmail: "",
+      issuerAddress: "",
+      paymentInstructions: "",
+      lineItems: [],
+    };
+    render(
+      <FinancialCard
+        previewData={{
+          ...previewFinancials,
+          payments: [
+            { ...base, id: "abandoned", amountCents: 13000, status: "canceled", method: "stripe_checkout", productName: "Abandoned Eunice checkout", createdAt: "2026-11-08T17:56:08.000Z" },
+            { ...base, id: "paid", amountCents: 13000, status: "paid", method: "stripe_checkout", productName: "Paid Xavier hour", createdAt: "2026-11-01T17:00:00.000Z" },
+          ],
+          invoices: [
+            { ...invoiceBase, id: "inv-abandoned", status: "canceled", provider: "stripe_checkout", description: "Abandoned invoice", createdAt: "2026-11-08T17:56:08.000Z" },
+            { ...invoiceBase, id: "inv-paid", status: "paid", provider: "stripe_checkout", description: "Paid invoice", createdAt: "2026-11-01T17:00:00.000Z" },
+          ],
+        } as never}
+        adminPreview
+      />,
+    );
+
+    expect(screen.queryByText("Abandoned Eunice checkout")).toBeNull();
+    expect(screen.getByText("Paid Xavier hour")).toBeTruthy();
+    expect(screen.queryByText("Abandoned invoice")).toBeNull();
+    expect(screen.getByText("Paid invoice")).toBeTruthy();
+  });
 });
