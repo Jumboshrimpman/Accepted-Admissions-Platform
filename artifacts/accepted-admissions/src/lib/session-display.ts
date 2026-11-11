@@ -489,6 +489,24 @@ export function isUpcomingListedSession(
   return !isPastSession(session, now);
 }
 
+/**
+ * Splits sessions by time only: upcoming keeps sessions whose end is still ahead,
+ * in the given order; past holds the rest, most recent first.
+ */
+export function splitSessionsByEnd<T extends ListedSession>(
+  sessions: readonly T[],
+  now: Date = new Date(),
+): { upcoming: T[]; past: T[] } {
+  const upcoming: T[] = [];
+  const past: T[] = [];
+  for (const session of sessions) {
+    if (isPastSession(session, now)) past.push(session);
+    else upcoming.push(session);
+  }
+  past.sort((left, right) => asDate(right.dateTime).getTime() - asDate(left.dateTime).getTime());
+  return { upcoming, past };
+}
+
 export function isSessionWorkComplete(
   session: Pick<ListedSession, "readiness" | "status" | "latestResult" | "preparation">,
 ): boolean {

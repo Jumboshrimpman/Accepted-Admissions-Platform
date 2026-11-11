@@ -1175,7 +1175,7 @@ describe("authenticated role dashboard flows", () => {
     expect(document.body.textContent).not.toMatch(/clean questions?/i);
   });
 
-  test("Taito’s twelve-session roadmap dedupes meetings and collapses past the next three", () => {
+  test("Taito’s twelve-session roadmap dedupes meetings, shows the next three, and docks ended dates under Past sessions", () => {
     const fallDates = [
       "2026-10-02",
       "2026-10-09",
@@ -1237,27 +1237,39 @@ describe("authenticated role dashboard flows", () => {
       ...dashboardForRole("student"),
       curriculumSessions,
     } as Dashboard;
-    render(<FallWelcomeDashboard />);
+    // Pin the clock so Oct 2, 9 and 16 have ended and Oct 23 onward is upcoming.
+    vi.useFakeTimers({ now: new Date("2026-10-20T00:00:00.000Z"), toFake: ["Date"] });
+    try {
+      render(<FallWelcomeDashboard />);
 
-    expect(screen.getByText("0 of 12")).toBeTruthy();
-    expect(screen.getByText("Friday, October 9, 2026")).toBeTruthy();
-    expect(screen.getByText("Friday, October 16, 2026")).toBeTruthy();
-    expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
-    expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
-    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
+      expect(screen.getByText("0 of 12")).toBeTruthy();
+      const list = document.getElementById("portal-session-roadmap")!;
+      expect(list.querySelectorAll("li")).toHaveLength(3);
+      expect(within(list).getByText("Friday, October 23, 2026")).toBeTruthy();
+      expect(within(list).getByText("Friday, November 6, 2026")).toBeTruthy();
+      expect(within(list).queryByText("Friday, November 13, 2026")).toBeNull();
+      expect(within(list).queryByText(/October 2, 2026/)).toBeNull();
+      const toggle = screen.getByTestId("session-list-show-more");
+      expect(toggle.textContent).toContain("See more (6)");
 
-    fireEvent.click(screen.getByTestId("session-list-show-more"));
-    expect(screen.getByText("Friday, October 23, 2026")).toBeTruthy();
-    expect(screen.getByText("Friday, December 18, 2026")).toBeTruthy();
-    expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
-    expect(screen.getAllByText(/October 23, 2026/)).toHaveLength(1);
-    expect(screen.getAllByText("SAT reasoning.")).toHaveLength(10);
-    expect(screen.getAllByText("English communication.")).toHaveLength(3);
-    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show less");
+      fireEvent.click(toggle);
+      expect(list.querySelectorAll("li")).toHaveLength(9);
+      expect(within(list).getByText("Friday, December 18, 2026")).toBeTruthy();
+      expect(within(list).getAllByText(/October 23, 2026/)).toHaveLength(1);
+      expect(toggle.textContent).toContain("Show less");
 
-    fireEvent.click(screen.getByTestId("session-list-show-more"));
-    expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
-    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
+      fireEvent.click(toggle);
+      expect(list.querySelectorAll("li")).toHaveLength(3);
+
+      const past = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+      expect(past.open).toBe(false);
+      expect(past.querySelector("summary")?.textContent).toContain("Past sessions (3)");
+      expect(past.querySelectorAll("li")).toHaveLength(3);
+      expect(within(past).getAllByText(/October 2, 2026/)).toHaveLength(1);
+      expect(within(past).getAllByText(/October 16, 2026/)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("the session roadmap shows the next three upcoming meetings until See more", () => {
@@ -1312,20 +1324,24 @@ describe("authenticated role dashboard flows", () => {
     expect(toggle.tagName).toBe("BUTTON");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(toggle.getAttribute("aria-controls")).toBe("portal-session-roadmap");
-    expect(toggle.textContent).toContain("See more (2)");
+    expect(toggle.textContent).toContain("See more (1)");
 
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(toggle.textContent).toContain("Show less");
     expect(openLink("four")).toBeTruthy();
-    expect(openLink("past")).toBeTruthy();
-    expect(list!.querySelectorAll("li")).toHaveLength(5);
+    expect(openLink("past")).toBeNull();
+    expect(list!.querySelectorAll("li")).toHaveLength(4);
 
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(openLink("four")).toBeNull();
-    expect(openLink("past")).toBeNull();
     expect(list!.querySelectorAll("li")).toHaveLength(3);
+
+    const past = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+    expect(past.open).toBe(false);
+    expect(past.querySelector("summary")?.textContent).toContain("Past sessions (1)");
+    expect(past.querySelector('a[href="/portal/courses/course-fall/sessions/past"]')).toBeTruthy();
   });
 
   test("three or fewer upcoming meetings show no See more control", () => {
@@ -1371,10 +1387,135 @@ describe("authenticated role dashboard flows", () => {
     expect(openLink("one")).toBeTruthy();
     expect(openLink("two")).toBeTruthy();
     expect(openLink("three")).toBeTruthy();
-    expect(openLink("past")).toBeTruthy();
-    expect(list!.querySelectorAll("li")).toHaveLength(4);
+    expect(openLink("past")).toBeNull();
+    expect(list!.querySelectorAll("li")).toHaveLength(3);
     expect(screen.queryByTestId("session-list-show-more")).toBeNull();
     expect(screen.queryByRole("button", { name: /See more/i })).toBeNull();
+    const past = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+    expect(past.open).toBe(false);
+    expect(past.querySelector('a[href="/portal/courses/course-fall/sessions/past"]')).toBeTruthy();
+  });
+
+  test("ended meetings leave the roadmap for a collapsed Past sessions list, newest first", () => {
+    const base = dashboardForRole("student");
+    const at = (daysFromNow: number) =>
+      new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString();
+    const meeting = (
+      id: string,
+      title: string,
+      daysFromNow: number,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id,
+      courseId: "course-fall",
+      dateTime: at(daysFromNow),
+      timezone: "Asia/Dubai",
+      durationMinutes: 60,
+      subject: "SAT" as const,
+      title,
+      status: "published" as const,
+      meetingUrl: "https://meet.google.com/michelle-room",
+      calendarEventUrl: null,
+      tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+      student: { id: "student-user", name: "Michelle Makarem" },
+      readiness: "ready" as const,
+      nextAction: "Open session plan",
+      currentFocus: "SAT reasoning.",
+      preparation: null,
+      latestResult: null,
+      ...extra,
+    });
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false, selfServeSatBooking: false },
+      upcomingSessions: [],
+      curriculumSessions: [
+        meeting("sep20", "Sep 20 SAT", -50, {
+          readiness: "in_progress",
+          preparation: { id: "quiz-sep20", title: "Pre-work", latestAttemptStatus: "active" },
+        }),
+        meeting("oct18", "Oct 18 SAT", -22, { latestResult: { analysis: null } }),
+        meeting("nov1", "Nov 1 SAT", -9, { readiness: "not_started" }),
+        meeting("nov15", "Nov 15 SAT", 5),
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const list = document.getElementById("portal-session-roadmap")!;
+    expect(list.querySelectorAll("li")).toHaveLength(1);
+    expect(list.querySelector('a[href="/portal/courses/course-fall/sessions/nov15"]')).toBeTruthy();
+    for (const id of ["sep20", "oct18", "nov1"]) {
+      expect(list.querySelector(`a[href="/portal/courses/course-fall/sessions/${id}"]`)).toBeNull();
+    }
+
+    const past = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+    expect(past.open).toBe(false);
+    expect(past.querySelector("summary")?.textContent).toContain("Past sessions (3)");
+    const rows = Array.from(past.querySelectorAll("li")).map((row) => row.getAttribute("data-testid"));
+    expect(rows).toEqual([
+      "portal-past-session-nov1",
+      "portal-past-session-oct18",
+      "portal-past-session-sep20",
+    ]);
+    expect(past.textContent).not.toContain("Preparation due");
+    expect(past.textContent).not.toContain("In progress");
+    expect(screen.getByTestId("portal-past-session-oct18").textContent).toContain("Ended · result available");
+    expect(screen.getByTestId("portal-past-session-nov1").textContent).toContain("Ended");
+    for (const id of ["sep20", "oct18", "nov1"]) {
+      expect(past.querySelector(`a[href="/portal/courses/course-fall/sessions/${id}"]`)).toBeTruthy();
+    }
+    // Ended meetings drop the join link but keep the session page.
+    expect(past.querySelector('a[href="https://meet.google.com/michelle-room"]')).toBeNull();
+    cleanup();
+
+    // The admin client preview uses the same split, read-only.
+    render(<ClientDashboardView dashboard={mocks.dashboard} adminPreview />);
+    const previewList = document.getElementById("portal-session-roadmap")!;
+    expect(previewList.querySelectorAll("li")).toHaveLength(1);
+    const previewPast = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+    expect(previewPast.open).toBe(false);
+    expect(previewPast.querySelector("summary")?.textContent).toContain("Past sessions (3)");
+    expect(previewPast.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  test("a client with only ended meetings sees an empty upcoming roadmap and the past list", () => {
+    const base = dashboardForRole("student");
+    const ended = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false, selfServeSatBooking: false },
+      upcomingSessions: [],
+      curriculumSessions: [
+        {
+          id: "old",
+          courseId: "course-fall",
+          dateTime: ended,
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Old SAT",
+          status: "published",
+          meetingUrl: null,
+          calendarEventUrl: null,
+          tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Sophia Sleiman" },
+          readiness: "ready",
+          nextAction: "Open session plan",
+          currentFocus: "SAT reasoning.",
+          preparation: null,
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(document.getElementById("portal-session-roadmap")).toBeNull();
+    expect(screen.getByTestId("portal-session-roadmap-empty").textContent).toContain(
+      "No upcoming sessions are scheduled",
+    );
+    const past = screen.getByTestId("portal-past-sessions") as HTMLDetailsElement;
+    expect(past.open).toBe(false);
+    expect(past.querySelector('a[href="/portal/courses/course-fall/sessions/old"]')).toBeTruthy();
   });
 
   test("client portals do not list approved tutor relationships", () => {
