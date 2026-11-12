@@ -717,7 +717,7 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
   assert.doesNotMatch(slice, /adminCalendarMeetConference\(/);
   assert.match(slice, /createGoogleEventWithMeetFallback\(\s*token,\s*adminWriter\.appCalendarId/);
-  assert.match(slice, /manualCalendarInviteMessage\(\{[\s\S]*?meetUrl: SHARED_FALL_MEETING_URL/);
+  assert.match(slice, /manualCalendarInviteMessage\(\{[\s\S]*?meetUrl: bookingMeetUrl/);
   assert.match(slice, /neelNikaCalendarEvent\(\{[\s\S]*?clientUserId: req\.appUser!\.id/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
   const reconnectBeforeDebit = slice.indexOf(
@@ -770,10 +770,18 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /kind: "manual_calendar_invite"/);
   assert.match(slice, /calendarPlan\.mode === "manual"[\s\S]{0,900}confirmBookedSession\(created, true\)/);
   assert.match(slice, /await confirmBookedSession\(created, false\)/);
-  const nikaGates = platformSource.match(
-    /isNikaTutorProfile\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/g,
+  const fallbackGates = platformSource.match(
+    /isAdminCalendarFallbackTutor\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/g,
   );
-  assert.equal(nikaGates?.length, 2);
+  assert.equal(fallbackGates?.length, 1);
+  assert.match(
+    platformSource,
+    /usesAdminCalendarFallback && selfSetHoursConfigured\(rule\)/,
+  );
+  assert.doesNotMatch(
+    platformSource,
+    /isNikaTutorProfile\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/,
+  );
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);

@@ -1,13 +1,15 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { grantLacksAppCreatedCalendar } from "./app-created-calendar.ts";
 
-/** Google account that may issue Nika's fixed-window invites while her app calendar is missing. */
+/** Google account that may issue admin-calendar invites while a tutor's app calendar is missing. */
 export const ADMIN_CALENDAR_ACCOUNT_EMAIL = "admin@acceptedadmissions.org";
 
 export const ADMIN_CALENDAR_FALLBACK_NOTE = "Bookings use admin calendar fallback";
 
 const NIKA_TUTOR_NAME = "Nika Raiffe";
 const NIKA_TUTOR_EMAIL = "nika.raiffe@gmail.com";
+export const SOPHIA_LAMAS_TUTOR_NAME = "Sophia Lamas";
+export const SOPHIA_LAMAS_TUTOR_EMAIL = "sophia.e.lamas@gmail.com";
 
 export function isNikaTutorProfile(input: {
   name?: string | null;
@@ -19,16 +21,37 @@ export function isNikaTutorProfile(input: {
   );
 }
 
+export function isSophiaLamasTutorProfile(input: {
+  name?: string | null;
+  portalEmail?: string | null;
+}): boolean {
+  return (
+    input.name?.trim() === SOPHIA_LAMAS_TUTOR_NAME ||
+    input.portalEmail?.trim().toLowerCase() === SOPHIA_LAMAS_TUTOR_EMAIL
+  );
+}
+
 /**
- * Nika's own Accepted Admissions calendar is not the writer.
- * The connections card and her tutor card say so until that calendar exists again.
+ * Nika and Sophia Lamas can book from self-set hours on the admin calendar
+ * until they have their own app-created calendar.
+ */
+export function isAdminCalendarFallbackTutor(input: {
+  name?: string | null;
+  portalEmail?: string | null;
+}): boolean {
+  return isNikaTutorProfile(input) || isSophiaLamasTutorProfile(input);
+}
+
+/**
+ * The tutor's own Accepted Admissions calendar is not the writer.
+ * The connections card and tutor card say so until that calendar exists again.
  */
 export function bookingsUseAdminCalendarFallback(input: {
   name?: string | null;
   portalEmail?: string | null;
   appCalendarId?: string | null;
 }): boolean {
-  if (!isNikaTutorProfile(input)) return false;
+  if (!isAdminCalendarFallbackTutor(input)) return false;
   return !input.appCalendarId?.trim();
 }
 

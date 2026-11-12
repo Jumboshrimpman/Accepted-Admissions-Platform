@@ -44,6 +44,10 @@ function isNikaTutorName(name: string | null | undefined): boolean {
   return name?.trim() === "Nika Raiffe";
 }
 
+function isSophiaLamasTutorName(name: string | null | undefined): boolean {
+  return name?.trim() === "Sophia Lamas";
+}
+
 function neelNikaMeetForViewer(
   userId: string | null | undefined,
   tutorName: string | null | undefined,
@@ -575,9 +579,11 @@ export function BookingCard({
           const joinAt =
             neelNikaMeetForViewer(currentUser?.id, selectedTutor?.name) ??
             session.meetingUrl ??
-            NEEL_NIKA_MEET_URL;
+            (isSophiaLamasTutorName(selectedTutor?.name) ? null : NEEL_NIKA_MEET_URL);
           setMessage(
-            `Confirmed: ${session.title}. Join at ${joinAt}. Your tutor and an administrator have been notified.`,
+            joinAt
+              ? `Confirmed: ${session.title}. Join at ${joinAt}. Your tutor and an administrator have been notified.`
+              : `Confirmed: ${session.title}. Your tutor and an administrator have been notified.`,
           );
         },
         onError: (error) => setMessage(errorMessage(error)),

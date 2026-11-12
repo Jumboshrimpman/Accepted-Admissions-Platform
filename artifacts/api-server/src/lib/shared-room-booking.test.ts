@@ -55,9 +55,9 @@ test("every booking invite is pinned to the one Meet link", async () => {
   const eventStart = platform.indexOf("function neelNikaCalendarEvent");
   const eventEnd = platform.indexOf("async function syncGoogleCalendarForSessionChange");
   const event = platform.slice(eventStart, eventEnd);
-  assert.match(event, /const meetUrl = SHARED_FALL_MEETING_URL/);
-  assert.match(event, /location: meetUrl/);
-  assert.match(event, /description: meetUrl/);
+  assert.match(event, /const meetUrl = pinnedBookingMeetUrl\(\{/);
+  assert.match(event, /location: meetUrl \?\? undefined/);
+  assert.match(event, /description: meetUrl \?\? undefined/);
   assert.match(event, /conferenceData: existingGoogleMeetConference\(meetUrl\)/);
   assert.doesNotMatch(event, /neelNikaMeetUrl\(/);
   assert.doesNotMatch(event, /createRequest/);

@@ -1,4 +1,6 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isSophiaLamasTutorProfile } from "./admin-calendar-fallback.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { neelNikaMeetUrl } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
@@ -12,6 +14,40 @@ import {
 
 /** Sophia Sleiman's Google Meet room. Never Taito's shared Fall room. */
 export const SOPHIA_SLEIMAN_MEET_URL = "https://meet.google.com/xqq-zivk-ewx";
+
+/**
+ * Sophia Lamas the tutor's fixed Google Meet room. Unique to her: never
+ * Sophia Sleiman's room and never the shared Fall room.
+ * Set this once a real room is created on admin@acceptedadmissions.org
+ * with anyone-with-the-link / Quick Access so an AI notetaker can join.
+ */
+export const SOPHIA_LAMAS_MEET_URL: string | null = null;
+
+/** Join link for sessions with Sophia Lamas as the tutor. */
+export function sophiaLamasMeetUrl(input: {
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): string | null {
+  if (!isSophiaLamasTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) {
+    return null;
+  }
+  return googleMeetUrl(SOPHIA_LAMAS_MEET_URL);
+}
+
+/**
+ * Meet room attached to a booking invite.
+ * Sophia Lamas uses her own fixed room (or none until one is set).
+ * Every other tutor on this path keeps the shared Fall room.
+ */
+export function pinnedBookingMeetUrl(input: {
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): string | null {
+  if (isSophiaLamasTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) {
+    return sophiaLamasMeetUrl(input);
+  }
+  return SHARED_FALL_MEETING_URL;
+}
 
 export type SessionMeetingInput = {
   meetUrl?: string | null;
@@ -99,7 +135,12 @@ export function studentFacingMeetingUrl(input: SessionMeetingInput): string | nu
       clientUserId: input.clientUserId,
       tutorName: input.tutorName,
       tutorEmail: input.tutorEmail,
-    }) ?? resolveSessionMeetingUrl(input)
+    }) ??
+    sophiaLamasMeetUrl({
+      tutorName: input.tutorName,
+      tutorEmail: input.tutorEmail,
+    }) ??
+    resolveSessionMeetingUrl(input)
   );
 }
 

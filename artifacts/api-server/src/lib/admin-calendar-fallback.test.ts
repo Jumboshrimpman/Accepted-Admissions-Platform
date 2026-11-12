@@ -48,6 +48,30 @@ test("admin calendar fallback note is Nika's until her app calendar can take boo
     }),
     false,
   );
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Sophia Lamas",
+      portalEmail: "other@example.com",
+      appCalendarId: null,
+    }),
+    true,
+  );
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Xavier Morales",
+      portalEmail: "sophia.e.lamas@gmail.com",
+      appCalendarId: "   ",
+    }),
+    true,
+  );
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Sophia Lamas",
+      portalEmail: "sophia.e.lamas@gmail.com",
+      appCalendarId: "cal-sophia-lamas",
+    }),
+    false,
+  );
 });
 
 test("a fixed window with no writer asks an admin to send Nika's invite by hand", () => {
