@@ -6,6 +6,8 @@ import {
   generateAvailableSlots,
   parseDateHours,
   parseRecurringHours,
+  recurringHoursIncludeOpenWindow,
+  selfSetHoursConfigured,
   selfSetHoursOpen,
   zonedDateTimeToUtc,
   type AvailabilityRule,
@@ -168,4 +170,43 @@ test("the weekly column migration does not rewrite saved dates", async () => {
   assert.equal(entry.idx, 78);
   assert.equal(entry.when, 1792820000000);
   assert.ok(entry.when > previous.when);
+});
+
+test("Sophia Lamas-style recurring hours count as self-set and open on the start date", () => {
+  const parsed = parseRecurringHours({
+    startDate: "2026-11-16",
+    endDate: null,
+    days: {
+      "1": [{ start: "18:00", end: "19:00" }],
+      "2": [{ start: "18:00", end: "19:00" }],
+      "3": [{ start: "18:00", end: "19:00" }],
+    },
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const hours: AvailabilityRule = {
+    timezone: "Asia/Dubai",
+    weeklyHours: {},
+    dateHours: {},
+    recurringHours: parsed.recurringHours,
+    bookingNoticeMinutes: 240,
+    bufferMinutes: 15,
+    blackoutDates: [],
+  };
+  assert.equal(recurringHoursIncludeOpenWindow(hours.recurringHours), true);
+  assert.equal(selfSetHoursConfigured(hours), true);
+  assert.equal(selfSetHoursConfigured({ dateHours: {}, recurringHours: { startDate: null, endDate: null, days: {} } }), false);
+  const monday = zonedDateTimeToUtc("2026-11-16", "18:00", "Asia/Dubai");
+  assert.equal(selfSetHoursOpen(hours, monday), true);
+  const slots = generateAvailableSlots(
+    hours,
+    monday,
+    new Date(monday.getTime() + 60 * 60_000),
+    60,
+    [],
+    [],
+    new Date("2026-11-12T16:00:00.000Z"),
+  );
+  assert.deepEqual(slots, [monday.toISOString()]);
+  assert.equal(monday.toISOString(), "2026-11-16T14:00:00.000Z");
 });

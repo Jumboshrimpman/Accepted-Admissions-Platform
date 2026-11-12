@@ -6,8 +6,11 @@ import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import {
   googleMeetUrl,
   normalizeAdminMeetUrl,
+  pinnedBookingMeetUrl,
   resolveSessionMeetingUrl,
+  SOPHIA_LAMAS_MEET_URL,
   SOPHIA_SLEIMAN_MEET_URL,
+  sophiaLamasMeetUrl,
   studentFacingMeetingUrl,
 } from "./session-meeting-url.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -320,4 +323,67 @@ test("admin meetUrl accepts a Meet link and null, and rejects other URLs", () =>
     ok: false,
   });
   assert.deepEqual(normalizeAdminMeetUrl("http://meet.google.com/abc-defg-hij"), { ok: false });
+});
+
+test("Sophia Lamas the tutor does not use Sophia Sleiman's room or the shared Fall room", () => {
+  assert.equal(SOPHIA_SLEIMAN_MEET_URL, "https://meet.google.com/xqq-zivk-ewx");
+  assert.equal(SHARED_FALL_MEETING_URL, "https://meet.google.com/rih-iayt-okb");
+  if (SOPHIA_LAMAS_MEET_URL) {
+    assert.notEqual(SOPHIA_LAMAS_MEET_URL, SOPHIA_SLEIMAN_MEET_URL);
+    assert.notEqual(SOPHIA_LAMAS_MEET_URL, SHARED_FALL_MEETING_URL);
+    assert.equal(googleMeetUrl(SOPHIA_LAMAS_MEET_URL), SOPHIA_LAMAS_MEET_URL);
+  }
+  assert.equal(
+    sophiaLamasMeetUrl({
+      tutorName: "Sophia Lamas",
+      tutorEmail: "other@example.com",
+    }),
+    SOPHIA_LAMAS_MEET_URL ? SOPHIA_LAMAS_MEET_URL : null,
+  );
+  assert.equal(
+    sophiaLamasMeetUrl({
+      tutorName: "Nika Raiffe",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SOPHIA_LAMAS_MEET_URL ? SOPHIA_LAMAS_MEET_URL : null,
+  );
+  assert.equal(
+    sophiaLamasMeetUrl({
+      tutorName: "Xavier Morales",
+      tutorEmail: "xavier.rmz6@gmail.com",
+    }),
+    null,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SOPHIA_LAMAS_MEET_URL,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Nika Raiffe",
+      tutorEmail: "nika.raiffe@gmail.com",
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      clientUserId: "b21bc32a-82c3-4252-a702-daa3fcdd23af",
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SOPHIA_LAMAS_MEET_URL,
+  );
+  if (SOPHIA_LAMAS_MEET_URL) {
+    assert.equal(
+      studentFacingMeetingUrl({
+        clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
+        tutorName: "Sophia Lamas",
+        tutorEmail: "sophia.e.lamas@gmail.com",
+      }),
+      SOPHIA_LAMAS_MEET_URL,
+    );
+  }
 });

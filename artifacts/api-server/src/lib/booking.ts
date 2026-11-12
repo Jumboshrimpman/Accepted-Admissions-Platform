@@ -365,6 +365,20 @@ export function dateHoursIncludeOpenWindow(value: unknown): boolean {
   );
 }
 
+/** A weekly recurring schedule with at least one open window. */
+export function recurringHoursIncludeOpenWindow(value: unknown): boolean {
+  const recurring = normalizeRecurringHours(value);
+  return Object.values(recurring.days).some((windows) => windows.length > 0);
+}
+
+/** Self-set hours: an explicit date window or a saved weekly recurring window. */
+export function selfSetHoursConfigured(rule: {
+  dateHours?: unknown;
+  recurringHours?: unknown;
+}): boolean {
+  return dateHoursIncludeOpenWindow(rule.dateHours) || recurringHoursIncludeOpenWindow(rule.recurringHours);
+}
+
 export function overlapsBusyWindow(
   start: Date,
   end: Date,

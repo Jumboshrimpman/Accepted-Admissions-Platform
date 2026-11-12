@@ -120,7 +120,7 @@ import {
   adminCalendarInviteHealth,
   selectStoredAdminCalendarWriter,
   bookingsUseAdminCalendarFallback,
-  isNikaTutorProfile,
+  isAdminCalendarFallbackTutor,
   manualCalendarInviteMessage,
 } from "../lib/admin-calendar-fallback";
 import {
@@ -228,6 +228,7 @@ import {
   googleAccountOrganizesAsTutor,
   tutorAttendeeForOrganizer,
   dateHoursIncludeOpenWindow,
+  selfSetHoursConfigured,
   selfSetHoursOpen,
   generateAvailableSlots,
   missingCalendarInviteMessage,
@@ -283,6 +284,7 @@ import { loadMeetingContext } from "../lib/session-meeting-context";
 import {
   meetingUrlFromContext,
   normalizeAdminMeetUrl,
+  pinnedBookingMeetUrl,
   studentFacingMeetingUrl,
 } from "../lib/session-meeting-url";
 import { presentSophiaNovemberInvoice } from "../lib/sophia-november-invoice";
@@ -5027,7 +5029,8 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
 
 /**
  * A blank app calendar must not reach /calendars//events.
- * Only Nika's fixed windows use the admin calendar, or confirm for a hand-sent invite.
+ * Nika and Sophia Lamas self-set hours (date windows or recurring weekly hours)
+ * use the admin calendar, or confirm for a hand-sent invite.
  * Every other tutor, including one with date windows, still 409s before payment.
  */
 async function adminCalendarForFixedWindowBooking(
@@ -5037,9 +5040,9 @@ async function adminCalendarForFixedWindowBooking(
 ): Promise<FixedWindowCalendarPlan> {
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
   if (appCalendarId) return { mode: "tutor" };
-  const nikaFixedWindow =
-    fixedWindow && isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email });
-  if (!nikaFixedWindow) {
+  const fallbackWindow =
+    fixedWindow && isAdminCalendarFallbackTutor({ name: tutor.name, portalEmail: tutor.email });
+  if (!fallbackWindow) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
   const admin = await findStoredAdminCalendarWriter();
@@ -5419,8 +5422,11 @@ function neelNikaCalendarEvent(args: {
   clientUserId?: string | null;
   tutorName?: string | null;
   tutorEmail?: string | null;
-}): { meetUrl: string; body: Record<string, unknown> } {
-  const meetUrl = SHARED_FALL_MEETING_URL;
+}): { meetUrl: string | null; body: Record<string, unknown> } {
+  const meetUrl = pinnedBookingMeetUrl({
+    tutorName: args.tutorName,
+    tutorEmail: args.tutorEmail,
+  });
   return {
     meetUrl,
     body: {
@@ -5430,13 +5436,13 @@ function neelNikaCalendarEvent(args: {
         durationMinutes: args.durationMinutes,
         timeZone: args.timeZone,
         attendeeEmail: args.attendeeEmail,
-        location: meetUrl,
-        description: meetUrl,
+        location: meetUrl ?? undefined,
+        description: meetUrl ?? undefined,
         student: args.student,
         tutor: args.tutor,
         inviteTutor: args.inviteTutor,
       }),
-      conferenceData: existingGoogleMeetConference(meetUrl),
+      ...(meetUrl ? { conferenceData: existingGoogleMeetConference(meetUrl) } : {}),
     },
   };
 }
@@ -5793,16 +5799,14 @@ async function loadTutorSlotContext(
     if (!(error instanceof BookingError)) throw error;
     calendar = null;
   }
-  // Nika's fixed windows with no app calendar stay on the fixed grid. Do not read her Google calendar.
-  const fixedWindowFallback =
-    isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email }) &&
-    dateHoursIncludeOpenWindow(rule.dateHours) &&
-    !calendar?.connection.appCalendarId?.trim();
+  // Self-set hours (date windows or recurring weekly hours) with no app calendar
+  // stay on the fixed grid. Do not read Google calendar for Nika or Sophia Lamas.
   const usesAdminCalendarFallback = bookingsUseAdminCalendarFallback({
     name: tutor.name,
     portalEmail: tutor.email,
     appCalendarId: calendar?.connection.appCalendarId,
   });
+  const fixedWindowFallback = usesAdminCalendarFallback && selfSetHoursConfigured(rule);
   let access = fixedWindowFallback ? null : calendar;
   let busyWindows: BusyWindow[] = [];
   if (calendar && !fixedWindowFallback) {
@@ -8866,13 +8870,17 @@ async function respondWithPrepaidBooking(
       if (followUpRequestId) await attachFollowUpSession(tx, followUpRequestId, session.id, start);
       return session;
     });
+    const bookingMeetUrl = pinnedBookingMeetUrl({
+      tutorName: tutor.name,
+      tutorEmail: tutor.email,
+    });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
       if (!(await sessionBookingConfirmed(session.id))) {
         await notifyAdministratorsOfBooking({
           kind: "booking_confirmed",
           sessionId: session.id,
           title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
-          message: `${req.appUser!.displayName} booked ${session.title} at ${session.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
+          message: `${req.appUser!.displayName} booked ${session.title} at ${session.dateTime.toISOString()}.${bookingMeetUrl ? ` Meet: ${bookingMeetUrl}` : ""}`,
         });
         if (!calendarInviteSent) {
           await notifyAdministratorsOfBooking({
@@ -8883,7 +8891,7 @@ async function respondWithPrepaidBooking(
               studentName: req.appUser!.displayName,
               sessionTitle: session.title,
               startIso: session.dateTime.toISOString(),
-              meetingUrl: SHARED_FALL_MEETING_URL,
+              meetingUrl: bookingMeetUrl ?? "",
             }),
           });
         }
@@ -8918,7 +8926,7 @@ async function respondWithPrepaidBooking(
             tutorEmail: tutor.email,
             start,
             durationMinutes,
-            meetUrl: SHARED_FALL_MEETING_URL,
+            meetUrl: bookingMeetUrl,
           }),
         });
         await confirmBookedSession(created, true);
