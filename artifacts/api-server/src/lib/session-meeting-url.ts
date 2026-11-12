@@ -16,12 +16,12 @@ import {
 export const SOPHIA_SLEIMAN_MEET_URL = "https://meet.google.com/xqq-zivk-ewx";
 
 /**
- * Sophia Lamas the tutor's fixed Google Meet room. Unique to her: never
- * Sophia Sleiman's room and never the shared Fall room.
- * Set this once a real room is created on admin@acceptedadmissions.org
- * with anyone-with-the-link / Quick Access so an AI notetaker can join.
+ * Michelle Makarem's dedicated Google Meet room, reused for sessions with
+ * Sophia Lamas (Michelle is currently the only client who can book her).
+ * Unique to this pairing: never Sophia Sleiman's room and never the shared
+ * Fall room. Do not fall back to either of those rooms.
  */
-export const SOPHIA_LAMAS_MEET_URL: string | null = null;
+export const SOPHIA_LAMAS_MEET_URL = "https://meet.google.com/ase-tqtz-ywj";
 
 /** Join link for sessions with Sophia Lamas as the tutor. */
 export function sophiaLamasMeetUrl(input: {
@@ -36,7 +36,7 @@ export function sophiaLamasMeetUrl(input: {
 
 /**
  * Meet room attached to a booking invite.
- * Sophia Lamas uses her own fixed room (or none until one is set).
+ * Sophia Lamas uses Michelle's dedicated room.
  * Every other tutor on this path keeps the shared Fall room.
  */
 export function pinnedBookingMeetUrl(input: {

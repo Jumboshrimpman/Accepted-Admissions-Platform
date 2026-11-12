@@ -326,26 +326,25 @@ test("admin meetUrl accepts a Meet link and null, and rejects other URLs", () =>
 });
 
 test("Sophia Lamas the tutor does not use Sophia Sleiman's room or the shared Fall room", () => {
+  assert.equal(SOPHIA_LAMAS_MEET_URL, "https://meet.google.com/ase-tqtz-ywj");
   assert.equal(SOPHIA_SLEIMAN_MEET_URL, "https://meet.google.com/xqq-zivk-ewx");
   assert.equal(SHARED_FALL_MEETING_URL, "https://meet.google.com/rih-iayt-okb");
-  if (SOPHIA_LAMAS_MEET_URL) {
-    assert.notEqual(SOPHIA_LAMAS_MEET_URL, SOPHIA_SLEIMAN_MEET_URL);
-    assert.notEqual(SOPHIA_LAMAS_MEET_URL, SHARED_FALL_MEETING_URL);
-    assert.equal(googleMeetUrl(SOPHIA_LAMAS_MEET_URL), SOPHIA_LAMAS_MEET_URL);
-  }
+  assert.notEqual(SOPHIA_LAMAS_MEET_URL, SOPHIA_SLEIMAN_MEET_URL);
+  assert.notEqual(SOPHIA_LAMAS_MEET_URL, SHARED_FALL_MEETING_URL);
+  assert.equal(googleMeetUrl(SOPHIA_LAMAS_MEET_URL), SOPHIA_LAMAS_MEET_URL);
   assert.equal(
     sophiaLamasMeetUrl({
       tutorName: "Sophia Lamas",
       tutorEmail: "other@example.com",
     }),
-    SOPHIA_LAMAS_MEET_URL ? SOPHIA_LAMAS_MEET_URL : null,
+    SOPHIA_LAMAS_MEET_URL,
   );
   assert.equal(
     sophiaLamasMeetUrl({
       tutorName: "Nika Raiffe",
       tutorEmail: "sophia.e.lamas@gmail.com",
     }),
-    SOPHIA_LAMAS_MEET_URL ? SOPHIA_LAMAS_MEET_URL : null,
+    SOPHIA_LAMAS_MEET_URL,
   );
   assert.equal(
     sophiaLamasMeetUrl({
@@ -376,14 +375,26 @@ test("Sophia Lamas the tutor does not use Sophia Sleiman's room or the shared Fa
     }),
     SOPHIA_LAMAS_MEET_URL,
   );
-  if (SOPHIA_LAMAS_MEET_URL) {
-    assert.equal(
-      studentFacingMeetingUrl({
-        clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
-        tutorName: "Sophia Lamas",
-        tutorEmail: "sophia.e.lamas@gmail.com",
-      }),
-      SOPHIA_LAMAS_MEET_URL,
-    );
-  }
+  assert.equal(
+    studentFacingMeetingUrl({
+      clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SOPHIA_LAMAS_MEET_URL,
+  );
+  assert.notEqual(
+    pinnedBookingMeetUrl({
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SOPHIA_SLEIMAN_MEET_URL,
+  );
+  assert.notEqual(
+    pinnedBookingMeetUrl({
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
 });
