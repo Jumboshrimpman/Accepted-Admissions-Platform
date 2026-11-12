@@ -901,6 +901,53 @@ describe("client availability calendar", () => {
     }
   });
 
+  test("shows Michelle's dedicated Meet on a Sophia Lamas session card", () => {
+    const sophiaRoom = "https://meet.google.com/ase-tqtz-ywj";
+    mocks.sessionsQuery.data = [
+      {
+        id: "michelle-sophia-lamas",
+        title: "Michelle’s SAT Session with Sophia",
+        dateTime: "2026-11-20T17:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Sophia Lamas",
+        tutorProfileId: "tutor-sophia-lamas",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+      {
+        id: "michelle-xavier",
+        title: "Michelle’s SAT Session with Xavier",
+        dateTime: "2026-11-15T17:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: "https://meet.google.com/rih-iayt-okb",
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByTestId("session-meet-url-michelle-sophia-lamas").textContent).toBe(
+      sophiaRoom,
+    );
+    const sophiaMeet = screen.getAllByRole("link", { name: "Meet" }).find((link) =>
+      link.getAttribute("href") === sophiaRoom,
+    );
+    expect(sophiaMeet).toBeTruthy();
+    expect(sophiaMeet?.getAttribute("href")).not.toBe("https://meet.google.com/xqq-zivk-ewx");
+    expect(sophiaMeet?.getAttribute("href")).not.toBe("https://meet.google.com/rih-iayt-okb");
+    expect(screen.queryByTestId("session-meet-url-michelle-xavier")).toBeNull();
+    const xavierMeet = screen.getAllByRole("link", { name: "Meet" }).find((link) =>
+      link.getAttribute("href") === "https://meet.google.com/rih-iayt-okb",
+    );
+    expect(xavierMeet).toBeTruthy();
+  });
+
   test("Victoria coming soon shows her rate and hides slots and reserve", async () => {
     mocks.tutorsQuery.data = [
       {
