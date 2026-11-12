@@ -123,6 +123,7 @@ import {
   isAdminCalendarFallbackTutor,
   isSophiaLamasTutorProfile,
   manualCalendarInviteMessage,
+  satTutorListBookable,
   tutorHasUsableFreeBusyGrant,
 } from "../lib/admin-calendar-fallback";
 import {
@@ -8457,6 +8458,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       tagline: tutorProfilesTable.tagline,
       subjects: tutorProfilesTable.subjects,
       calendarStatus: tutorProfilesTable.calendarStatus,
+      email: tutorProfilesTable.email,
     })
     .from(tutorProfilesTable)
     .where(
@@ -8474,7 +8476,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
-  const [catalog, entries] = await Promise.all([
+  const [catalog, entries, rules] = await Promise.all([
     satCreditCatalog(),
     db
       .select({
@@ -8484,12 +8486,29 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       })
       .from(creditLedgerTable)
       .where(eq(creditLedgerTable.clientUserId, req.appUser!.id)),
+    tutors.length
+      ? db
+          .select({
+            tutorProfileId: availabilityRulesTable.tutorProfileId,
+            dateHours: availabilityRulesTable.dateHours,
+            recurringHours: availabilityRulesTable.recurringHours,
+          })
+          .from(availabilityRulesTable)
+          .where(
+            inArray(
+              availabilityRulesTable.tutorProfileId,
+              tutors.map((tutor) => tutor.id),
+            ),
+          )
+      : Promise.resolve([]),
   ]);
+  const hoursByTutorId = new Map(rules.map((rule) => [rule.tutorProfileId, rule]));
   const legacyProductIds = catalog
     .filter((product) => isLegacySharedSatSlug(product.slug))
     .map((product) => product.id);
   res.json(
     tutors.map((tutor) => {
+      const { email, ...publicTutor } = tutor;
       const tutorKey = satTutorKeyForName(tutor.name);
       const tutorProductIds = tutorKey
         ? catalog.filter((product) => satTutorKeyForSlug(product.slug) === tutorKey).map((product) => product.id)
@@ -8500,7 +8519,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
         ? tutor.subjects
         : ["SAT", ...tutor.subjects];
       return {
-        ...tutor,
+        ...publicTutor,
         name: personFirstName(tutor.name),
         photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
         title: clientPortalTutorTitle(tutor),
@@ -8514,7 +8533,13 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
               allowLegacy: allowsLegacySatPool(tutorKey, req.appUser),
             })
           : 0,
-        bookable: comingSoon ? false : connected,
+        bookable: satTutorListBookable({
+          comingSoon,
+          calendarConnected: connected,
+          name: tutor.name,
+          portalEmail: email,
+          selfSetHoursConfigured: selfSetHoursConfigured(hoursByTutorId.get(tutor.id) ?? {}),
+        }),
         comingSoon,
         serviceName: "SAT",
       };
