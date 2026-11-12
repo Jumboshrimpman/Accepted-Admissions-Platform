@@ -32,8 +32,9 @@ export function isSophiaLamasTutorProfile(input: {
 }
 
 /**
- * Nika and Sophia Lamas can book from self-set hours on the admin calendar
- * until they have their own app-created calendar.
+ * Nika and Sophia Lamas can book from self-set hours on the admin calendar.
+ * Nika leaves this path once she has her own app-created calendar.
+ * Sophia Lamas stays on it even after she connects.
  */
 export function isAdminCalendarFallbackTutor(input: {
   name?: string | null;
@@ -43,16 +44,27 @@ export function isAdminCalendarFallbackTutor(input: {
 }
 
 /**
- * The tutor's own Accepted Admissions calendar is not the writer.
- * The connections card and tutor card say so until that calendar exists again.
+ * Invites are written on the admin calendar instead of the tutor's app calendar.
+ * Nika uses this until her own app-created calendar exists.
+ * Sophia Lamas stays on the admin calendar after she connects; her grant is
+ * only used to read free/busy when deciding which hours are open.
  */
 export function bookingsUseAdminCalendarFallback(input: {
   name?: string | null;
   portalEmail?: string | null;
   appCalendarId?: string | null;
 }): boolean {
-  if (!isAdminCalendarFallbackTutor(input)) return false;
+  if (isSophiaLamasTutorProfile(input)) return true;
+  if (!isNikaTutorProfile(input)) return false;
   return !input.appCalendarId?.trim();
+}
+
+/** A live Google grant that can be used to read free/busy. */
+export function tutorHasUsableFreeBusyGrant(
+  access: { accessToken?: string | null; refreshToken?: string | null } | null | undefined,
+): boolean {
+  if (!access) return false;
+  return Boolean(access.accessToken?.trim() || access.refreshToken?.trim());
 }
 
 /**

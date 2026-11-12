@@ -8,6 +8,7 @@ import {
   bookingsUseAdminCalendarFallback,
   manualCalendarInviteMessage,
   selectStoredAdminCalendarWriter,
+  tutorHasUsableFreeBusyGrant,
 } from "./admin-calendar-fallback.ts";
 import { GOOGLE_CALENDAR_APP_CREATED_SCOPE, GOOGLE_CALENDAR_FREEBUSY_SCOPE } from "./google-calendar.ts";
 
@@ -70,8 +71,18 @@ test("admin calendar fallback note is Nika's until her app calendar can take boo
       portalEmail: "sophia.e.lamas@gmail.com",
       appCalendarId: "cal-sophia-lamas",
     }),
-    false,
+    true,
   );
+  assert.equal(
+    tutorHasUsableFreeBusyGrant({ accessToken: "token", refreshToken: null }),
+    true,
+  );
+  assert.equal(
+    tutorHasUsableFreeBusyGrant({ accessToken: "", refreshToken: "refresh" }),
+    true,
+  );
+  assert.equal(tutorHasUsableFreeBusyGrant({ accessToken: "  ", refreshToken: "" }), false);
+  assert.equal(tutorHasUsableFreeBusyGrant(null), false);
 });
 
 test("a fixed window with no writer asks an admin to send Nika's invite by hand", () => {

@@ -121,7 +121,9 @@ import {
   selectStoredAdminCalendarWriter,
   bookingsUseAdminCalendarFallback,
   isAdminCalendarFallbackTutor,
+  isSophiaLamasTutorProfile,
   manualCalendarInviteMessage,
+  tutorHasUsableFreeBusyGrant,
 } from "../lib/admin-calendar-fallback";
 import {
   acquireBookingLocks,
@@ -5031,6 +5033,8 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
  * A blank app calendar must not reach /calendars//events.
  * Nika and Sophia Lamas self-set hours (date windows or recurring weekly hours)
  * use the admin calendar, or confirm for a hand-sent invite.
+ * Sophia Lamas stays on the admin calendar even after she has an app calendar.
+ * Nika organizes on her own calendar once that id exists.
  * Every other tutor, including one with date windows, still 409s before payment.
  */
 async function adminCalendarForFixedWindowBooking(
@@ -5038,8 +5042,12 @@ async function adminCalendarForFixedWindowBooking(
   fixedWindow: boolean,
   tutor: { name?: string | null; email?: string | null },
 ): Promise<FixedWindowCalendarPlan> {
+  const sophiaKeepsAdminInvites = isSophiaLamasTutorProfile({
+    name: tutor.name,
+    portalEmail: tutor.email,
+  });
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-  if (appCalendarId) return { mode: "tutor" };
+  if (appCalendarId && !sophiaKeepsAdminInvites) return { mode: "tutor" };
   const fallbackWindow =
     fixedWindow && isAdminCalendarFallbackTutor({ name: tutor.name, portalEmail: tutor.email });
   if (!fallbackWindow) {
@@ -5770,6 +5778,7 @@ type TutorSlotContext = {
   bookedWindows: BusyWindow[];
   roomWindows: BusyWindow[];
   usesAdminCalendarFallback: boolean;
+  applyGoogleBusyToSelfSetHours: boolean;
 };
 
 async function loadTutorSlotContext(
@@ -5799,17 +5808,25 @@ async function loadTutorSlotContext(
     if (!(error instanceof BookingError)) throw error;
     calendar = null;
   }
-  // Self-set hours (date windows or recurring weekly hours) with no app calendar
-  // stay on the fixed grid. Do not read Google calendar for Nika or Sophia Lamas.
+  // Self-set hours stay on the fixed grid. Invites for this path use the admin
+  // calendar, so the tutor grant is not the writer. Skip Google free/busy only
+  // when there is no usable grant. Sophia Lamas keeps admin invites after she
+  // connects; once she has a grant, busy times on her calendars hide those hours.
   const usesAdminCalendarFallback = bookingsUseAdminCalendarFallback({
     name: tutor.name,
     portalEmail: tutor.email,
     appCalendarId: calendar?.connection.appCalendarId,
   });
   const fixedWindowFallback = usesAdminCalendarFallback && selfSetHoursConfigured(rule);
+  const skipGoogleFreeBusy =
+    fixedWindowFallback &&
+    !(
+      isSophiaLamasTutorProfile({ name: tutor.name, portalEmail: tutor.email }) &&
+      tutorHasUsableFreeBusyGrant(calendar)
+    );
   let access = fixedWindowFallback ? null : calendar;
   let busyWindows: BusyWindow[] = [];
-  if (calendar && !fixedWindowFallback) {
+  if (calendar && !skipGoogleFreeBusy) {
     if (readOnly) {
       try {
         busyWindows = await listGoogleBusyWindows(
@@ -5910,6 +5927,10 @@ async function loadTutorSlotContext(
     bookedWindows,
     roomWindows,
     usesAdminCalendarFallback,
+    applyGoogleBusyToSelfSetHours: isSophiaLamasTutorProfile({
+      name: tutor.name,
+      portalEmail: tutor.email,
+    }),
   };
 }
 
@@ -5929,9 +5950,16 @@ function projectTutorSlots(
     new Date(),
     context.roomWindows,
   );
-  const slots = context.access
+  let slots = context.access
     ? generated
     : generated.filter((slot) => selfSetHoursOpen(context.availabilityRule, new Date(slot)));
+  if (context.applyGoogleBusyToSelfSetHours && context.busyWindows.length > 0) {
+    slots = slots.filter((slot) => {
+      const start = new Date(slot);
+      const end = new Date(start.getTime() + durationMinutes * 60_000);
+      return !overlapsBusyWindow(start, end, context.busyWindows, context.availabilityRule.bufferMinutes);
+    });
+  }
   return {
     tutor: context.tutor,
     rule: context.rule,
