@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import {
   ADMIN_CALENDAR_ACCOUNT_EMAIL,
   ADMIN_CALENDAR_FALLBACK_NOTE,
@@ -7,6 +9,7 @@ import {
   adminCalendarInviteHealth,
   bookingsUseAdminCalendarFallback,
   manualCalendarInviteMessage,
+  satTutorListBookable,
   selectStoredAdminCalendarWriter,
 } from "./admin-calendar-fallback.ts";
 import { GOOGLE_CALENDAR_APP_CREATED_SCOPE, GOOGLE_CALENDAR_FREEBUSY_SCOPE } from "./google-calendar.ts";
@@ -222,4 +225,75 @@ test("only a connected admin grant with refresh, app calendar, and event-write s
     },
   );
   assert.equal(adminCalendarInviteHealth([]).healthy, false);
+});
+
+test("Sophia Lamas is bookable on the SAT list from self-set hours without a calendar connect", () => {
+  const sophiaHours = {
+    comingSoon: false,
+    calendarConnected: false,
+    name: "Sophia Lamas",
+    selfSetHoursConfigured: true,
+  };
+  assert.equal(satTutorListBookable(sophiaHours), true);
+  assert.equal(
+    satTutorListBookable({
+      comingSoon: false,
+      calendarConnected: false,
+      name: "Xavier Morales",
+      portalEmail: "sophia.e.lamas@gmail.com",
+      selfSetHoursConfigured: true,
+    }),
+    true,
+  );
+  assert.equal(satTutorListBookable({ ...sophiaHours, selfSetHoursConfigured: false }), false);
+  assert.equal(satTutorListBookable({ ...sophiaHours, comingSoon: true }), false);
+  assert.equal(satTutorListBookable({ ...sophiaHours, calendarConnected: true }), true);
+
+  const nikaHours = {
+    comingSoon: false,
+    calendarConnected: false,
+    name: "Nika Raiffe",
+    portalEmail: "nika.raiffe@gmail.com",
+    selfSetHoursConfigured: true,
+  };
+  assert.equal(satTutorListBookable(nikaHours), false);
+  assert.equal(satTutorListBookable({ ...nikaHours, calendarConnected: true }), true);
+  assert.equal(
+    satTutorListBookable({
+      comingSoon: false,
+      calendarConnected: false,
+      name: "Xavier Morales",
+      selfSetHoursConfigured: true,
+    }),
+    false,
+  );
+  assert.equal(
+    satTutorListBookable({
+      comingSoon: false,
+      calendarConnected: false,
+      name: "Eunice Chon",
+      selfSetHoursConfigured: true,
+    }),
+    false,
+  );
+  assert.equal(
+    satTutorListBookable({
+      comingSoon: true,
+      calendarConnected: true,
+      name: "Victoria Wijerathnayapa",
+      selfSetHoursConfigured: true,
+    }),
+    false,
+  );
+});
+
+test("the SAT tutor list uses the Sophia-only bookable helper, not the shared admin-calendar fallback gate", async () => {
+  const platform = await readFile(fileURLToPath(new URL("../routes/platform.ts", import.meta.url)), "utf8");
+  const satList = platform.slice(platform.indexOf('router.get("/booking/tutors"'));
+  const satMap = satList.slice(0, satList.indexOf('router.get("/booking/availability"'));
+  assert.match(satMap, /bookable: satTutorListBookable\(/);
+  assert.doesNotMatch(satMap, /bookable: comingSoon \? false : connected/);
+  assert.doesNotMatch(satMap, /isAdminCalendarFallbackTutor/);
+  assert.match(satMap, /isSophiaLamasTutorProfile|satTutorListBookable/);
+  assert.match(satMap, /selfSetHoursConfigured/);
 });

@@ -43,6 +43,23 @@ export function isAdminCalendarFallbackTutor(input: {
 }
 
 /**
+ * SAT tutor-list bookable flag. Sophia Lamas can be booked from self-set hours
+ * without a calendar connect. comingSoon still forces false. Other tutors,
+ * including Nika, still require a connected calendar on this list.
+ */
+export function satTutorListBookable(input: {
+  comingSoon?: boolean;
+  calendarConnected: boolean;
+  name?: string | null;
+  portalEmail?: string | null;
+  selfSetHoursConfigured?: boolean;
+}): boolean {
+  if (input.comingSoon) return false;
+  if (input.calendarConnected) return true;
+  return isSophiaLamasTutorProfile(input) && Boolean(input.selfSetHoursConfigured);
+}
+
+/**
  * The tutor's own Accepted Admissions calendar is not the writer.
  * The connections card and tutor card say so until that calendar exists again.
  */
