@@ -519,6 +519,15 @@ export function missingCalendarInviteMessage(args: {
   return `${args.studentName} booked ${args.sessionTitle} at ${args.startIso}. The session is confirmed. Meet: ${args.meetingUrl}. Google Calendar was not updated, so no invite went to the student, the tutor, or admin@acceptedadmissions.org.`;
 }
 
+/** Email 1 day before and a pop-up 1 hour before. Disables calendar defaults so every session is consistent. */
+export const BOOKING_CALENDAR_REMINDERS = {
+  useDefault: false,
+  overrides: [
+    { method: "popup" as const, minutes: 60 },
+    { method: "email" as const, minutes: 1440 },
+  ],
+};
+
 export function calendarEventPayload(
   title: string,
   start: Date,
@@ -547,6 +556,7 @@ export function calendarEventPayload(
     start: { dateTime: start.toISOString(), timeZone },
     end: { dateTime: new Date(start.getTime() + durationMinutes * 60_000).toISOString(), timeZone },
     attendees: attendees.length > 0 ? attendees : [{ email: attendeeEmail }],
+    reminders: BOOKING_CALENDAR_REMINDERS,
   };
 }
 
