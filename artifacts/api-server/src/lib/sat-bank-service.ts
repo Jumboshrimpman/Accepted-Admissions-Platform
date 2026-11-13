@@ -75,6 +75,7 @@ import {
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
+import { questionIsAlreadyAssignedToStudent } from "./student-question-usage.ts";
 import {
   selectRoutinePreworkFromOneForm,
   type RoutineFormQuestion,
@@ -1235,6 +1236,10 @@ export async function loadRoutineSatFormPool(): Promise<RoutineFormQuestion[]> {
     examFamily: row.examFamily,
     practiceTestNumber: row.practiceTestNumber,
     position: row.position,
+    linkedQuestionId: row.linkedQuestionId,
+    prompt: row.prompt,
+    stimulus: row.stimulus,
+    choices: row.choices,
   }));
 }
 
@@ -1409,6 +1414,37 @@ export async function assignPreworkFromBank(input: {
         "The SAT/PSAT bank has no matching official extract questions yet. Import the 15 College Board JSONL packs from content/college-board/.",
       ),
       { status: 409 },
+    );
+  }
+  const ignoreAssignmentIds = input.archiveAssignmentIds ?? [];
+  const seen = session.clientUserId
+    ? await loadSeenSatBankUsage(session.clientUserId, ignoreAssignmentIds)
+    : { sourceKeys: new Set<string>(), practiceTests: new Set<number>(), questionIds: new Set<string>(), fingerprints: new Set<string>() };
+  if (input.excludeSourceKeys) {
+    for (const sourceKey of input.excludeSourceKeys) seen.sourceKeys.add(sourceKey);
+  }
+  if (input.seenPracticeTests) {
+    for (const testNumber of input.seenPracticeTests) seen.practiceTests.add(testNumber);
+  }
+  pool = pool.filter(
+    (row) =>
+      !questionIsAlreadyAssignedToStudent(
+        {
+          questionId: row.linkedQuestionId,
+          sourceKey: row.sourceKey,
+          prompt: row.prompt,
+          stimulus: row.stimulus,
+          choices: row.choices,
+        },
+        seen,
+      ),
+  );
+  if (pool.length === 0) {
+    throw Object.assign(
+      new Error(
+        "Every matching official SAT/PSAT question in the bank has already been assigned to this student.",
+      ),
+      { status: 409, shortfall: true },
     );
   }
   const diagnosticItems = pool.map((row) => ({ ...row, ...bankRowForDiagnostic(row) }));

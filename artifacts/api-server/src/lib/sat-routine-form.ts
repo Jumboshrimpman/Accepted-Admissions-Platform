@@ -25,6 +25,10 @@ export type RoutineFormQuestion = {
   practiceTestNumber?: unknown;
   position?: number | null;
   sourceKey?: string | null;
+  linkedQuestionId?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: unknown;
 };
 
 export type RoutineFormPick<T> = {

@@ -18,6 +18,7 @@ import {
   upsertBankRecords,
 } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
+import { filterUnseenBankItems } from "./student-question-usage.ts";
 import { selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
 import { isHardChallengeReserve } from "./sat-hard-reserve-plan.ts";
 import { logger } from "./logger.ts";
@@ -304,6 +305,10 @@ async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bank
       questionNumber: Number(row.questionNumber),
       practiceTestNumber: item.practiceTestNumber ?? null,
       sourceKind: row.sourceKind,
+      linkedQuestionId: row.linkedQuestionId,
+      prompt: row.prompt,
+      stimulus: row.stimulus,
+      choices: row.choices,
     });
   }
   return selected;
@@ -746,7 +751,11 @@ async function assignOfficialFormPrework(
   const sectionRestricted =
     (sections.includes("rw") && !sections.includes("math")) ||
     (sections.includes("math") && !sections.includes("rw"));
-  const picked = selectRoutinePreworkFromOneForm(pool, {
+  const unseenPool = filterUnseenBankItems(
+    pool.map((item) => item),
+    seen,
+  );
+  const picked = selectRoutinePreworkFromOneForm(unseenPool, {
     seed: session.id,
     usedPracticeTests: seen.practiceTests,
     requireFullCount: sectionRestricted,
@@ -892,7 +901,7 @@ export async function ensureHardSatPrework(
     const seen = session.clientUserId
       ? await loadSeenSatBankUsage(session.clientUserId, replaceableIds)
       : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
-    const pool = await loadRenderableHardBank();
+    const pool = filterUnseenBankItems(await loadRenderableHardBank(), seen);
     const planned = planHardSatSessionSets(pool, {
       excludeSourceKeys: seen.sourceKeys,
       seenPracticeTests: seen.practiceTests,
@@ -995,7 +1004,7 @@ export async function officialHardInSessionItems(
     ? await loadSeenSatBankUsage(session.clientUserId, ignoreAssignmentIds)
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
   const exclude = new Set<string>([...seen.sourceKeys, ...preworkKeys]);
-  const pool = await loadRenderableHardBank();
+  const pool = filterUnseenBankItems(await loadRenderableHardBank(), seen);
   const target =
     session.dateTime && session.subject
       ? await inSessionTargetForSession({
@@ -1311,7 +1320,7 @@ export function taitoOct30PreworkAllowsInSession(
 }
 
 /**
- * Point Taito's Oct 30 pre-work at hard reading plus the official math half
+ * Point Taito's Oct 30 pre-work at the hard reading set for that historical session
  * when that copy has no attempts. A started set is left in place and flagged.
  * A full hard pre-work that is already assigned stays when the Oct 30 mix
  * cannot be filled, and the in-session set is still written.
