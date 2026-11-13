@@ -72,7 +72,9 @@ const STACKED_FRACTION_ORPHAN =
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-zπΠ]\s+[A-Za-zπΠ]|\d{1,3}\s+[A-Za-zπΠ])$/;
 const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
-const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*(?:What|Which)\b/i;
+/** Uppercase segment labels only (`AB CD.`). `/i` made `to it. Which` look like OCR. */
+const MISSING_SEGMENT_RELATION =
+  /\b[A-Z]{2}\s+[A-Z]{2}\.\s*(?:[Ww][Hh][Aa][Tt]|[Ww][Hh][Ii][Cc][Hh])\b/;
 const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
 const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b|\b12345678910\b/;
 const AXIS_SEQUENCE_OCR =
@@ -80,7 +82,7 @@ const AXIS_SEQUENCE_OCR =
 const AXIS_LABEL_BLEED =
   /\b\d{1,2}(?:\s+\d{1,2}){3,}\s+(?:Diameter|inches)\b|\b\d{8,}Diameter\b/i;
 const EXTRACTION_MARKER_COMPACT = /startreferencedcontent|endreferencedcontent/;
-const SPACED_TRIANGLE_VERTICES = /\btriangles?\s+[A-Z](?:\s+[A-Z]){2}\b/i;
+const SPACED_TRIANGLE_VERTICES = /\b[Tt]riangles?\s+[A-Z](?:\s+[A-Z]){2}\b/;
 const SPACED_VERTEX_LABEL = /\b[A-Z](?:\s+[A-Z]){2}\b/g;
 const DAT_PLOT_OCR = /\bda[tr]\s*plots?\b/i;
 const REPEATED_ISOLATED_VAR = /\b([A-Za-z])\s+\1\b/;
@@ -103,9 +105,11 @@ const BARE_EQ_AFTER_WORD = /\b(?:the|and|where|if|is)\s+=\s*-?\d/;
 const TEO_LENGTH_OCR = /\bteo\s*length\b/i;
 const HAS_HAVE_OCR = /\bhas\s*\(\s*have\s*\)/i;
 const INCOMPLETE_TRAILING_ASK =
-  /\b(?:what is the|of the|if [A-Z]{2}(?:\s+\d+)?|the solution to the given[^.?\n]*is)\s*$/i;
+  /\b(?:what is the|of the|the solution to the given[^.?\n]*is)\s*$/i;
+/** `If AB` / `If AB 12` at the end of a stem — labels stay case-sensitive so `if it` is not flagged. */
+const INCOMPLETE_TRAILING_IF_SEGMENT = /\b[Ii]f [A-Z]{2}(?:\s+\d+)?\s*$/;
 const MISSING_SEGMENT_MEASURE = /\b[A-Z]{2}\s+\d+\s+units\b/;
-const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
+const SMASHED_IF_SEGMENT = /\b[Ii]f\s+[A-Z]{2}\s+\d+(?:\s+[Ww]hat\b|\s*$)/;
 const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 /** Glued compact poly OCR: `2-4x-7x=` / `2 –4x –7x =`. Spaced `2 - 4x - 7x =` stays. */
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+\s*[+\-−–]\d+[A-Za-z]\s*[+\-−–]\d+[A-Za-z]\s*=/;
@@ -755,6 +759,7 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (HAS_HAVE_OCR.test(raw)) return true;
   if (STRAY_COMPARISON_IN_PROSE.test(raw)) return true;
   if (INCOMPLETE_TRAILING_ASK.test(raw.trim())) return true;
+  if (INCOMPLETE_TRAILING_IF_SEGMENT.test(raw.trim())) return true;
   if (AXIS_TICK_OCR.test(raw)) return true;
   if (SMASHED_AXIS_TICKS.test(raw)) return true;
   if (AXIS_SEQUENCE_OCR.test(raw)) return true;
