@@ -179,6 +179,29 @@ test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", 
   assert.deepEqual(figurePrimaryChoices(triangle), []);
 });
 
+test("ordinary English 'to it. Which' is not a missing segment-relation OCR error", () => {
+  const ostrom =
+    "Economist Elinor Ostrom’s studies of communities\naround the world have empirically demonstrated that\ncommon pool resources, such as grazing lands, can\nbe sustainably managed by the people who use them\n(rather than through private entities or centralized\ngovernments).______ Ostrom’s work is a\nrepudiation of the “tragedy of the commons,” the\nview that individuals will inevitably overexploit a\nfinite shared resource if given unfettered access to it.\nWhich choice completes the text with the most\nlogical transition?";
+  assert.equal(looksCorruptStemOcr(ostrom), false);
+  assert.equal(looksCorruptStemOcr("finite shared resource if given unfettered access to it. Which choice completes the text?"), false);
+  assert.equal(looksCorruptStemOcr("access to it. which choice completes the text?"), false);
+  assert.equal(looksCorruptStemOcr("I don't know if it"), false);
+  // Real missing-operator geometry stems still flag, including lowercase What/Which.
+  assert.equal(looksCorruptStemOcr("In the triangle shown, PQ QR. What is the value of x?"), true);
+  assert.equal(looksCorruptStemOcr("In the triangle shown, AB CD. which is the length of AE?"), true);
+  assert.equal(looksCorruptStemOcr("If AB 12 what is the length of CD?"), true);
+  const ostromQuestion = {
+    prompt: ostrom,
+    choices: [
+      { id: "a", label: "A", text: "By contrast," },
+      { id: "b", label: "B", text: "For example," },
+      { id: "c", label: "C", text: "That said," },
+      { id: "d", label: "D", text: "As such," },
+    ],
+  };
+  assert.equal(shouldShowQuizChoices(ostromQuestion), true);
+});
+
 test("hides page-neighbor figures on word problems and rejects corrupt stems", () => {
   assert.equal(looksCorruptStemOcr("In the triangle shown, PQ QR. What is the value = of x?"), true);
   assert.equal(stemCitesVisual("Rectangle P has an area of 72 square inches."), false);
