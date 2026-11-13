@@ -146,10 +146,10 @@ test("hard difficulty starts the session after Oct 16 and stays reusable", () =>
   );
 });
 
-test("Taito stays on both sections and Sophia's hard bank is reading and writing only", () => {
+test("Taito and Sophia hard banks are reading and writing only", () => {
   const taito = SAT_DIFFICULTY_SETTINGS.find((setting) => setting.email === TAITO_STUDENT_EMAIL);
   assert.equal(taito?.difficulty, "hard");
-  assert.equal(taito?.sections, undefined);
+  assert.deepEqual(taito?.sections, ["rw"]);
   assert.equal(taito?.inSessionQuestionTarget, 20);
   assert.deepEqual(
     satSectionsForStudent({
@@ -157,7 +157,15 @@ test("Taito stays on both sections and Sophia's hard bank is reading and writing
       subject: "SAT",
       sessionDateKey: "2026-11-20",
     }),
-    ["rw", "math"],
+    ["rw"],
+  );
+  assert.deepEqual(
+    satSectionsForStudent({
+      email: TAITO_STUDENT_EMAIL,
+      subject: "SAT",
+      sessionDateKey: "2026-12-18",
+    }),
+    ["rw"],
   );
   assert.deepEqual(hardSatSectionQuotas(40), { rw: 22, math: 18 });
   const sophia = SAT_DIFFICULTY_SETTINGS.find((setting) => setting.userId === SOPHIA_SLEIMAN_SAT_USER_ID);
@@ -1010,10 +1018,10 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       2,
     ),
   );
-  assert.equal(tailRw, 133);
-  assert.equal(tailMath, 33);
-  assert.equal(rwCount, 208);
-  assert.equal(mathCount, 48);
+  assert.equal(tailRw, 134);
+  assert.equal(tailMath, 34);
+  assert.equal(rwCount, 209);
+  assert.equal(mathCount, 49);
   assert.deepEqual(
     coverage.map((row) => ({
       sessionDateKey: row.sessionDateKey,
@@ -1025,7 +1033,7 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       {
         sessionDateKey: "2026-10-30",
         full: true,
-        prework: { rw: 30, math: 10, minRw: 27, minMath: 24 },
+        prework: { rw: 29, math: 11, minRw: 28, minMath: 24 },
         inSession: { rw: 15, math: 5, minRw: 27, minMath: 23 },
       },
       {
@@ -1037,26 +1045,26 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       {
         sessionDateKey: "2026-11-20",
         full: true,
-        prework: { rw: 40, math: 0, minRw: 4, minMath: null },
+        prework: { rw: 40, math: 0, minRw: 5, minMath: null },
         inSession: { rw: 20, math: 0, minRw: 3, minMath: null },
       },
       {
         sessionDateKey: "2026-11-27",
         full: false,
-        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
-        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+        prework: { rw: 8, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 4, math: 0, minRw: 1, minMath: null },
       },
       {
         sessionDateKey: "2026-12-11",
         full: false,
-        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
-        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+        prework: { rw: 8, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 4, math: 0, minRw: 1, minMath: null },
       },
       {
         sessionDateKey: "2026-12-18",
         full: false,
-        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
-        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+        prework: { rw: 8, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 4, math: 0, minRw: 1, minMath: null },
       },
     ],
   );

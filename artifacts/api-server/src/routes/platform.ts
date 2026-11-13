@@ -617,7 +617,10 @@ import {
 import {
   ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
   evaluateAssignmentClone,
+  dropAlreadyAssignedCloneQuestions,
+  ASSIGNMENT_QUESTIONS_ALREADY_ASSIGNED_MESSAGE,
 } from "../lib/assignment-clone";
+import { loadSeenStudentQuestions } from "../lib/student-question-usage.ts";
 import {
   QUESTION_ALREADY_ON_QUIZ_MESSAGE,
   questionCanAttachToAssignment,
@@ -782,6 +785,7 @@ import {
   adminNotificationsTable,
   attemptsTable,
   auditLogsTable,
+  bankQuestionsTable,
   availabilityRulesTable,
   bookingSlotHoldsTable,
   calendarConnectionsTable,
@@ -13244,6 +13248,43 @@ router.post(
     if (!planned.ok) {
       res.status(planned.status).json({ error: planned.error });
       return;
+    }
+
+    if (session.clientUserId && planned.copiedQuestions.length > 0) {
+      const seen = await loadSeenStudentQuestions(session.clientUserId, []);
+      const sourceIds = planned.copiedQuestions.map((question) => question.questionId);
+      const sourceRows = await db
+        .select({
+          id: questionsTable.id,
+          prompt: questionsTable.prompt,
+          stimulus: questionsTable.stimulus,
+          choices: questionsTable.choices,
+          sourceKey: bankQuestionsTable.sourceKey,
+        })
+        .from(questionsTable)
+        .leftJoin(
+          bankQuestionsTable,
+          eq(bankQuestionsTable.linkedQuestionId, questionsTable.id),
+        )
+        .where(inArray(questionsTable.id, sourceIds));
+      const contentById = new Map(
+        sourceRows.map((row) => [
+          row.id,
+          {
+            questionId: row.id,
+            prompt: row.prompt,
+            stimulus: row.stimulus,
+            choices: row.choices,
+            sourceKey: row.sourceKey,
+          },
+        ]),
+      );
+      const remaining = dropAlreadyAssignedCloneQuestions(planned.copiedQuestions, contentById, seen);
+      if (remaining.length === 0) {
+        res.status(409).json({ error: ASSIGNMENT_QUESTIONS_ALREADY_ASSIGNED_MESSAGE });
+        return;
+      }
+      planned.copiedQuestions = remaining;
     }
 
     const created = await db.transaction(async (tx) => {

@@ -14,6 +14,10 @@ export type HardReserveCandidate = {
   section?: string | null;
   /** False when the row is not from the renderable module-2 hard bank. */
   inHardPool?: boolean;
+  linkedQuestionId?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: unknown;
 };
 
 export type HardReservePick<T> = {
