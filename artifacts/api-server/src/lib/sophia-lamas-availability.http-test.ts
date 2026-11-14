@@ -142,7 +142,7 @@ async function getJson(baseUrl: string, path: string) {
   const text = await response.text();
   return {
     status: response.status,
-    body: text ? (JSON.parse(text) as { slots?: string[] }) : {},
+    body: text ? (JSON.parse(text) as { slots?: string[]; providerStatus?: string }) : {},
   };
 }
 
@@ -461,6 +461,7 @@ test("disconnected Sophia Lamas offers fixed hours with no free/busy and writes 
     server = await startServer(michelle);
     const offered = await getJson(server.baseUrl, AVAILABILITY_PATH(sophia!.id));
     assert.equal(offered.status, 200, JSON.stringify(offered.body));
+    assert.equal(offered.body.providerStatus, "disconnected");
     assert.equal(offered.body.slots?.includes(monday), true);
     assert.equal(offered.body.slots?.includes(WEDNESDAY_START), true);
     assert.equal(calendar.freeBusyCalls(), 0);
@@ -754,6 +755,7 @@ test("connected Sophia Lamas hides a busy hour, books a free hour on the admin c
     server = await startServer(michelle);
     const offered = await getJson(server.baseUrl, AVAILABILITY_PATH(sophia!.id));
     assert.equal(offered.status, 200, JSON.stringify(offered.body));
+    assert.equal(offered.body.providerStatus, "connected");
     assert.equal(offered.body.slots?.includes(MONDAY_START), false);
     assert.equal(offered.body.slots?.includes(WEDNESDAY_START), true);
     assert.ok(calendar.freeBusyCalls() > 0);
@@ -816,6 +818,7 @@ test("connected Sophia Lamas hides a busy hour, books a free hour on the admin c
     const busyBeforeFbOnly = calendar.freeBusyCalls();
     const offeredFbOnly = await getJson(server.baseUrl, AVAILABILITY_PATH(sophia!.id));
     assert.equal(offeredFbOnly.status, 200, JSON.stringify(offeredFbOnly.body));
+    assert.equal(offeredFbOnly.body.providerStatus, "connected");
     assert.equal(offeredFbOnly.body.slots?.includes(MONDAY_START), false);
     assert.equal(offeredFbOnly.body.slots?.includes(WEDNESDAY_START), true);
     assert.ok(calendar.freeBusyCalls() > busyBeforeFbOnly);
