@@ -1,3 +1,4 @@
+import { questionIsAlreadyAssignedToStudent, type SeenStudentQuestions } from "./student-question-fingerprint.ts";
 export const ASSIGNMENT_ALREADY_ON_SESSION_MESSAGE =
   "This quiz is already assigned to that session. Assigning again would create a duplicate.";
 export const ASSIGNMENT_CLONE_COURSE_MISMATCH_MESSAGE =
@@ -6,6 +7,8 @@ export const ASSIGNMENT_CLONE_SUBJECT_MISMATCH_MESSAGE =
   "Assignment subject must match the linked session subject";
 export const ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE =
   "This assignment already has student attempts. Assign it to another session by cloning instead of moving it.";
+export const ASSIGNMENT_QUESTIONS_ALREADY_ASSIGNED_MESSAGE =
+  "Every question in this quiz was already assigned to this student. Choose a different quiz or new questions.";
 
 export type AssignmentQuestionCopy = {
   questionId: string;
@@ -151,4 +154,40 @@ export function buildAssignmentCloneValues(
     },
     questions: sourceQuestions.map((question) => ({ ...question })),
   };
+}
+
+export type CloneQuestionContent = {
+  questionId: string;
+  sourceKey?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: unknown;
+};
+
+/** Drop questions this student has already been given, including same-wording snapshots. */
+export function dropAlreadyAssignedCloneQuestions(
+  questions: readonly AssignmentQuestionCopy[],
+  contentById: ReadonlyMap<string, CloneQuestionContent>,
+  seen: Pick<SeenStudentQuestions, "questionIds" | "sourceKeys" | "fingerprints">,
+): AssignmentQuestionCopy[] {
+  const kept: AssignmentQuestionCopy[] = [];
+  for (const question of questions) {
+    const content = contentById.get(question.questionId);
+    if (
+      questionIsAlreadyAssignedToStudent(
+        {
+          questionId: question.questionId,
+          sourceKey: content?.sourceKey,
+          prompt: content?.prompt,
+          stimulus: content?.stimulus,
+          choices: content?.choices,
+        },
+        seen,
+      )
+    ) {
+      continue;
+    }
+    kept.push(question);
+  }
+  return kept.map((question, index) => ({ ...question, position: index }));
 }

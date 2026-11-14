@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   adminNotificationsTable,
   auditLogsTable,
@@ -33,6 +33,8 @@ import { selfServeSatBookingForAccount } from "./session-schedule.ts";
 import { satDebitPlan, type SatDebit } from "./sat-tutor-pricing.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { formatSessionInstantEt } from "./admin-calendar-fallback.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { meetUrlFromSessionFields, queueBookingAdminAlert } from "./booking-admin-email.ts";
 
 export { remainingCreditHours } from "./credit-hours.ts";
 
@@ -783,31 +785,103 @@ export async function notifyAdministratorsOfBooking(args: {
     .select({ id: usersTable.id })
     .from(usersTable)
     .where(eq(usersTable.role, "administrator"));
-  if (administrators.length === 0) return;
-  const existing = await db
-    .select({ recipientUserId: adminNotificationsTable.recipientUserId })
-    .from(adminNotificationsTable)
-    .where(
-      and(
-        eq(adminNotificationsTable.sessionId, args.sessionId),
-        eq(adminNotificationsTable.kind, args.kind),
-        eq(adminNotificationsTable.title, args.title),
-      ),
-    );
-  const already = new Set(existing.map((row) => row.recipientUserId));
-  const fresh = administrators.filter((admin) => !already.has(admin.id));
-  if (fresh.length === 0) return;
-  await db.insert(adminNotificationsTable).values(
-    fresh.map((admin) => ({
-      recipientUserId: admin.id,
-      kind: args.kind,
-      guidanceRequestId: null,
-      sessionId: args.sessionId,
-      title: args.title,
-      message: args.message,
-      status: "unread",
-    })),
+  let alreadyNotified = false;
+  if (administrators.length > 0) {
+    const existing = await db
+      .select({ recipientUserId: adminNotificationsTable.recipientUserId })
+      .from(adminNotificationsTable)
+      .where(
+        and(
+          eq(adminNotificationsTable.sessionId, args.sessionId),
+          eq(adminNotificationsTable.kind, args.kind),
+          eq(adminNotificationsTable.title, args.title),
+        ),
+      );
+    const already = new Set(existing.map((row) => row.recipientUserId));
+    const fresh = administrators.filter((admin) => !already.has(admin.id));
+    if (fresh.length === 0) {
+      alreadyNotified = true;
+    } else {
+      await db.insert(adminNotificationsTable).values(
+        fresh.map((admin) => ({
+          recipientUserId: admin.id,
+          kind: args.kind,
+          guidanceRequestId: null,
+          sessionId: args.sessionId,
+          title: args.title,
+          message: args.message,
+          status: "unread",
+        })),
+      );
+    }
+  }
+  // Fire-and-forget Resend to admin@ only. Never await the send on the booking path.
+  if (!alreadyNotified) {
+    queueAdminBookingAlert(args);
+  }
+}
+
+async function loadBookingAdminAlertDetails(sessionId: string): Promise<{
+  studentName?: string | null;
+  tutorName?: string | null;
+  start?: Date | null;
+  meetUrl?: string | null;
+}> {
+  const [session] = await db
+    .select({
+      dateTime: sessionsTable.dateTime,
+      meetUrl: sessionsTable.meetUrl,
+      providerEventUrl: sessionsTable.providerEventUrl,
+      clientUserId: sessionsTable.clientUserId,
+      tutorUserId: sessionsTable.tutorUserId,
+    })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1);
+  if (!session) return {};
+  const ids = [session.clientUserId, session.tutorUserId].filter(
+    (id): id is string => Boolean(id),
   );
+  const people =
+    ids.length === 0
+      ? []
+      : await db
+          .select({ id: usersTable.id, displayName: usersTable.displayName })
+          .from(usersTable)
+          .where(inArray(usersTable.id, ids));
+  const names = new Map(people.map((row) => [row.id, row.displayName]));
+  return {
+    studentName: session.clientUserId ? names.get(session.clientUserId) ?? null : null,
+    tutorName: session.tutorUserId ? names.get(session.tutorUserId) ?? null : null,
+    start: session.dateTime,
+    meetUrl: meetUrlFromSessionFields(session.meetUrl, session.providerEventUrl),
+  };
+}
+
+function queueAdminBookingAlert(args: {
+  sessionId: string;
+  title: string;
+  message: string;
+}): void {
+  void loadBookingAdminAlertDetails(args.sessionId)
+    .then((details) => {
+      queueBookingAdminAlert({
+        title: args.title,
+        message: args.message,
+        studentName: details.studentName,
+        tutorName: details.tutorName,
+        start: details.start,
+        meetUrl: details.meetUrl ?? args.message,
+      });
+    })
+    .catch((error) => {
+      queueBookingAdminAlert({
+        title: args.title,
+        message: args.message,
+        meetUrl: args.message,
+      });
+      void error;
+    });
 }
 
 export function requireStudentBooker(user: Pick<AppUser, "role" | "email">): void {

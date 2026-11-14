@@ -8,6 +8,7 @@ import {
 import { isOfficialSatExtract } from "./sat-bank-diagnostic-quality.ts";
 import { materializeHardSatQuestion } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
+import { filterUnseenBankItems } from "./student-question-usage.ts";
 import { satSectionsForSession } from "./sat-hard-sets.ts";
 import { logger } from "./logger.ts";
 import { normalizedSessionSubject } from "./session-schedule.ts";
@@ -58,6 +59,10 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
       sourceKind: row.sourceKind,
       section: row.section,
       inHardPool: true,
+      linkedQuestionId: row.linkedQuestionId,
+      prompt: row.prompt,
+      stimulus: row.stimulus,
+      choices: row.choices,
     });
   }
   return selected;
@@ -142,7 +147,12 @@ export async function ensureHardChallengeReserve(session: {
   const exclude = new Set<string>([...seen.sourceKeys, ...onSession]);
   const sections = await satSectionsForSession(session);
   const pool = await loadOfficialHardReservePool();
-  const picked = selectHardReserve(pool, {
+  const unseenPool = filterUnseenBankItems(pool, {
+    questionIds: seen.questionIds ?? new Set(),
+    sourceKeys: seen.sourceKeys,
+    fingerprints: seen.fingerprints ?? new Set(),
+  });
+  const picked = selectHardReserve(unseenPool, {
     seed: session.id,
     target,
     excludeSourceKeys: exclude,

@@ -84,6 +84,7 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
     difficulty: "hard",
     effectiveAfterDateKey: HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
     inSessionQuestionTarget: 20,
+    sections: ["rw"],
   },
   {
     userId: SOPHIA_SLEIMAN_SAT_USER_ID,
@@ -646,7 +647,7 @@ export function satDifficultyForStudent(input: StudentSatSettingInput): SatDiffi
   return activeSatSetting(input)?.difficulty ?? "standard";
 }
 
-/** Both sections when the student has no restriction. Taito stays on both. */
+/** Both sections when the student has no restriction. Taito and Sophia stay on reading and writing only. */
 export function satSectionsForStudent(input: StudentSatSettingInput): readonly SatPracticeSection[] {
   const sections = activeSatSetting(input)?.sections;
   if (!sections || sections.length === 0) return ["rw", "math"];

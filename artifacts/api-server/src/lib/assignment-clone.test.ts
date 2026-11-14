@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { ASSIGNMENT_ALREADY_ON_SESSION_MESSAGE, assignmentAlreadyOnSession, buildAssignmentCloneValues, evaluateAssignmentClone } from "./assignment-clone.ts";
+import { ASSIGNMENT_ALREADY_ON_SESSION_MESSAGE, assignmentAlreadyOnSession, buildAssignmentCloneValues, dropAlreadyAssignedCloneQuestions, evaluateAssignmentClone } from "./assignment-clone.ts";
+import { emptySeenStudentQuestions } from "./student-question-fingerprint.ts";
 
 const sourceQuestions = [
   { questionId: "q-1", position: 0, predictionFirst: true },
@@ -151,4 +152,23 @@ test("duplicate assignment to the same session is rejected unless explicitly all
     allowDuplicate: true,
   });
   assert.equal(allowed.ok, true);
+});
+
+test("clone drops questions the student has already been assigned by id or wording", () => {
+  const questions = [
+    { questionId: "q-old", position: 0, predictionFirst: false },
+    { questionId: "q-clone", position: 1, predictionFirst: false },
+    { questionId: "q-new", position: 2, predictionFirst: false },
+  ];
+  const contentById = new Map([
+    ["q-old", { questionId: "q-old", prompt: "Seen stem", choices: [{ text: "A" }] }],
+    ["q-clone", { questionId: "q-clone", prompt: "Same wording", choices: [{ text: "B" }] }],
+    ["q-new", { questionId: "q-new", prompt: "Fresh stem", choices: [{ text: "C" }] }],
+  ]);
+  const seen = emptySeenStudentQuestions();
+  seen.questionIds.add("q-old");
+  seen.fingerprints.add("same wording :: b");
+  const kept = dropAlreadyAssignedCloneQuestions(questions, contentById, seen);
+  assert.deepEqual(kept.map((row) => row.questionId), ["q-new"]);
+  assert.equal(kept[0]?.position, 0);
 });

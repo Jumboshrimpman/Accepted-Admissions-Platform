@@ -31,6 +31,7 @@ import {
   selectIeltsStylePreworkItems,
 } from "./ielts-style-bank-select.ts";
 import { materializeBankQuestion } from "./sat-bank-service.ts";
+import { filterUnseenBankItems, loadSeenStudentQuestions } from "./student-question-usage.ts";
 import {
   isEnglishSessionSubject,
   isTaitoFirstEnglishSession,
@@ -305,6 +306,10 @@ export async function assignEnglishPreworkFromBank(input: {
   if (input.bankQuestionIds?.length) {
     const allowed = new Set(input.bankQuestionIds);
     pool = pool.filter((row) => allowed.has(row.id));
+  }
+  if (session.clientUserId) {
+    const seen = await loadSeenStudentQuestions(session.clientUserId, []);
+    pool = filterUnseenBankItems(pool, seen);
   }
   const selectedRows = selectIeltsStylePreworkItems(pool, { homeworkKind, setIndex });
   const qualityRows = selectedRows.map(bankRowForQuality);

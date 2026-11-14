@@ -13,6 +13,7 @@ after(async () => {
 import {
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
+  BOOKING_CALENDAR_REMINDERS,
   calendarEventPayload,
   calendarInviteIncludesTutor,
   googleAccountOrganizesAsTutor,
@@ -497,6 +498,12 @@ test("event payload contains only the approved session details", () => {
   assert.deepEqual(event.attendees, [
     { email: "michelle@example.com" },
     { email: "admin@acceptedadmissions.org" },
+  ]);
+  assert.deepEqual(event.reminders, BOOKING_CALENDAR_REMINDERS);
+  assert.equal(event.reminders.useDefault, false);
+  assert.deepEqual(event.reminders.overrides, [
+    { method: "popup", minutes: 60 },
+    { method: "email", minutes: 1440 },
   ]);
   assert.equal("privateEventDetails" in event, false);
 });
