@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { generateAvailableSlots, zonedDateTimeToUtc } from "./booking.ts";
 import {
   NIKA_TUTOR_PROFILE_ID,
+  SOPHIA_LAMAS_TUTOR_PROFILE_ID,
   SELF_SERVE_AVAILABILITY_EDITOR_DAYS,
   SELF_SERVE_AVAILABILITY_MAX_DAYS,
   SELF_SERVE_AVAILABILITY_TUTOR_IDS,
@@ -17,9 +18,11 @@ import {
 
 const platformUrl = new URL("../routes/platform.ts", import.meta.url);
 
-test("only the Nika profile id may edit its own date windows", () => {
-  assert.deepEqual(SELF_SERVE_AVAILABILITY_TUTOR_IDS, [NIKA_TUTOR_PROFILE_ID]);
+test("only Nika and Sophia Lamas may edit their own date windows", () => {
+  assert.deepEqual(SELF_SERVE_AVAILABILITY_TUTOR_IDS, [NIKA_TUTOR_PROFILE_ID, SOPHIA_LAMAS_TUTOR_PROFILE_ID]);
+  assert.equal(SOPHIA_LAMAS_TUTOR_PROFILE_ID, "5c98f45b-0069-4342-8bdb-163dc49cc531");
   assert.equal(tutorMayEditOwnDateHours(NIKA_TUTOR_PROFILE_ID), true);
+  assert.equal(tutorMayEditOwnDateHours(SOPHIA_LAMAS_TUTOR_PROFILE_ID), true);
   assert.equal(tutorMayEditOwnDateHours("bbca73b6-331d-48f0-ac03-7b98ae438856"), false);
   assert.equal(tutorMayEditOwnDateHours(null), false);
   assert.equal(SELF_SERVE_AVAILABILITY_EDITOR_DAYS, 56);
@@ -108,5 +111,8 @@ test("startup seed does not write date windows", async () => {
   assert.match(source, /mergeDateHours\(/);
   assert.match(source, /tutorMayEditOwnDateHours\(/);
   const allowlist = await readFile(fileURLToPath(new URL("./self-serve-availability.ts", import.meta.url)), "utf8");
-  assert.match(allowlist, /SELF_SERVE_AVAILABILITY_TUTOR_IDS: readonly string\[\] = \[NIKA_TUTOR_PROFILE_ID\]/);
+  assert.match(
+    allowlist,
+    /SELF_SERVE_AVAILABILITY_TUTOR_IDS: readonly string\[\] = \[\s*NIKA_TUTOR_PROFILE_ID,\s*SOPHIA_LAMAS_TUTOR_PROFILE_ID,\s*\]/,
+  );
 });

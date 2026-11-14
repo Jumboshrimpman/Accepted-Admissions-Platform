@@ -87,6 +87,7 @@ function formatCivilDate(key: string): string {
 
 function timezoneCaption(timezone: string): string {
   if (timezone === "America/New_York") return "Eastern Time";
+  if (timezone === "Asia/Dubai") return "Dubai time (Gulf Standard Time)";
   return timezone;
 }
 

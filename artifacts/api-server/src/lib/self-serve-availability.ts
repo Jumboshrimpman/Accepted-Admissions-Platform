@@ -8,8 +8,17 @@ import { civilDateKey, type AvailabilityWindow, type RecurringHours } from "./bo
  * Administrators keep PUT /admin/tutors/:id/date-hours either way.
  */
 export const NIKA_TUTOR_PROFILE_ID = "46d7cfee-d0c0-4bad-93e7-d79907301684";
+/**
+ * Sophia Lamas (SAT English). Her Mon–Wed weekly hours stay as set. She can
+ * also open extra dates and close single dates from her dashboard, and
+ * students such as Michelle see those changes when they book.
+ */
+export const SOPHIA_LAMAS_TUTOR_PROFILE_ID = "5c98f45b-0069-4342-8bdb-163dc49cc531";
 
-export const SELF_SERVE_AVAILABILITY_TUTOR_IDS: readonly string[] = [NIKA_TUTOR_PROFILE_ID];
+export const SELF_SERVE_AVAILABILITY_TUTOR_IDS: readonly string[] = [
+  NIKA_TUTOR_PROFILE_ID,
+  SOPHIA_LAMAS_TUTOR_PROFILE_ID,
+];
 
 /** Dates the tutor may save, counting today. The editor shows a shorter range. */
 export const SELF_SERVE_AVAILABILITY_MAX_DAYS = 90;
