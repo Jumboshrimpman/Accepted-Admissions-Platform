@@ -5788,6 +5788,7 @@ type TutorSlotContext = {
   roomWindows: BusyWindow[];
   usesAdminCalendarFallback: boolean;
   applyGoogleBusyToSelfSetHours: boolean;
+  providerConnected: boolean;
 };
 
 async function loadTutorSlotContext(
@@ -5940,6 +5941,7 @@ async function loadTutorSlotContext(
       name: tutor.name,
       portalEmail: tutor.email,
     }),
+    providerConnected: Boolean(calendar && tutorHasUsableFreeBusyGrant(calendar)),
   };
 }
 
@@ -5973,6 +5975,7 @@ function projectTutorSlots(
     tutor: context.tutor,
     rule: context.rule,
     access: context.access,
+    providerConnected: context.providerConnected,
     slots,
   };
 }
@@ -6981,7 +6984,7 @@ async function offeredAvailabilityForProfile(
   const needsReconnect = results.some(
     (result) => result.access && !result.access.connection.appCalendarId?.trim(),
   );
-  const connected = results.every((result) => result.access);
+  const connected = results.every((result) => result.providerConnected);
   let providerStatus: OfferedAvailabilityBody["providerStatus"] = needsReconnect
     ? "reconnect"
     : connected
@@ -8598,7 +8601,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
         title: result.tutor.title,
         timezone: result.rule.timezone,
       },
-      providerStatus: result.access ? "connected" : "disconnected",
+      providerStatus: result.providerConnected ? "connected" : "disconnected",
       slots: result.slots,
     });
   } catch (error) {
@@ -14679,7 +14682,7 @@ router.get(
           true,
         );
         previewBooking = {
-          calendarStatus: availability.access ? "connected" : "disconnected",
+          calendarStatus: availability.providerConnected ? "connected" : "disconnected",
           availability: {
             tutor: {
               id: availability.tutor.id,
@@ -14687,7 +14690,7 @@ router.get(
               title: clientPortalTutorTitle(availability.tutor),
               timezone: availability.rule.timezone,
             },
-            providerStatus: availability.access ? "connected" : "disconnected",
+            providerStatus: availability.providerConnected ? "connected" : "disconnected",
             slots: availability.slots,
           },
           sessions: previewSessions,
