@@ -12,6 +12,8 @@ import {
   courseMembershipsTable,
   coursesTable,
   creditLedgerTable,
+  curriculumBlocksTable,
+  curriculumLibraryAssetsTable,
   db,
   invoicesTable,
   loginActivityTable,
@@ -51,10 +53,29 @@ import { SHARED_FALL_MEETING_URL } from "./session-schedule";
 
 const NIKA_NAME = "Nika Raiffe";
 const FALL_SAT_COURSE_TITLE = "Fall 2026 SAT & IELTS";
-const MONDAY_START = zonedDateTimeToUtc("2026-11-16", "18:00", "Asia/Dubai").toISOString();
-const WEDNESDAY_START = zonedDateTimeToUtc("2026-11-18", "18:00", "Asia/Dubai").toISOString();
+/**
+ * First Monday on or after Sophia's Nov 16 start that is at least two days
+ * out, so the suite keeps passing after that week has gone by.
+ */
+function upcomingMondayKey(now = new Date()): string {
+  const floor = new Date(Math.max(Date.parse("2026-11-16T00:00:00.000Z"), now.getTime() + 2 * 24 * 60 * 60_000));
+  const cursor = new Date(Date.UTC(floor.getUTCFullYear(), floor.getUTCMonth(), floor.getUTCDate()));
+  while (cursor.getUTCDay() !== 1) cursor.setUTCDate(cursor.getUTCDate() + 1);
+  return cursor.toISOString().slice(0, 10);
+}
+function addDaysKey(key: string, days: number): string {
+  const date = new Date(`${key}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+const MONDAY_KEY = upcomingMondayKey();
+const WEDNESDAY_KEY = addDaysKey(MONDAY_KEY, 2);
+const MONDAY_START = zonedDateTimeToUtc(MONDAY_KEY, "18:00", "Asia/Dubai").toISOString();
+const WEDNESDAY_START = zonedDateTimeToUtc(WEDNESDAY_KEY, "18:00", "Asia/Dubai").toISOString();
+const AVAILABILITY_FROM = zonedDateTimeToUtc(MONDAY_KEY, "17:00", "Asia/Dubai").toISOString();
+const AVAILABILITY_TO = zonedDateTimeToUtc(WEDNESDAY_KEY, "20:00", "Asia/Dubai").toISOString();
 const AVAILABILITY_PATH = (tutorProfileId: string) =>
-  `/api/booking/availability?tutorProfileId=${tutorProfileId}&from=2026-11-16T13:00:00.000Z&to=2026-11-18T16:00:00.000Z&durationMinutes=60`;
+  `/api/booking/availability?tutorProfileId=${tutorProfileId}&from=${AVAILABILITY_FROM}&to=${AVAILABILITY_TO}&durationMinutes=60`;
 
 type CapturedWrite = {
   method: string;
@@ -268,8 +289,9 @@ test("disconnected Sophia Lamas offers fixed hours with no free/busy and writes 
 
   try {
     const monday = MONDAY_START;
-    assert.equal(monday, "2026-11-16T14:00:00.000Z");
-    assert.equal(WEDNESDAY_START, "2026-11-18T14:00:00.000Z");
+    // 18:00 Asia/Dubai is 9:00 AM ET (14:00 UTC) after the US clock change.
+    assert.match(monday, /T14:00:00\.000Z$/);
+    assert.match(WEDNESDAY_START, /T14:00:00\.000Z$/);
 
     let michelle = (
       await db
@@ -284,9 +306,7 @@ test("disconnected Sophia Lamas offers fixed hours with no free/busy and writes 
         )
         .limit(1)
     )[0];
-    if (michelle) {
-      reusedMichelle = true;
-    } else {
+    if (!michelle) {
       const [created] = await db
         .insert(usersTable)
         .values({
@@ -470,6 +490,7 @@ test("disconnected Sophia Lamas offers fixed hours with no free/busy and writes 
     if (createdSessionIds.length > 0) {
       await db.delete(adminNotificationsTable).where(inArray(adminNotificationsTable.sessionId, createdSessionIds));
       await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.sessionId, createdSessionIds));
+      await db.delete(curriculumBlocksTable).where(inArray(curriculumBlocksTable.sessionId, createdSessionIds));
       await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     }
     if (createdPaymentIds.length > 0) {
@@ -503,6 +524,11 @@ test("disconnected Sophia Lamas offers fixed hours with no free/busy and writes 
       await db.delete(invoicesTable).where(inArray(invoicesTable.clientUserId, createdUserIds));
       await db.delete(courseMembershipsTable).where(inArray(courseMembershipsTable.userId, createdUserIds));
       await db.delete(portalAccessGrantsTable).where(inArray(portalAccessGrantsTable.userId, createdUserIds));
+      // Booking can queue library slides whose author is the test admin user.
+      await db
+        .update(curriculumLibraryAssetsTable)
+        .set({ createdByUserId: null })
+        .where(inArray(curriculumLibraryAssetsTable.createdByUserId, createdUserIds));
       await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
     }
     process.env.SESSION_SECRET = previousSecret;
@@ -774,7 +800,8 @@ test("connected Sophia Lamas hides a busy hour, books a free hour on the admin c
 
     await db.delete(adminNotificationsTable).where(inArray(adminNotificationsTable.sessionId, createdSessionIds));
     await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.sessionId, createdSessionIds));
-    await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
+    await db.delete(curriculumBlocksTable).where(inArray(curriculumBlocksTable.sessionId, createdSessionIds));
+      await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     createdSessionIds.length = 0;
 
     await db
@@ -822,6 +849,7 @@ test("connected Sophia Lamas hides a busy hour, books a free hour on the admin c
     if (createdSessionIds.length > 0) {
       await db.delete(adminNotificationsTable).where(inArray(adminNotificationsTable.sessionId, createdSessionIds));
       await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.sessionId, createdSessionIds));
+      await db.delete(curriculumBlocksTable).where(inArray(curriculumBlocksTable.sessionId, createdSessionIds));
       await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     }
     if (createdPaymentIds.length > 0) {
@@ -855,6 +883,11 @@ test("connected Sophia Lamas hides a busy hour, books a free hour on the admin c
       await db.delete(invoicesTable).where(inArray(invoicesTable.clientUserId, createdUserIds));
       await db.delete(courseMembershipsTable).where(inArray(courseMembershipsTable.userId, createdUserIds));
       await db.delete(portalAccessGrantsTable).where(inArray(portalAccessGrantsTable.userId, createdUserIds));
+      // Booking can queue library slides whose author is the test admin user.
+      await db
+        .update(curriculumLibraryAssetsTable)
+        .set({ createdByUserId: null })
+        .where(inArray(curriculumLibraryAssetsTable.createdByUserId, createdUserIds));
       await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
     }
     process.env.SESSION_SECRET = previousSecret;
@@ -876,8 +909,8 @@ test("Nika still skips free/busy when disconnected and writes her own calendar w
   process.env.SESSION_SECRET = previousSecret || "nika-regression-test-secret";
   const adminCalendarId = `nika-reg-admin-${suffix}`;
   const nikaAppCalendarId = `nika-reg-own-${suffix}`;
-  const nikaMonday = zonedDateTimeToUtc("2026-11-16", "18:00", "Asia/Dubai").toISOString();
-  const nikaWednesday = zonedDateTimeToUtc("2026-11-18", "18:00", "Asia/Dubai").toISOString();
+  const nikaMonday = zonedDateTimeToUtc(MONDAY_KEY, "18:00", "Asia/Dubai").toISOString();
+  const nikaWednesday = zonedDateTimeToUtc(WEDNESDAY_KEY, "18:00", "Asia/Dubai").toISOString();
   const calendar = installCalendarMock(adminCalendarId);
   const createdUserIds: string[] = [];
   const createdProfileIds: string[] = [];
@@ -1114,6 +1147,7 @@ test("Nika still skips free/busy when disconnected and writes her own calendar w
     if (createdSessionIds.length > 0) {
       await db.delete(adminNotificationsTable).where(inArray(adminNotificationsTable.sessionId, createdSessionIds));
       await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.sessionId, createdSessionIds));
+      await db.delete(curriculumBlocksTable).where(inArray(curriculumBlocksTable.sessionId, createdSessionIds));
       await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     }
     if (createdLedgerIds.length > 0) {
@@ -1143,6 +1177,11 @@ test("Nika still skips free/busy when disconnected and writes her own calendar w
       await db.delete(invoicesTable).where(inArray(invoicesTable.clientUserId, createdUserIds));
       await db.delete(courseMembershipsTable).where(inArray(courseMembershipsTable.userId, createdUserIds));
       await db.delete(portalAccessGrantsTable).where(inArray(portalAccessGrantsTable.userId, createdUserIds));
+      // Booking can queue library slides whose author is the test admin user.
+      await db
+        .update(curriculumLibraryAssetsTable)
+        .set({ createdByUserId: null })
+        .where(inArray(curriculumLibraryAssetsTable.createdByUserId, createdUserIds));
       await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
     }
     process.env.SESSION_SECRET = previousSecret;
