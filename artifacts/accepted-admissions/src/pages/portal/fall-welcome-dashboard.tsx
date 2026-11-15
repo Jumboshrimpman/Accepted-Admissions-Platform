@@ -45,6 +45,10 @@ import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
+import {
+  bookingSectionStartsCollapsed,
+  CollapsibleBookingSection,
+} from "@/components/collapsible-booking-section";
 import { FinancialCard } from "@/pages/portal/financial-card";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { SessionJoinActions } from "@/components/session-join-actions";
@@ -55,6 +59,7 @@ import {
   PORTAL_BEGIN_RESCHEDULE_EVENT,
   PORTAL_BOOKING_SECTION_ID,
   canPurchaseOrBookSatCredits,
+  scrollToPortalBooking,
   isOffPlatformProgramClient,
   shouldShowSatPaymentReceipts,
   SOPHIA_SLEIMAN_SAT_USER_ID,
@@ -240,7 +245,7 @@ export function ClientDashboardView({
     const pathOnly = location.split("?")[0] || "/portal";
     setLocation(nextQuery ? `${pathOnly}?${nextQuery}` : pathOnly, { replace: true });
     const timer = window.setTimeout(() => {
-      document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollToPortalBooking();
     }, 150);
     return () => window.clearTimeout(timer);
   }, [location, setLocation]);
@@ -341,6 +346,10 @@ export function ClientDashboardView({
   const completed = sessions.filter(isSessionWorkComplete).length;
   const portalUserId = mirroredStudent?.id ?? dashboard.user.id;
   const sophiaPortal = portalUserId === SOPHIA_SLEIMAN_SAT_USER_ID;
+  const bookingCollapsed = bookingSectionStartsCollapsed(portalUserId);
+  const bookingSectionTitle = collegeConsulting
+    ? "Pay and book a College Consulting session"
+    : "Pay and book a session with a tutor";
   const priorityDashboard = isPriorityCreditsDashboard({
     userId: portalUserId,
     email: mirroredStudent?.email ?? dashboard.user.email,
@@ -522,7 +531,7 @@ export function ClientDashboardView({
                       type="button"
                       className="rounded-full"
                       onClick={() =>
-                        document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        scrollToPortalBooking()
                       }
                     >
                       {bookSessionLabel}
@@ -551,9 +560,7 @@ export function ClientDashboardView({
                             }),
                           );
                         }
-                        document
-                          .getElementById("booking-schedule")
-                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        scrollToPortalBooking();
                       }}
                     >
                       Change time
@@ -576,7 +583,7 @@ export function ClientDashboardView({
                       variant="outline"
                       className="rounded-full"
                       onClick={() =>
-                        document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        scrollToPortalBooking()
                       }
                     >
                       {bookSessionLabel}
@@ -830,7 +837,7 @@ export function ClientDashboardView({
               className="mt-3 rounded-full"
               size="sm"
               onClick={() =>
-                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                scrollToPortalBooking()
               }
             >
               View booking schedule
@@ -845,6 +852,7 @@ export function ClientDashboardView({
       {priorityDashboard ? null : billingSection}
 
       {studentSatCommerce && showSelfServeBooking ? (
+        <CollapsibleBookingSection collapsed={bookingCollapsed} title={bookingSectionTitle}>
         <BookingCard
           collegeConsulting={collegeConsulting}
           consultingCatalog={
@@ -857,8 +865,10 @@ export function ClientDashboardView({
             ...sessions,
           ]}
         />
+        </CollapsibleBookingSection>
       ) : null}
       {adminPreview && showSelfServeBooking && previewBooking ? (
+        <CollapsibleBookingSection collapsed={bookingCollapsed} title={bookingSectionTitle}>
         <ClientPreviewBookingCard
           previewBooking={previewBooking}
           clientTimezone={clientTimezone}
@@ -877,6 +887,7 @@ export function ClientDashboardView({
             (dashboard.upcomingSessions?.length ?? 0) > 0
           }
         />
+        </CollapsibleBookingSection>
       ) : null}
 
       {priorityDashboard ? null : upcomingMeeting}

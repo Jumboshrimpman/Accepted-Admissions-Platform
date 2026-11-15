@@ -15,6 +15,15 @@ const homeworkState = {
 };
 const sessionPageState = {
   cleanIelts: false,
+  blocks: [] as Array<{
+    id: string;
+    sessionId: string;
+    kind: string;
+    position: number;
+    visibility: string;
+    status: string;
+    config: Record<string, unknown>;
+  }>,
 };
 
 const assignmentQueries: Record<
@@ -100,7 +109,7 @@ vi.mock("@workspace/api-client-react", () => ({
               title: "October pre-session mini-section",
             },
           ],
-      blocks: [],
+      blocks: sessionPageState.blocks,
       homework: sessionPageState.cleanIelts
         ? [
             {
@@ -300,6 +309,7 @@ afterEach(() => {
   homeworkState.latestAttemptId = "attempt-1";
   homeworkState.deadline = null;
   sessionPageState.cleanIelts = false;
+  sessionPageState.blocks = [];
   adaptiveLists.mistakes = [{ skill: "Transitions" }];
   adaptiveLists.recommendations = [];
   adaptiveLists.hardQuestions = [];
@@ -477,5 +487,49 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
     expect(screen.queryByTestId("download-session-questions")).toBeNull();
     expect(screen.queryByTestId("download-session-answer-key")).toBeNull();
+  });
+
+  test("assigned tutor sees the session's attached SAT Prep slides at the top of the live plan", () => {
+    sessionPageState.blocks = [
+      {
+        id: "block-draft",
+        sessionId: "session-1",
+        kind: "external_link",
+        position: 0,
+        visibility: "both",
+        status: "draft",
+        config: { title: "Draft deck", url: "/media/draft.pptx" },
+      },
+      {
+        id: "block-sat-prep",
+        sessionId: "session-1",
+        kind: "external_link",
+        position: 1,
+        visibility: "both",
+        status: "published",
+        config: {
+          title: "SAT_Prep_I_11-16",
+          label: "SAT_Prep_I_11-16",
+          text: "Standard English Conventions",
+          url: "/media/sat-prep/SAT_Prep_I.pptx",
+          libraryKind: "resource",
+          seedKey: "michelle-sophia-lamas-sat-prep:I",
+          satPrepStem: "SAT_Prep_I",
+        },
+      },
+    ];
+    render(<TutorSession />);
+    const card = screen.getByTestId("tutor-session-slides-card");
+    expect(card.textContent).toMatch(/Session slides/);
+    expect(card.textContent).toMatch(/SAT_Prep_I_11-16/);
+    expect(card.textContent).not.toMatch(/Draft deck/);
+    const link = screen.getByRole("link", { name: /Download SAT_Prep_I_11-16/ });
+    expect(link.getAttribute("href")).toBe("/media/sat-prep/SAT_Prep_I.pptx");
+    expect(link.getAttribute("download")).toBe("SAT_Prep_I.pptx");
+  });
+
+  test("hides the slides card when no published file is attached", () => {
+    render(<TutorSession />);
+    expect(screen.queryByTestId("tutor-session-slides-card")).toBeNull();
   });
 });

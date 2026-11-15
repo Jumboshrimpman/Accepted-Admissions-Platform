@@ -33,6 +33,7 @@ import { TutorDateHoursEditor, type DateHoursState } from "@/pages/tutor/date-ho
 import { TutorOfferedAvailability, type OfferedAvailability } from "@/pages/tutor/offered-availability";
 import {
   SessionQuestionDownloads,
+  SessionSlideLinkList,
   sessionOffersQuestionPdfs,
   viewerMayDownloadSessionPdfs,
 } from "@/components/session-tutor-materials";
@@ -300,6 +301,17 @@ export function TutorDashboardView({
                     sessionOffersQuestionPdfs(dashboard.assignments, session.id) ? (
                       <SessionQuestionDownloads sessionId={session.id} />
                     ) : null}
+                    <SessionSlideLinkList
+                      testId={`tutor-dashboard-slides-${session.id}`}
+                      slides={(dashboard.materials ?? [])
+                        .filter((material) => material.sessionId === session.id)
+                        .map((material) => ({
+                          id: material.id,
+                          title: material.title,
+                          url: material.url,
+                          description: null,
+                        }))}
+                    />
                   </div>
                 </div>
               ))}

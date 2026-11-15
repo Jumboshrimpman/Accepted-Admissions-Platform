@@ -102,6 +102,9 @@ export function isPortalHomePath(location: string): boolean {
 export function scrollToPortalBooking(): boolean {
   const node = document.getElementById(PORTAL_BOOKING_SECTION_ID);
   if (!node) return false;
+  // Some students start with the booking section collapsed; open it first.
+  const wrapper = typeof node.closest === "function" ? node.closest("details") : null;
+  if (wrapper && !wrapper.open) wrapper.open = true;
   node.scrollIntoView({ behavior: "smooth", block: "start" });
   return true;
 }
