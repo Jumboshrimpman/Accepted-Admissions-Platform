@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 /**
@@ -27,15 +27,26 @@ export function CollapsibleBookingSection({
   title: string;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
   if (!collapsed) return <>{children}</>;
   return (
-    <details className="group rounded-2xl border bg-card" data-testid="collapsible-booking-section">
+    <details
+      className="group rounded-2xl border bg-card"
+      data-testid="collapsible-booking-section"
+      onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
+    >
       <summary
-        className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-base font-semibold sm:px-6"
+        className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-base font-semibold sm:px-6 [&::-webkit-details-marker]:hidden"
         data-testid="collapsible-booking-summary"
       >
-        {title}
-        <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" aria-hidden="true" />
+        <span>{title}</span>
+        <span
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors group-hover:bg-primary/90"
+          data-testid="collapsible-booking-toggle"
+        >
+          {open ? "Hide" : "Press to Book"}
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+        </span>
       </summary>
       <div className="p-2 sm:p-3">{children}</div>
     </details>

@@ -32,10 +32,18 @@ describe("collapsed pay / book section", () => {
     expect(screen.getByTestId("collapsible-booking-summary").textContent).toMatch(
       /Pay and book a session with a tutor/,
     );
+    const toggle = screen.getByTestId("collapsible-booking-toggle");
+    expect(toggle.textContent).toBe("Press to Book");
+    expect(screen.getByTestId("collapsible-booking-summary").contains(toggle)).toBe(true);
     fireEvent.click(screen.getByTestId("collapsible-booking-summary"));
     details.open = true;
+    fireEvent(details, new Event("toggle"));
     expect(details.open).toBe(true);
+    expect(screen.getByTestId("collapsible-booking-toggle").textContent).toBe("Hide");
     expect(screen.getByText("Booking schedule")).toBeTruthy();
+    details.open = false;
+    fireEvent(details, new Event("toggle"));
+    expect(screen.getByTestId("collapsible-booking-toggle").textContent).toBe("Press to Book");
   });
 
   test("other students render the booking section unchanged with no wrapper", () => {
@@ -45,6 +53,7 @@ describe("collapsed pay / book section", () => {
       </CollapsibleBookingSection>,
     );
     expect(screen.queryByTestId("collapsible-booking-section")).toBeNull();
+    expect(screen.queryByText("Press to Book")).toBeNull();
     expect(screen.getByText("Booking schedule")).toBeTruthy();
   });
 
@@ -60,5 +69,7 @@ describe("collapsed pay / book section", () => {
     expect(details.open).toBe(false);
     expect(scrollToPortalBooking()).toBe(true);
     expect(details.open).toBe(true);
+    fireEvent(details, new Event("toggle"));
+    expect(screen.getByTestId("collapsible-booking-toggle").textContent).toBe("Hide");
   });
 });
