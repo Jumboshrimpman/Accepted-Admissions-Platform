@@ -59,6 +59,7 @@ import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
 import { AdminSessionQuizLinks } from "@/components/admin-session-quiz-links";
 import {
+  SessionSlides,
   SessionTutorMaterials,
   viewerMayDownloadSessionPdfs,
 } from "@/components/session-tutor-materials";
@@ -595,6 +596,7 @@ export default function TutorSession() {
         </TabsList>
 
         <TabsContent value="curriculum" className="space-y-4">
+          <SessionSlides blocks={session.blocks} />
           <SessionTutorMaterials
             sessionId={sessionId}
             timezone={session.timezone}
