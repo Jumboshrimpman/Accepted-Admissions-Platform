@@ -46,6 +46,17 @@ export const NIKA_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
 ] as const;
 
+/** Sophia Lamas's published bio. Migration 0088 copies it onto her public and portal profiles. */
+export const SOPHIA_LAMAS_PUBLIC_BIOGRAPHY =
+  "Sophia Lamas is a 2024 graduate of Stanford with a degree in International Relations and Middle Eastern Studies and 2026 graduate of a Master’s in Middle East Studies at George Washington University, specializing in Arabic and Conflict Resolution. She is currently training to be a pilot.";
+
+export const SOPHIA_LAMAS_LEGACY_PUBLIC_BIOGRAPHIES = [
+  "Sophia Lamas is a 2024 graduate of Stanford with a degree in International Relations and Middle Eastern Studies. There, she served as the Vice President of Stanford's Questbridge College Program Chapter. She is now pursuing her Master’s in Middle East Studies at George Washington University, specializing in Arabic and Conflict Resolution.",
+] as const;
+
+/** Square portal headshot for Sophia Lamas. The public team page keeps /media/team/sophia-lamas.jpg. */
+export const SOPHIA_LAMAS_PORTAL_PHOTO_URL = "/media/portal/sophia-lamas.jpg";
+
 /** First-party public portraits served from this app (not Wix CDN). */
 export const APPROVED_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> = {
   "Rosanna Kataja": "/media/team/rosanna-kataja.jpg",
