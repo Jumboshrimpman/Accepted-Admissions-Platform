@@ -310,3 +310,20 @@ test("merges missing approved school logos without dropping custom tiles", () =>
   assert.equal(withCustom?.some((logo) => logo.name === "Harvard GSAS"), true);
   assert.equal(withCustom?.[7]?.name, "Custom College");
 });
+
+test("Sophia Lamas bio and portal photo match the approved copy and migration 0088", async () => {
+  const expected =
+    "Sophia Lamas is a 2024 graduate of Stanford with a degree in International Relations and Middle Eastern Studies and 2026 graduate of a Master’s in Middle East Studies at George Washington University, specializing in Arabic and Conflict Resolution. She is currently training to be a pilot.";
+  assert.equal(roster.SOPHIA_LAMAS_PUBLIC_BIOGRAPHY, expected);
+  assert.equal(roster.SOPHIA_LAMAS_PORTAL_PHOTO_URL, "/media/portal/sophia-lamas.jpg");
+  assert.equal(roster.APPROVED_PUBLIC_TEAM_PORTRAITS["Sophia Lamas"], "/media/team/sophia-lamas.jpg");
+  assert.ok(!roster.SOPHIA_LAMAS_LEGACY_PUBLIC_BIOGRAPHIES.includes(expected as never));
+  const sql = await readFile(
+    new URL("../../../../lib/db/drizzle/0088_sophia_lamas_profile.sql", import.meta.url),
+    "utf8",
+  );
+  assert.ok(sql.includes(`'${expected}'`));
+  assert.ok(sql.includes("5c98f45b-0069-4342-8bdb-163dc49cc531"));
+  assert.ok(sql.includes("'/media/portal/sophia-lamas.jpg'"));
+  assert.ok(!/DELETE|INSERT|DROP/i.test(sql));
+});

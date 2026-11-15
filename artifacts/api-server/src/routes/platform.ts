@@ -406,6 +406,8 @@ import {
   NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
   NIKA_PUBLIC_BIOGRAPHY,
   PUBLIC_TUTOR_ORDER,
+  SOPHIA_LAMAS_LEGACY_PUBLIC_BIOGRAPHIES,
+  SOPHIA_LAMAS_PUBLIC_BIOGRAPHY,
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
   mergeApprovedSchoolLogos,
@@ -1885,8 +1887,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "Admissions Tutor",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Sophia Lamas"],
         photoAltText: "Sophia Lamas, Admissions Tutor",
-        biography:
-          "Sophia Lamas is a 2024 graduate of Stanford with a degree in International Relations and Middle Eastern Studies. There, she served as the Vice President of Stanford's Questbridge College Program Chapter. She is now pursuing her Master’s in Middle East Studies at George Washington University, specializing in Arabic and Conflict Resolution.",
+        biography: SOPHIA_LAMAS_PUBLIC_BIOGRAPHY,
         subjects: ["College admissions"],
         linkedinUrl: "https://www.linkedin.com/in/sophia-lamas/",
         publicApproved: true,
@@ -2117,6 +2118,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
     [XAVIER_NAME, XAVIER_LEGACY_PUBLIC_BIOGRAPHIES, XAVIER_PUBLIC_BIOGRAPHY],
     [EUNICE_NAME, EUNICE_LEGACY_PUBLIC_BIOGRAPHIES, EUNICE_PUBLIC_BIOGRAPHY],
     [NIKA_NAME, NIKA_LEGACY_PUBLIC_BIOGRAPHIES, NIKA_PUBLIC_BIOGRAPHY],
+    [SOPHIA_LAMAS_NAME, SOPHIA_LAMAS_LEGACY_PUBLIC_BIOGRAPHIES, SOPHIA_LAMAS_PUBLIC_BIOGRAPHY],
   ] as const) {
     for (const legacyBio of legacyBios) {
       await db

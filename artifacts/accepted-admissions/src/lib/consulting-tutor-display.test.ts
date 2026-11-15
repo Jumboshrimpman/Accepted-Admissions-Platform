@@ -46,3 +46,15 @@ test("college consulting labels use Nika and Victoria's first names only", () =>
     "College Consulting hour with Nika",
   );
 });
+
+test("Sophia Lamas uses her square portal headshot on booking cards", async () => {
+  const { PORTAL_SOPHIA_LAMAS_PHOTO_URL } = await import("./consulting-tutor-display.ts");
+  assert.equal(PORTAL_SOPHIA_LAMAS_PHOTO_URL, "/media/portal/sophia-lamas.jpg");
+  assert.equal(portalBookingTutorPhoto("Sophia Lamas", null), PORTAL_SOPHIA_LAMAS_PHOTO_URL);
+  assert.equal(
+    portalBookingTutorPhoto("Sophia Lamas", "/media/team/sophia-lamas.jpg"),
+    PORTAL_SOPHIA_LAMAS_PHOTO_URL,
+  );
+  assert.equal(portalBookingTutorPhoto("Eunice Chon", null), "/media/team/eunice-chon.jpg");
+  assert.equal(portalBookingTutorPhoto("Nika Raiffe", null), "/media/team/nika-raiffe.png");
+});

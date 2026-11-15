@@ -568,6 +568,13 @@
       "when": 1792883000000,
       "tag": "0087_assignment_hard_challenge_reserve",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1792884000000,
+      "tag": "0088_sophia_lamas_profile",
+      "breakpoints": true
     }
   ]
 }

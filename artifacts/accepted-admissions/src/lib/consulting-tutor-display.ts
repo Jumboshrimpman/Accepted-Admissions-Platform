@@ -20,6 +20,9 @@ export function portalTutorFirstName(storedName: string): string {
 /** Sama's square headshot. The public site keeps /media/team/victoria.jpg. */
 export const PORTAL_VICTORIA_PHOTO_URL = "/media/portal/victoria.jpg";
 
+/** Sophia Lamas's square portal headshot. The public site keeps /media/team/sophia-lamas.jpg. */
+export const PORTAL_SOPHIA_LAMAS_PHOTO_URL = "/media/portal/sophia-lamas.jpg";
+
 /** Same files as APPROVED_PUBLIC_TEAM_PORTRAITS. First names match the booking card label. */
 const BOOKING_CARD_PORTRAITS: Record<string, string> = {
   "Rosanna Kataja": "/media/team/rosanna-kataja.jpg",
@@ -51,6 +54,7 @@ export function portalBookingTutorPhoto(
   photoUrl: string | null | undefined,
 ): string | null {
   if (/^victoria\b/i.test(storedName.trim())) return PORTAL_VICTORIA_PHOTO_URL;
+  if (/^sophia lamas$/i.test(storedName.trim())) return PORTAL_SOPHIA_LAMAS_PHOTO_URL;
   const stored = photoUrl?.trim() ?? "";
   if (stored) return stored;
   return BOOKING_CARD_PORTRAITS[storedName.trim()] ?? null;
