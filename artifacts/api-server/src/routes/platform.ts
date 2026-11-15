@@ -285,6 +285,7 @@ import {
 } from "../lib/session-schedule";
 import { loadMeetingContext } from "../lib/session-meeting-context";
 import {
+  coursePageJoinMeetUrl,
   meetingUrlFromContext,
   normalizeAdminMeetUrl,
   pinnedBookingMeetUrl,
@@ -5445,6 +5446,8 @@ function neelNikaCalendarEvent(args: {
   const meetUrl = pinnedBookingMeetUrl({
     tutorName: args.tutorName,
     tutorEmail: args.tutorEmail,
+    clientUserId: args.clientUserId,
+    clientEmail: args.student?.email ?? args.attendeeEmail,
   });
   return {
     meetUrl,
@@ -8940,6 +8943,8 @@ async function respondWithPrepaidBooking(
     const bookingMeetUrl = pinnedBookingMeetUrl({
       tutorName: tutor.name,
       tutorEmail: tutor.email,
+      clientUserId: req.appUser!.id,
+      clientEmail: req.appUser!.email,
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
       if (!(await sessionBookingConfirmed(session.id))) {
@@ -13870,32 +13875,41 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
   ).filter((session): session is (typeof courseSessions)[number] => Boolean(session))
     .filter((session) => !hideCancelled || isStudentCurriculumSession(session));
   const meetingContext = await loadMeetingContext(resolvedSessions);
+  const sessions = await Promise.all(
+    resolvedSessions.map(async (session) => {
+      const tutor = await sessionTutorShape(session);
+      const student = await sessionStudentShape(session);
+      return {
+        ...publicSessionShape(
+          session,
+          sessionDisplayTitle(
+            session,
+            sessionTitle(student?.name, session.subject, tutor?.name),
+          ),
+        ),
+        tutor,
+        meetingUrl: meetingUrlFromContext(session, meetingContext, {
+          name: tutor?.name,
+        }),
+        calendarEventUrl: calendarEventUrlForSession(session),
+      };
+    }),
+  );
   res.json(
     GetCourseResponse.parse({
       ...base,
-       meetUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      meetUrl: coursePageJoinMeetUrl(
+        resolvedSessions.map((session, index) => ({
+          dateTime: session.dateTime,
+          meetingUrl: sessions[index]?.meetingUrl ?? null,
+          bookingStatus: session.bookingStatus,
+          durationMinutes: session.durationMinutes,
+        })),
+        new Date(),
+      ),
       driveUrl: null,
       goalSummary: course?.goalSummary ?? null,
-      sessions: await Promise.all(
-        resolvedSessions.map(async (session) => {
-          const tutor = await sessionTutorShape(session);
-          const student = await sessionStudentShape(session);
-          return {
-            ...publicSessionShape(
-              session,
-              sessionDisplayTitle(
-                session,
-                sessionTitle(student?.name, session.subject, tutor?.name),
-              ),
-            ),
-            tutor,
-            meetingUrl: meetingUrlFromContext(session, meetingContext, {
-              name: tutor?.name,
-            }),
-            calendarEventUrl: calendarEventUrlForSession(session),
-          };
-        }),
-      ),
+      sessions,
     }),
   );
 });

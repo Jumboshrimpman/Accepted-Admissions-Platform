@@ -3,8 +3,12 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { MICHELLE_MAKAREM_USER_ID } from "./no-auto-prework-clients.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  coursePageJoinMeetUrl,
   googleMeetUrl,
+  MICHELLE_MAKAREM_MEET_URL,
   normalizeAdminMeetUrl,
   pinnedBookingMeetUrl,
   resolveSessionMeetingUrl,
@@ -397,4 +401,177 @@ test("Sophia Lamas the tutor does not use Sophia Sleiman's room or the shared Fa
     }),
     SHARED_FALL_MEETING_URL,
   );
+});
+
+
+const MICHELLE_SHARED_FALL_INPUT = {
+  meetUrl: null,
+  providerEventUrl: "https://www.google.com/calendar/event?eid=michelle-xavier",
+  courseMeetUrl: SHARED_FALL_MEETING_URL,
+  term: "Fall 2026",
+  clientUserId: MICHELLE_MAKAREM_USER_ID,
+  clientEmail: "makaremmichelle7@gmail.com",
+  dateTime: new Date("2026-11-22T17:00:00.000Z"),
+  subject: "SAT",
+  timezone: "America/New_York",
+  tutorName: "Xavier Morales",
+  tutorEmail: "xavier.rmz6@gmail.com",
+} as const;
+
+test("Michelle's sessions with any tutor use her dedicated room in the portal and on new booking invites", () => {
+  assert.equal(MICHELLE_MAKAREM_MEET_URL, "https://meet.google.com/ase-tqtz-ywj");
+  assert.equal(MICHELLE_MAKAREM_MEET_URL, SOPHIA_LAMAS_MEET_URL);
+  assert.equal(studentFacingMeetingUrl(MICHELLE_SHARED_FALL_INPUT), MICHELLE_MAKAREM_MEET_URL);
+  assert.equal(
+    studentFacingMeetingUrl({
+      ...MICHELLE_SHARED_FALL_INPUT,
+      meetUrl: SHARED_FALL_MEETING_URL,
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      ...MICHELLE_SHARED_FALL_INPUT,
+      tutorName: "Sophia Lamas",
+      tutorEmail: "sophia.e.lamas@gmail.com",
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Xavier Morales",
+      tutorEmail: "xavier.rmz6@gmail.com",
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+      clientEmail: "makaremmichelle7@gmail.com",
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+});
+
+test("Sophia S, Taito, and Neel-Nika rooms stay unchanged when Michelle's room is pinned", () => {
+  assert.equal(
+    studentFacingMeetingUrl({
+      courseMeetUrl: SHARED_FALL_MEETING_URL,
+      term: "Fall 2026",
+      clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      clientEmail: "sophiasleiman13@gmail.com",
+      dateTime: new Date("2026-11-18T15:00:00.000Z"),
+      subject: "SAT English",
+      timezone: "America/New_York",
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+    }),
+    SOPHIA_SLEIMAN_MEET_URL,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      courseMeetUrl: SHARED_FALL_MEETING_URL,
+      term: "Fall 2026",
+      clientEmail: TAITO_STUDENT_EMAIL,
+      dateTime: taitoSessionDateTime("2026-11-20"),
+      subject: "SAT",
+      timezone: "Asia/Tokyo",
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      courseMeetUrl: SHARED_FALL_MEETING_URL,
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "nika.raiffe@gmail.com",
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+      clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
+      clientEmail: "sophiasleiman13@gmail.com",
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
+});
+
+test("the course page Join Meet button uses the next session's resolved URL and hides when none remain", () => {
+  const now = new Date("2026-11-16T16:00:00.000Z");
+  assert.equal(
+    coursePageJoinMeetUrl(
+      [
+        {
+          dateTime: new Date("2026-11-16T14:00:00.000Z"),
+          durationMinutes: 60,
+          meetingUrl: SHARED_FALL_MEETING_URL,
+        },
+        {
+          dateTime: new Date("2026-11-22T17:00:00.000Z"),
+          durationMinutes: 60,
+          meetingUrl: MICHELLE_MAKAREM_MEET_URL,
+        },
+        {
+          dateTime: new Date("2026-11-29T15:00:00.000Z"),
+          durationMinutes: 90,
+          meetingUrl: SOPHIA_SLEIMAN_MEET_URL,
+        },
+      ],
+      now,
+    ),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    coursePageJoinMeetUrl(
+      [
+        {
+          dateTime: new Date("2026-11-16T15:30:00.000Z"),
+          durationMinutes: 60,
+          meetingUrl: MICHELLE_MAKAREM_MEET_URL,
+        },
+      ],
+      now,
+    ),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    coursePageJoinMeetUrl(
+      [
+        {
+          dateTime: new Date("2026-11-22T17:00:00.000Z"),
+          durationMinutes: 60,
+          bookingStatus: "cancelled",
+          meetingUrl: MICHELLE_MAKAREM_MEET_URL,
+        },
+      ],
+      now,
+    ),
+    null,
+  );
+  assert.equal(coursePageJoinMeetUrl([], now), null);
+});
+
+
+test("GET /courses/:courseId pins Join Meet to the viewer's next session URL, not the shared course room", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const platform = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const start = platform.indexOf('router.get("/courses/:courseId"');
+  const end = platform.indexOf("async function reviewSubmissionsForUser");
+  const handler = platform.slice(start, end);
+  assert.match(handler, /meetUrl: coursePageJoinMeetUrl\(/);
+  assert.doesNotMatch(handler, /meetUrl: meetingUrlForTerm\(/);
 });
