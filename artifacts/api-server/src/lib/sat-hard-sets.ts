@@ -53,7 +53,11 @@ import {
   matchesTaitoScheduledDate,
   normalizedSessionSubject,
 } from "./session-schedule.ts";
-import { skipsAutoPrework } from "./no-auto-prework-clients.ts";
+import {
+  MICHELLE_MAKAREM_USER_ID,
+  MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID,
+  skipsAutoPrework,
+} from "./no-auto-prework-clients.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 const HARD_SAT_SHORTFALL_TITLE = "Hard SAT set needs questions";
@@ -1390,4 +1394,72 @@ export async function ensureTaitoOct30HardPrework(): Promise<{
     return { action: "shortfall", readingLeftInPlace: false };
   }
   return { action: "unchanged", readingLeftInPlace: false };
+}
+
+/** Michelle's already-assigned Nov 16 sets must never be auto-refreshed. */
+export function isMichelleFutureHardSatSession(session: {
+  id: string;
+  clientUserId?: string | null;
+  subject: string;
+  dateTime: Date;
+  timezone?: string | null;
+  status?: string | null;
+  bookingStatus?: string | null;
+}): boolean {
+  if (session.id === MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID) return false;
+  if (session.clientUserId !== MICHELLE_MAKAREM_USER_ID) return false;
+  if ((session.status ?? "").trim() === "archived") return false;
+  if ((session.bookingStatus ?? "").trim() === "cancelled") return false;
+  return (
+    satDifficultyForStudent({
+      userId: session.clientUserId,
+      subject: session.subject,
+      session: { dateTime: session.dateTime, timezone: session.timezone },
+    }) === "hard"
+  );
+}
+
+/**
+ * Replace unattempted non-hard sets on Michelle's later SAT sessions with hard
+ * equivalents. Leaves completed attempts and the Nov 16 session untouched.
+ * Reports a shortfall instead of padding with foundational questions.
+ */
+export async function ensureMichelleFutureHardSatSets(): Promise<{
+  considered: number;
+  shortfalls: number;
+  results: Array<{
+    sessionId: string;
+    difficulty: SatDifficulty;
+    inSessionStatus: "not-hard" | "attempted" | "unchanged" | "updated" | "unavailable" | null;
+  }>;
+}> {
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.clientUserId, MICHELLE_MAKAREM_USER_ID),
+        ne(sessionsTable.id, MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID),
+        ne(sessionsTable.status, "archived"),
+      ),
+    );
+  const results: Array<{
+    sessionId: string;
+    difficulty: SatDifficulty;
+    inSessionStatus: "not-hard" | "attempted" | "unchanged" | "updated" | "unavailable" | null;
+  }> = [];
+  for (const session of sessions) {
+    if (!isMichelleFutureHardSatSession(session)) continue;
+    const result = await ensureHardSatSessionSets(session);
+    results.push({
+      sessionId: session.id,
+      difficulty: result.difficulty,
+      inSessionStatus: result.inSessionStatus,
+    });
+  }
+  return {
+    considered: results.length,
+    shortfalls: results.filter((row) => row.inSessionStatus === "unavailable").length,
+    results,
+  };
 }

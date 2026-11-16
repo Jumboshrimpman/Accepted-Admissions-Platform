@@ -66,16 +66,19 @@ export const HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-10-16";
 export const SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY = "2026-10-31";
 
 /**
- * Michelle's Nov 15 session has hand-built hard SAT sets (40 one-form pre-work,
- * 15 hard in-session, 5 reserve). Treating only that session as hard keeps the
- * standard prep path (run when pre-work is submitted) from adding to, renaming,
- * or replacing those sets. Her other sessions stay standard.
+ * Michelle's Nov 15 session has hand-built hard SAT sets. That date stays in
+ * its own window. Nov 16 keeps the sets already assigned (do not auto-refresh
+ * them). Sessions after Nov 16 use hard-only pre-work, in-session, and reserve
+ * sets on both SAT sections.
  */
 export const MICHELLE_HARD_SAT_STUDENT_EMAIL = "makaremmichelle7@gmail.com";
 /** Same Clerk user as MICHELLE_MAKAREM_CLERK_USER_ID. */
 export const MICHELLE_HARD_SAT_CLERK_USER_ID = "user_3JCRGfBj8dgWSjO1r2zeKovFVE7";
+export const MICHELLE_HARD_SAT_USER_ID = "b21bc32a-82c3-4252-a702-daa3fcdd23af";
 export const MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-11-14";
 export const MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY = "2026-11-15";
+/** Exclusive: her Nov 16 sets stay as assigned; later sessions are hard-only. */
+export const MICHELLE_HARD_SAT_FUTURE_AFTER_DATE_KEY = "2026-11-16";
 
 export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
   {
@@ -96,9 +99,17 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
   {
     email: MICHELLE_HARD_SAT_STUDENT_EMAIL,
     clerkUserId: MICHELLE_HARD_SAT_CLERK_USER_ID,
+    userId: MICHELLE_HARD_SAT_USER_ID,
     difficulty: "hard",
     effectiveAfterDateKey: MICHELLE_HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
     effectiveThroughDateKey: MICHELLE_HARD_SAT_EFFECTIVE_THROUGH_DATE_KEY,
+  },
+  {
+    email: MICHELLE_HARD_SAT_STUDENT_EMAIL,
+    clerkUserId: MICHELLE_HARD_SAT_CLERK_USER_ID,
+    userId: MICHELLE_HARD_SAT_USER_ID,
+    difficulty: "hard",
+    effectiveAfterDateKey: MICHELLE_HARD_SAT_FUTURE_AFTER_DATE_KEY,
   },
 ];
 
@@ -636,8 +647,9 @@ function activeSatSetting(input: StudentSatSettingInput): SatDifficultySetting |
   for (const setting of settings) {
     if (!settingMatchesStudent(setting, input)) continue;
     const dateKey = dateKeyForSetting(input.session, input.sessionDateKey, setting);
-    if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return null;
-    if (setting.effectiveThroughDateKey && dateKey > setting.effectiveThroughDateKey) return null;
+    if (!dateKey) continue;
+    if (dateKey <= setting.effectiveAfterDateKey) continue;
+    if (setting.effectiveThroughDateKey && dateKey > setting.effectiveThroughDateKey) continue;
     return setting;
   }
   return null;

@@ -1111,12 +1111,20 @@ test("routine pre-work: 40 official SAT RW items from one form across modules co
   );
 });
 
-test("Michelle is a hard SAT student only for her Nov 15 session, on both sections", () => {
+test("Michelle is a hard SAT student on Nov 15 and on sessions after Nov 16, on both sections", () => {
   const michelle = { email: MICHELLE_HARD_SAT_STUDENT_EMAIL, subject: "SAT Math" };
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-15" }), "hard");
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-14" }), "standard");
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-16" }), "standard");
-  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-22" }), "standard");
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-22" }), "hard");
+  assert.equal(
+    satDifficultyForStudent({
+      userId: "b21bc32a-82c3-4252-a702-daa3fcdd23af",
+      subject: "SAT",
+      sessionDateKey: "2026-11-22",
+    }),
+    "hard",
+  );
   assert.equal(
     satDifficultyForStudent({ ...michelle, subject: "IELTS", sessionDateKey: "2026-11-15" }),
     "standard",
@@ -1171,6 +1179,7 @@ test("Michelle's Nov 15 hard setting also matches her Clerk user id", () => {
     });
   assert.equal(byClerk("2026-11-15"), "hard");
   assert.equal(byClerk("2026-11-16"), "standard");
+  assert.equal(byClerk("2026-11-22"), "hard");
   assert.equal(
     satDifficultyForStudent({
       email: "changed-address@example.invalid",
