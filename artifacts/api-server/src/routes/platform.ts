@@ -43,6 +43,7 @@ import {
   deleteGoogleEvent,
   googleCalendarSendUpdatesForSubjects,
   existingGoogleMeetConference,
+  newGoogleMeetConference,
   exchangeGoogleCode,
   getGoogleCalendarEvent,
   getGoogleCalendarConfig,
@@ -121,7 +122,8 @@ import {
   adminCalendarInviteHealth,
   selectStoredAdminCalendarWriter,
   bookingsUseAdminCalendarFallback,
-  isAdminCalendarFallbackTutor,
+  newSessionInviteCalendarMode,
+  sessionInvitesOrganizedByAdmin,
   isSophiaLamasTutorProfile,
   manualCalendarInviteMessage,
   satTutorListBookable,
@@ -286,6 +288,7 @@ import {
 } from "../lib/session-schedule";
 import { loadMeetingContext } from "../lib/session-meeting-context";
 import {
+  alignMeetingToConference,
   eventConferenceMeetUrl,
   reconcileCreatedMeetEvent,
 } from "../lib/meet-conference-align";
@@ -293,6 +296,7 @@ import {
   coursePageJoinMeetUrl,
   meetingUrlFromContext,
   normalizeAdminMeetUrl,
+  persistableDedicatedMeetUrl,
   pinnedBookingMeetUrl,
   studentFacingMeetingUrl,
 } from "../lib/session-meeting-url";
@@ -5047,32 +5051,71 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
 }
 
 /**
- * A blank app calendar must not reach /calendars//events.
- * Nika and Sophia Lamas self-set hours (date windows or recurring weekly hours)
- * use the admin calendar, or confirm for a hand-sent invite.
- * Sophia Lamas stays on the admin calendar even after she has an app calendar.
- * Nika organizes on her own calendar once that id exists.
- * Every other tutor, including one with date windows, still 409s before payment.
+ * New session invites are organized by admin@acceptedadmissions.org.
+ * Tutor calendars are not used as the event organizer. If the admin grant is
+ * missing, the booking can still confirm and an admin sends the invite by hand.
  */
 async function adminCalendarForFixedWindowBooking(
-  access: { connection: { appCalendarId?: string | null } } | null | undefined,
-  fixedWindow: boolean,
-  tutor: { name?: string | null; email?: string | null },
+  _access: { connection: { appCalendarId?: string | null } } | null | undefined,
+  _fixedWindow: boolean,
+  _tutor: { name?: string | null; email?: string | null },
 ): Promise<FixedWindowCalendarPlan> {
-  const sophiaKeepsAdminInvites = isSophiaLamasTutorProfile({
-    name: tutor.name,
-    portalEmail: tutor.email,
-  });
-  const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-  if (appCalendarId && !sophiaKeepsAdminInvites) return { mode: "tutor" };
-  const fallbackWindow =
-    fixedWindow && isAdminCalendarFallbackTutor({ name: tutor.name, portalEmail: tutor.email });
-  if (!fallbackWindow) {
+  if (!sessionInvitesOrganizedByAdmin()) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
   const admin = await findStoredAdminCalendarWriter();
-  if (!admin) return { mode: "manual" };
-  return { mode: "admin", writer: admin };
+  if (admin && newSessionInviteCalendarMode(true) === "admin") {
+    return { mode: "admin", writer: admin };
+  }
+  return { mode: "manual" };
+}
+
+async function loadDedicatedMeetUrl(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const [row] = await db
+    .select({ dedicatedMeetUrl: usersTable.dedicatedMeetUrl })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return persistableDedicatedMeetUrl(row?.dedicatedMeetUrl);
+}
+
+/** Remember Neel's first real hangoutLink. Never stores Taito's rih room. */
+async function persistDedicatedMeetUrl(
+  userId: string | null | undefined,
+  meetUrl: string | null | undefined,
+): Promise<void> {
+  const persistable = persistableDedicatedMeetUrl(meetUrl);
+  if (!userId || !persistable || !isNeelDharniUser(userId)) return;
+  await db
+    .update(usersTable)
+    .set({ dedicatedMeetUrl: persistable, updatedAt: new Date() })
+    .where(and(eq(usersTable.id, userId), isNull(usersTable.dedicatedMeetUrl)));
+}
+
+async function accessForExistingSessionEvent(session: {
+  providerCalendarId?: string | null;
+  tutorUserId?: string | null;
+}): Promise<{
+  access: Awaited<ReturnType<typeof calendarAccess>>;
+  calendarId: string;
+  via: "admin" | "existing";
+}> {
+  const admin = await findStoredAdminCalendarWriter();
+  const storedId = session.providerCalendarId?.trim() ?? "";
+  if (admin && storedId === admin.appCalendarId) {
+    return {
+      access: await calendarAccess(admin.tutorProfileId),
+      calendarId: admin.appCalendarId,
+      via: "admin",
+    };
+  }
+  const access = session.tutorUserId ? await calendarAccessForUser(session.tutorUserId) : null;
+  return {
+    access,
+    calendarId: sessionEventCalendarId(session.providerCalendarId),
+    via: "existing",
+  };
 }
 
 async function applyCalendarDisconnectDecision(
@@ -5445,7 +5488,8 @@ async function alignWrittenCalendarEvent(
     calendarId,
     event,
     intendedUrl,
-    log: (fields, message) => logger.warn(fields, message),
+    log: (fields, message) =>
+      fields.level === "error" ? logger.error(fields, message) : logger.warn(fields, message),
   });
   return aligned;
 }
@@ -5454,7 +5498,7 @@ function storedConferenceMeetUrl(
   event: GoogleCalendarEvent,
   intendedUrl: string | null | undefined,
 ): string | null {
-  return eventConferenceMeetUrl(event) ?? (intendedUrl ? intendedUrl : null);
+  return alignMeetingToConference({ intendedUrl, event }).meetUrl;
 }
 
 function neelNikaCalendarEvent(args: {
@@ -5470,12 +5514,14 @@ function neelNikaCalendarEvent(args: {
   clientUserId?: string | null;
   tutorName?: string | null;
   tutorEmail?: string | null;
+  dedicatedMeetUrl?: string | null;
 }): { meetUrl: string | null; body: Record<string, unknown> } {
   const meetUrl = pinnedBookingMeetUrl({
     tutorName: args.tutorName,
     tutorEmail: args.tutorEmail,
     clientUserId: args.clientUserId,
     clientEmail: args.student?.email ?? args.attendeeEmail,
+    dedicatedMeetUrl: args.dedicatedMeetUrl,
   });
   return {
     meetUrl,
@@ -5492,7 +5538,9 @@ function neelNikaCalendarEvent(args: {
         tutor: args.tutor,
         inviteTutor: args.inviteTutor,
       }),
-      ...(meetUrl ? { conferenceData: existingGoogleMeetConference(meetUrl) } : {}),
+      conferenceData: meetUrl
+        ? existingGoogleMeetConference(meetUrl)
+        : newGoogleMeetConference(randomUUID()),
     },
   };
 }
@@ -5525,12 +5573,15 @@ async function syncGoogleCalendarForSessionChange(args: {
       providerEventUrl: cancelling ? null : args.existing.providerEventUrl,
     };
   }
-  const access = await calendarAccessForUser(args.existing.tutorUserId);
+  const existingAccess = await accessForExistingSessionEvent(args.existing);
+  const access = existingAccess.access;
   if (!access) {
     throw new BookingError(
       409,
       "CALENDAR_DISCONNECTED",
-      "The tutor's calendar is disconnected.",
+      existingAccess.via === "admin"
+        ? "The admin calendar is disconnected."
+        : "The tutor's calendar is disconnected.",
     );
   }
   const tutorUserId = args.next.tutorUserId ?? args.existing.tutorUserId;
@@ -5556,8 +5607,8 @@ async function syncGoogleCalendarForSessionChange(args: {
     args.next.subject,
     { tutorEmail },
   );
+  const calendarId = existingAccess.calendarId;
   if (cancelling) {
-    const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
     const removed = await runTutorCalendarCall(access, (token) =>
       writeStoredSessionEvent(args.existing, token, () =>
         deleteGoogleEvent(token, calendarId, args.existing.providerEventId!, sendUpdates),
@@ -5577,11 +5628,11 @@ async function syncGoogleCalendarForSessionChange(args: {
       providerEventUrl: args.existing.providerEventUrl,
     };
   }
-  const [student, tutor] = await Promise.all([
+  const [student, tutor, dedicatedMeetUrl] = await Promise.all([
     calendarInviteParty(args.next.clientUserId),
     calendarInviteParty(args.next.tutorUserId ?? args.existing.tutorUserId),
+    loadDedicatedMeetUrl(args.next.clientUserId),
   ]);
-  const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
   const pinned = neelNikaCalendarEvent({
     title: args.next.title,
     start: args.next.dateTime,
@@ -5596,6 +5647,7 @@ async function syncGoogleCalendarForSessionChange(args: {
     inviteTutor: tutorAttendee.inviteTutor,
     clientUserId: args.next.clientUserId,
     tutorEmail,
+    dedicatedMeetUrl,
   });
   const written = await runTutorCalendarCall(access, (token) =>
     writeStoredSessionEvent(args.existing, token, async () =>
@@ -5628,10 +5680,12 @@ async function syncGoogleCalendarForSessionChange(args: {
     };
   }
   const event = written.value;
+  const meetUrl = storedConferenceMeetUrl(event, pinned.meetUrl);
+  await persistDedicatedMeetUrl(args.next.clientUserId, meetUrl);
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
     providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? args.existing.providerEventUrl,
-    meetUrl: storedConferenceMeetUrl(event, pinned.meetUrl),
+    meetUrl,
   };
 }
 
@@ -8974,11 +9028,13 @@ async function respondWithPrepaidBooking(
       if (followUpRequestId) await attachFollowUpSession(tx, followUpRequestId, session.id, start);
       return session;
     });
+    const dedicatedMeetUrl = await loadDedicatedMeetUrl(req.appUser!.id);
     const bookingMeetUrl = pinnedBookingMeetUrl({
       tutorName: tutor.name,
       tutorEmail: tutor.email,
       clientUserId: req.appUser!.id,
       clientEmail: req.appUser!.email,
+      dedicatedMeetUrl,
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
       if (!(await sessionBookingConfirmed(session.id))) {
@@ -9084,6 +9140,7 @@ async function respondWithPrepaidBooking(
           clientUserId: req.appUser!.id,
           tutorName: tutor.name,
           tutorEmail: tutor.email,
+          dedicatedMeetUrl,
         });
         const event = await runTutorCalendarCall(adminAccess, (token) =>
           (async () =>
@@ -9117,79 +9174,18 @@ async function respondWithPrepaidBooking(
           })
           .where(eq(sessionsTable.id, created.id))
           .returning();
+        await persistDedicatedMeetUrl(
+          req.appUser!.id,
+          storedConferenceMeetUrl(event, pinned.meetUrl),
+        );
         await confirmBookedSession(updated ?? created, true);
         return null;
       }
-      if (!access) {
-        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
-      }
-      if (!appCalendarId) {
-        throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
-      }
-      const pinned = neelNikaCalendarEvent({
-        title: created.title,
-        start,
-        durationMinutes,
-        timeZone: rule.timezone,
-        attendeeEmail: req.appUser!.email,
-        location: SHARED_FALL_MEETING_URL,
-        student,
-        tutor: tutorForEvent,
-        inviteTutor: tutorAttendee.inviteTutor,
-        clientUserId: req.appUser!.id,
-        tutorName: tutor.name,
-        tutorEmail: tutor.email,
-      });
-      const written = await runTutorCalendarCall(access, (token) =>
-        writeStoredSessionEvent(
-          {
-            id: created.id,
-            providerCalendarId: appCalendarId,
-            tutorUserId: tutor.userId,
-          },
-          token,
-          async () =>
-            alignWrittenCalendarEvent(
-              token,
-              appCalendarId,
-              pinned.meetUrl,
-              await (pinned.meetUrl
-                ? createGoogleEventWithMeetFallback(
-                    token,
-                    appCalendarId,
-                    pinned.body,
-                    sendUpdates,
-                  )
-                : createGoogleEvent(
-                    token,
-                    appCalendarId,
-                    pinned.body,
-                    sendUpdates,
-                  )),
-            ),
-        ),
+      throw new BookingError(
+        409,
+        "CALENDAR_RECONNECT_REQUIRED",
+        "Session invites must be sent from the admin@ calendar.",
       );
-      if (written.status === "manual") {
-        throw new BookingError(
-          503,
-          "CALENDAR_UNAVAILABLE",
-          "The tutor calendar could not be updated. Your credit was not used.",
-        );
-      }
-      const event = written.value;
-      const [updated] = await db
-        .update(sessionsTable)
-        .set({
-          providerEventId: event.id ?? null,
-          providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? null,
-          providerCalendarId: appCalendarId,
-          meetUrl: storedConferenceMeetUrl(event, pinned.meetUrl),
-          updatedAt: new Date(),
-        })
-        .where(eq(sessionsTable.id, created.id))
-        .returning();
-      const confirmed = updated ?? created;
-      await confirmBookedSession(confirmed, true);
     } catch (error) {
       if (
         fixedWindow &&
@@ -9556,9 +9552,10 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       (id): id is string => Boolean(id),
     );
     const previousStart = session.dateTime;
-    const [student, tutorParty] = await Promise.all([
+    const [student, tutorParty, dedicatedMeetUrl] = await Promise.all([
       calendarInviteParty(session.clientUserId),
       calendarInviteParty(session.tutorUserId, { email: profile.email }),
+      loadDedicatedMeetUrl(session.clientUserId),
     ]);
     const attendeeEmail = student.email ?? "";
     const sendUpdates = googleCalendarSendUpdatesForSubjects(session.subject, {
@@ -9589,6 +9586,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         clientUserId: session.clientUserId,
         tutorName: profile.name,
         tutorEmail: profile.email,
+        dedicatedMeetUrl,
       });
     const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
     const moved = inviteAt(start, rule.timezone);

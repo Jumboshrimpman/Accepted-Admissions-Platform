@@ -9,8 +9,10 @@ import {
   adminCalendarInviteHealth,
   bookingsUseAdminCalendarFallback,
   manualCalendarInviteMessage,
+  newSessionInviteCalendarMode,
   satTutorListBookable,
   selectStoredAdminCalendarWriter,
+  sessionInvitesOrganizedByAdmin,
   tutorHasUsableFreeBusyGrant,
 } from "./admin-calendar-fallback.ts";
 import { GOOGLE_CALENDAR_APP_CREATED_SCOPE, GOOGLE_CALENDAR_FREEBUSY_SCOPE } from "./google-calendar.ts";
@@ -307,4 +309,35 @@ test("the SAT tutor list uses the Sophia-only bookable helper, not the shared ad
   assert.doesNotMatch(satMap, /isAdminCalendarFallbackTutor/);
   assert.match(satMap, /isSophiaLamasTutorProfile|satTutorListBookable/);
   assert.match(satMap, /selfSetHoursConfigured/);
+});
+
+test("new session invites are always organized by admin@, never on a tutor calendar", () => {
+  assert.equal(sessionInvitesOrganizedByAdmin(), true);
+  assert.equal(newSessionInviteCalendarMode(true), "admin");
+  assert.equal(newSessionInviteCalendarMode(false), "manual");
+  // Slot-grid fallback stays tutor-specific so free/busy is not skipped for Xavier.
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Xavier Morales",
+      portalEmail: "xavier.rmz6@gmail.com",
+      appCalendarId: "cal-xavier",
+    }),
+    false,
+  );
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Eunice Chon",
+      portalEmail: "eunice_chon@berkeley.edu",
+      appCalendarId: "cal-eunice",
+    }),
+    false,
+  );
+  assert.equal(
+    bookingsUseAdminCalendarFallback({
+      name: "Nika Raiffe",
+      portalEmail: "nika.raiffe@gmail.com",
+      appCalendarId: "cal-nika",
+    }),
+    false,
+  );
 });

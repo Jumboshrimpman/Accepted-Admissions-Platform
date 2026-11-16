@@ -1581,6 +1581,21 @@ export function existingGoogleMeetConference(meetUrl: string): {
   };
 }
 
+/** Ask Google to mint a new Meet on this event. Does not invent a room URL. */
+export function newGoogleMeetConference(requestId: string): {
+  createRequest: {
+    requestId: string;
+    conferenceSolutionKey: { type: "hangoutsMeet" };
+  };
+} {
+  return {
+    createRequest: {
+      requestId,
+      conferenceSolutionKey: { type: "hangoutsMeet" },
+    },
+  };
+}
+
 export function googleRejectedConferenceData(error: unknown): boolean {
   return (
     error instanceof GoogleCalendarRequestError &&

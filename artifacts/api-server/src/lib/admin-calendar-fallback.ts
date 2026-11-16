@@ -61,10 +61,22 @@ export function satTutorListBookable(input: {
 }
 
 /**
- * Invites are written on the admin calendar instead of the tutor's app calendar.
- * Nika uses this until her own app-created calendar exists.
- * Sophia Lamas stays on the admin calendar after she connects; her grant is
- * only used to read free/busy when deciding which hours are open.
+ * New session invites are always organized by admin@acceptedadmissions.org.
+ * Tutor Google connections stay connected for free/busy availability only.
+ */
+export function sessionInvitesOrganizedByAdmin(): boolean {
+  return true;
+}
+
+/** How a new session invite is written. Never organizes on a tutor calendar. */
+export function newSessionInviteCalendarMode(hasAdminWriter: boolean): "admin" | "manual" {
+  return hasAdminWriter ? "admin" : "manual";
+}
+
+/**
+ * Slot-grid fallback: Nika uses admin hours until she has an app calendar;
+ * Sophia Lamas stays on that path after she connects. This does not decide
+ * who organizes the invite — sessionInvitesOrganizedByAdmin does.
  */
 export function bookingsUseAdminCalendarFallback(input: {
   name?: string | null;

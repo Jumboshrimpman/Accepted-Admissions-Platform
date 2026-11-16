@@ -1149,6 +1149,18 @@ test("freeBusy 403 and 500 keep a stored refresh token connected", async () => {
   });
 });
 
+test("a new Meet is requested with createRequest and no invented URL", () => {
+  const conference = googleCalendar.newGoogleMeetConference("req-neel-1");
+  assert.deepEqual(conference, {
+    createRequest: {
+      requestId: "req-neel-1",
+      conferenceSolutionKey: { type: "hangoutsMeet" },
+    },
+  });
+  assert.equal("entryPoints" in conference, false);
+  assert.equal("conferenceId" in conference, false);
+});
+
 test("an existing Meet is sent as conference entry points and dropped when Google rejects it", async () => {
   const meetUrl = "https://meet.google.com/rih-iayt-okb";
   const conference = googleCalendar.existingGoogleMeetConference(meetUrl);

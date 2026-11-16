@@ -4,10 +4,15 @@ import {
   type GoogleCalendarEvent,
 } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { googleMeetUrl } from "./session-meeting-url.ts";
+import {
+  googleMeetUrl,
+  persistableDedicatedMeetUrl,
+} from "./session-meeting-url.ts";
 
 export const MEET_CONFERENCE_DIVERGED_MESSAGE =
   "calendar meet conference diverged from intended room";
+export const MEET_CONFERENCE_KEEP_INTENDED_MESSAGE =
+  "calendar meet conference diverged; keeping the dedicated room on the portal";
 
 export type GoogleMeetEventFields = {
   hangoutLink?: string | null;
@@ -24,6 +29,7 @@ export type AlignedMeeting = {
   intendedUrl: string | null;
   conferenceUrl: string | null;
   diverged: boolean;
+  keepIntended: boolean;
 };
 
 /** The event's real Google Meet button: hangoutLink, then a video entry point. */
@@ -65,8 +71,11 @@ export function replaceMeetUrlInText(
 }
 
 /**
- * Single source of truth for a booked event: use the real conference button
- * when Google returns one, otherwise the intended room.
+ * When a booking targeted a specific room (Michelle ase, Sophia S xqq, Taito
+ * rih, or Neel's persisted room), keep that room on the portal even if Google
+ * attaches a different conference button. When there was no intended room
+ * (Neel's first booking), persist the real hangoutLink only if it is not
+ * Taito's rih room.
  */
 export function alignMeetingToConference(input: {
   intendedUrl?: string | null;
@@ -74,12 +83,22 @@ export function alignMeetingToConference(input: {
 }): AlignedMeeting {
   const intendedUrl = googleMeetUrl(input.intendedUrl);
   const conferenceUrl = eventConferenceMeetUrl(input.event);
-  const meetUrl = conferenceUrl ?? intendedUrl;
+  if (intendedUrl) {
+    return {
+      meetUrl: intendedUrl,
+      intendedUrl,
+      conferenceUrl,
+      diverged: Boolean(conferenceUrl && conferenceUrl !== intendedUrl),
+      keepIntended: true,
+    };
+  }
+  const persistable = persistableDedicatedMeetUrl(conferenceUrl);
   return {
-    meetUrl,
-    intendedUrl,
+    meetUrl: persistable,
+    intendedUrl: null,
     conferenceUrl,
-    diverged: Boolean(intendedUrl && conferenceUrl && intendedUrl !== conferenceUrl),
+    diverged: Boolean(conferenceUrl && !persistable),
+    keepIntended: false,
   };
 }
 
@@ -104,8 +123,12 @@ export async function reconcileCreatedMeetEvent(input: {
         calendarId: input.calendarId,
         intendedUrl: alignment.intendedUrl,
         conferenceUrl: alignment.conferenceUrl,
+        keepIntended: alignment.keepIntended,
+        level: "error",
       },
-      MEET_CONFERENCE_DIVERGED_MESSAGE,
+      alignment.keepIntended
+        ? MEET_CONFERENCE_KEEP_INTENDED_MESSAGE
+        : MEET_CONFERENCE_DIVERGED_MESSAGE,
     );
   }
   const eventId = input.event.id;
@@ -115,7 +138,7 @@ export async function reconcileCreatedMeetEvent(input: {
   const nextLocation = alignment.meetUrl;
   const nextDescription = replaceMeetUrlInText(
     input.event.description,
-    alignment.intendedUrl,
+    alignment.conferenceUrl ?? alignment.intendedUrl,
     alignment.meetUrl,
   );
   const locationMatches = googleMeetUrl(input.event.location) === alignment.meetUrl;
@@ -136,6 +159,7 @@ export async function reconcileCreatedMeetEvent(input: {
   );
   return {
     event: { ...input.event, ...patched, location: nextLocation, description: nextDescription },
-    alignment: { ...alignment, meetUrl: eventConferenceMeetUrl(patched) ?? alignment.meetUrl },
+    // Keep the intended room when we refused to follow a diverged conference button.
+    alignment,
   };
 }

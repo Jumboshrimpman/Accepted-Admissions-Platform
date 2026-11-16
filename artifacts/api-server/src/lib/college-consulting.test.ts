@@ -397,7 +397,26 @@ test("placeholder emails link without a known Clerk id and stop when another use
       tutorName: "Nika Raiffe",
       tutorEmail: "other@example.com",
     }),
-    "https://meet.google.com/rih-iayt-okb",
+    null,
+  );
+  const neelRoom = "https://meet.google.com/abc-defg-hij";
+  assert.equal(
+    neelNikaMeetUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "other@example.com",
+      dedicatedMeetUrl: neelRoom,
+    }),
+    neelRoom,
+  );
+  assert.equal(
+    neelNikaMeetUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "other@example.com",
+      dedicatedMeetUrl: "https://meet.google.com/rih-iayt-okb",
+    }),
+    null,
   );
   assert.equal(
     neelNikaMeetUrl({

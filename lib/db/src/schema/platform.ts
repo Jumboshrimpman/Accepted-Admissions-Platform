@@ -59,6 +59,8 @@ export const usersTable = pgTable(
     role: roleEnum("role").notNull().default("student"),
     timezone: text("timezone").notNull().default("America/New_York"),
     timezoneSource: text("timezone_source").notNull().default("default"),
+    /** Persisted Google Meet room for a student (e.g. Neel's own room). Never Taito's rih room. */
+    dedicatedMeetUrl: text("dedicated_meet_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

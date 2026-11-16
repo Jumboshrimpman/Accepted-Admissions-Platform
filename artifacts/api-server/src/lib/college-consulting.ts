@@ -252,14 +252,33 @@ export function isNeelDharniUser(userId: string | null | undefined): boolean {
 }
 
 /** Neel booking Nika. Other students, and Neel with anyone else, stay on their own Meet. */
+/**
+ * Neel's Meet room with Nika, once a real hangoutLink has been persisted.
+ * Never Taito's rih room. Returns null until the first new booking creates one.
+ */
 export function neelNikaMeetUrl(input: {
   clientUserId?: string | null;
   tutorName?: string | null;
   tutorEmail?: string | null;
+  dedicatedMeetUrl?: string | null;
 }): string | null {
   if (!isNeelDharniUser(input.clientUserId)) return null;
   if (!isNikaTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) return null;
-  return NEEL_NIKA_MEET_URL;
+  const dedicated = input.dedicatedMeetUrl?.trim() ?? "";
+  if (!dedicated) return null;
+  try {
+    const parsed = new URL(dedicated);
+    if (parsed.protocol !== "https:") return null;
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "meet.google.com") return null;
+    const code = parsed.pathname.replace(/^\/+|\/+$/g, "");
+    if (!code || code.includes("/")) return null;
+    const url = `https://meet.google.com/${code}`;
+    if (url === NEEL_NIKA_MEET_URL) return null;
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 /**
