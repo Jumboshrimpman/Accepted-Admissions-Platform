@@ -713,7 +713,7 @@ test("an event organized by another Google account invites every tutor's profile
   );
 });
 
-test("a connected fixed-window booking writes her calendar and a disconnected one alerts admins", async () => {
+test("new session invites are written on the admin calendar and a missing writer alerts admins", async () => {
   const platformSource = await readFile(
     fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
     "utf8",
@@ -726,7 +726,8 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /createGoogleEventWithMeetFallback\(\s*token,\s*adminWriter\.appCalendarId/);
   assert.match(slice, /manualCalendarInviteMessage\(\{[\s\S]*?meetUrl: bookingMeetUrl/);
   assert.match(slice, /neelNikaCalendarEvent\(\{[\s\S]*?clientUserId: req\.appUser!\.id/);
-  assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
+  assert.doesNotMatch(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
+  assert.match(slice, /Session invites must be sent from the admin@ calendar/);
   const reconnectBeforeDebit = slice.indexOf(
     "adminCalendarForFixedWindowBooking(access, fixedWindow, tutor)",
   );
@@ -734,7 +735,6 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const write = slice.indexOf("createGoogleEvent(");
   assert.ok(reconnectBeforeDebit > 0 && reconnectBeforeDebit < debit && debit < write);
   assert.match(slice, /error\.code === "CALENDAR_RECONNECT_REQUIRED"/);
-  assert.match(slice, /if \(!appCalendarId\) \{\s*throw new BookingError\(\s*409,\s*"CALENDAR_RECONNECT_REQUIRED"/);
   assert.match(
     slice,
     /if \(error instanceof BookingServiceError\) \{\s*return new BookingError\(error\.status, error\.code, error\.message\);\s*\}/,
@@ -771,20 +771,23 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
     rescheduleSlice,
     /googleAccountOrganizesAsTutor\(\s*writeAccess\.connection\.googleAccountEmail/,
   );
-  assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
+  assert.match(slice, /await confirmBookedSession\(updated \?\? created, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
   assert.match(slice, /calendarPlan\.mode === "manual"/);
   assert.match(slice, /kind: "manual_calendar_invite"/);
   assert.match(slice, /calendarPlan\.mode === "manual"[\s\S]{0,900}confirmBookedSession\(created, true\)/);
   assert.match(slice, /await confirmBookedSession\(created, false\)/);
-  const fallbackGates = platformSource.match(
-    /isAdminCalendarFallbackTutor\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/g,
+  assert.doesNotMatch(
+    platformSource,
+    /isAdminCalendarFallbackTutor\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/,
   );
-  assert.equal(fallbackGates?.length, 1);
   assert.match(
     platformSource,
     /usesAdminCalendarFallback && selfSetHoursConfigured\(rule\)/,
   );
+  assert.match(platformSource, /sessionInvitesOrganizedByAdmin\(\)/);
+  assert.match(platformSource, /newSessionInviteCalendarMode\(/);
+  assert.match(platformSource, /accessForExistingSessionEvent\(/);
   assert.doesNotMatch(
     platformSource,
     /isNikaTutorProfile\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/,

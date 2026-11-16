@@ -58,9 +58,10 @@ test("every booking invite is pinned to the one Meet link", async () => {
   assert.match(event, /const meetUrl = pinnedBookingMeetUrl\(\{/);
   assert.match(event, /location: meetUrl \?\? undefined/);
   assert.match(event, /description: meetUrl \?\? undefined/);
-  assert.match(event, /conferenceData: existingGoogleMeetConference\(meetUrl\)/);
+  assert.match(event, /conferenceData: meetUrl/);
+  assert.match(event, /existingGoogleMeetConference\(meetUrl\)/);
+  assert.match(event, /newGoogleMeetConference\(randomUUID\(\)\)/);
   assert.doesNotMatch(event, /neelNikaMeetUrl\(/);
-  assert.doesNotMatch(event, /createRequest/);
   assert.equal(NEEL_NIKA_MEET_URL, "https://meet.google.com/rih-iayt-okb");
 });
 

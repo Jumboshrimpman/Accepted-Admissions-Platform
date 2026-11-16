@@ -55,25 +55,59 @@ export function sophiaLamasMeetUrl(input: {
   return googleMeetUrl(SOPHIA_LAMAS_MEET_URL);
 }
 
+export const SOPHIA_SLEIMAN_EMAIL = "sophiasleiman13@gmail.com";
+
+/** True only for Taito's dedicated rih room. */
+export function isTaitoSharedMeetUrl(url: string | null | undefined): boolean {
+  return googleMeetUrl(url) === SHARED_FALL_MEETING_URL;
+}
+
 /**
- * Meet room attached to a booking invite.
- * Michelle Makarem uses her dedicated room with any tutor.
- * Sophia Lamas uses that same room (Michelle is currently the only client
- * who can book her). Every other tutor on this path keeps the shared Fall room.
+ * A Meet URL that may be stored as a student's dedicated room.
+ * Taito's rih room is never persisted for anyone else.
+ */
+export function persistableDedicatedMeetUrl(
+  url: string | null | undefined,
+): string | null {
+  const meet = googleMeetUrl(url);
+  if (!meet || isTaitoSharedMeetUrl(meet)) return null;
+  return meet;
+}
+
+export function sophiaSleimanMeetUrl(input: {
+  clientUserId?: string | null;
+  clientEmail?: string | null;
+}): string | null {
+  const email = input.clientEmail?.trim().toLowerCase() ?? "";
+  if (input.clientUserId === SOPHIA_SLEIMAN_SAT_USER_ID || email === SOPHIA_SLEIMAN_EMAIL) {
+    return googleMeetUrl(SOPHIA_SLEIMAN_MEET_URL);
+  }
+  return null;
+}
+
+/**
+ * Meet room attached to a new booking invite.
+ * Michelle → ase, Sophia S → xqq, Sophia Lamas → ase, Taito → rih.
+ * Neel uses a previously persisted hangoutLink, or null so Google can
+ * create a fresh Meet. Nobody else is booked into Taito's rih room.
  */
 export function pinnedBookingMeetUrl(input: {
   tutorName?: string | null;
   tutorEmail?: string | null;
   clientUserId?: string | null;
   clientEmail?: string | null;
+  dedicatedMeetUrl?: string | null;
 }): string | null {
+  const email = input.clientEmail?.trim().toLowerCase() ?? "";
+  if (email === TAITO_STUDENT_EMAIL) return SHARED_FALL_MEETING_URL;
   if (isMichelleMakaremSessionClient(input)) {
     return michelleMakaremMeetUrl(input);
   }
-  if (isSophiaLamasTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) {
-    return sophiaLamasMeetUrl(input);
-  }
-  return SHARED_FALL_MEETING_URL;
+  const sophiaLamas = sophiaLamasMeetUrl(input);
+  if (sophiaLamas) return sophiaLamas;
+  const sophiaS = sophiaSleimanMeetUrl(input);
+  if (sophiaS) return sophiaS;
+  return persistableDedicatedMeetUrl(input.dedicatedMeetUrl);
 }
 
 export type SessionMeetingInput = {
@@ -88,6 +122,7 @@ export type SessionMeetingInput = {
   timezone?: string | null;
   tutorName?: string | null;
   tutorEmail?: string | null;
+  dedicatedMeetUrl?: string | null;
 };
 
 /** https://meet.google.com/<code> only. Calendar htmlLinks are not join links. */
@@ -138,36 +173,33 @@ function taitoKeepsSharedRoom(input: SessionMeetingInput): boolean {
 
 /**
  * Join link for one session.
- * session.meetUrl, then a meet.google.com providerEventUrl, then a course Meet
- * link that is not the shared Fall room. The shared room is the final fallback
- * for every course that uses it, and for Taito's Fall sessions. Sophia's own
- * room is applied before that fallback. studentFacingMeetingUrl lets an
- * explicit session.meetUrl (the real calendar conference button) win over
- * Michelle's default room; new bookings still target her dedicated room.
+ * Taito's Fall sessions stay on rih. Other students never fall back to that
+ * room: session.meetUrl and providerEventUrl that are rih are ignored,
+ * then a non-shared course link, then Sophia S's dedicated room.
  */
 export function resolveSessionMeetingUrl(input: SessionMeetingInput): string | null {
   if (taitoKeepsSharedRoom(input)) return SHARED_FALL_MEETING_URL;
-  const override = googleMeetUrl(input.meetUrl);
+  const override = persistableDedicatedMeetUrl(input.meetUrl);
   if (override) return override;
-  const provider = googleMeetUrl(input.providerEventUrl);
+  const provider = persistableDedicatedMeetUrl(input.providerEventUrl);
   if (provider) return provider;
-  const course = googleMeetUrl(input.courseMeetUrl);
-  if (course && course !== SHARED_FALL_MEETING_URL) return course;
-  if (input.clientUserId === SOPHIA_SLEIMAN_SAT_USER_ID) return SOPHIA_SLEIMAN_MEET_URL;
-  if (course === SHARED_FALL_MEETING_URL) return SHARED_FALL_MEETING_URL;
-  return null;
+  const course = persistableDedicatedMeetUrl(input.courseMeetUrl);
+  if (course) return course;
+  return sophiaSleimanMeetUrl(input);
 }
 
+/**
+ * Portal Join link.
+ * Taito is always rih. An explicit session.meet_url wins next so an existing
+ * event whose button could not be moved (e.g. Nov 22) can match the calendar.
+ * New Michelle, Sophia S, and Sophia Lamas bookings persist their dedicated
+ * rooms, so the portal stays on ase/xqq even if Google attaches rih.
+ * Neel uses a persisted hangoutLink, never rih.
+ */
 export function studentFacingMeetingUrl(input: SessionMeetingInput): string | null {
-  const explicitMeetUrl = taitoKeepsSharedRoom(input)
-    ? SHARED_FALL_MEETING_URL
-    : googleMeetUrl(input.meetUrl);
+  if (taitoKeepsSharedRoom(input)) return SHARED_FALL_MEETING_URL;
+  const explicitMeetUrl = googleMeetUrl(input.meetUrl);
   return (
-    neelNikaMeetUrl({
-      clientUserId: input.clientUserId,
-      tutorName: input.tutorName,
-      tutorEmail: input.tutorEmail,
-    }) ??
     explicitMeetUrl ??
     michelleMakaremMeetUrl({
       clientUserId: input.clientUserId,
@@ -177,6 +209,14 @@ export function studentFacingMeetingUrl(input: SessionMeetingInput): string | nu
       tutorName: input.tutorName,
       tutorEmail: input.tutorEmail,
     }) ??
+    sophiaSleimanMeetUrl(input) ??
+    neelNikaMeetUrl({
+      clientUserId: input.clientUserId,
+      tutorName: input.tutorName,
+      tutorEmail: input.tutorEmail,
+      dedicatedMeetUrl: input.dedicatedMeetUrl,
+    }) ??
+    persistableDedicatedMeetUrl(input.dedicatedMeetUrl) ??
     resolveSessionMeetingUrl(input)
   );
 }

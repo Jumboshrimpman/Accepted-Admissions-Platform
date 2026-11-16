@@ -3,6 +3,7 @@ import test from "node:test";
 
 const {
   MEET_CONFERENCE_DIVERGED_MESSAGE,
+  MEET_CONFERENCE_KEEP_INTENDED_MESSAGE,
   alignMeetingToConference,
   eventConferenceMeetUrl,
   replaceMeetUrlInText,
@@ -40,16 +41,17 @@ test("eventConferenceMeetUrl prefers hangoutLink, then a video entry point", () 
   assert.equal(eventConferenceMeetUrl({ hangoutLink: "https://www.google.com/calendar/event?eid=abc" }), null);
 });
 
-test("alignMeetingToConference uses the real conference button when it differs from the intended room", () => {
+test("alignMeetingToConference keeps the intended dedicated room when the conference button diverges", () => {
   const aligned = alignMeetingToConference({
     intendedUrl: ASE,
     event: { hangoutLink: RIH, location: ASE, description: ASE },
   });
   assert.deepEqual(aligned, {
-    meetUrl: RIH,
+    meetUrl: ASE,
     intendedUrl: ASE,
     conferenceUrl: RIH,
     diverged: true,
+    keepIntended: true,
   });
   assert.equal(
     alignMeetingToConference({
@@ -101,23 +103,40 @@ test("reconcileCreatedMeetEvent logs divergence and patches location and descrip
       event: {
         id: "evt-1",
         hangoutLink: RIH,
-        location: ASE,
-        description: ASE,
+        location: RIH,
+        description: RIH,
       },
       log: (fields, message) => logs.push({ fields, message }),
     });
     assert.equal(result.alignment.diverged, true);
-    assert.equal(result.alignment.meetUrl, RIH);
-    assert.equal(result.event.location, RIH);
-    assert.equal(result.event.description, RIH);
+    assert.equal(result.alignment.meetUrl, ASE);
+    assert.equal(result.alignment.keepIntended, true);
+    assert.equal(result.event.location, ASE);
+    assert.equal(result.event.description, ASE);
     assert.equal(logs.length, 1);
-    assert.equal(logs[0]?.message, MEET_CONFERENCE_DIVERGED_MESSAGE);
+    assert.equal(logs[0]?.message, MEET_CONFERENCE_KEEP_INTENDED_MESSAGE);
+    assert.equal(logs[0]?.fields.level, "error");
     assert.equal(logs[0]?.fields.intendedUrl, ASE);
     assert.equal(logs[0]?.fields.conferenceUrl, RIH);
     assert.equal(patches.length, 1);
     assert.match(patches[0]!.path, /sendUpdates=none/);
-    assert.deepEqual(patches[0]!.body, { location: RIH, description: RIH });
+    assert.deepEqual(patches[0]!.body, { location: ASE, description: ASE });
   } finally {
     globalThis.fetch = previous;
   }
+});
+
+test("a first booking without an intended room does not persist Taito's conference link", () => {
+  const aligned = alignMeetingToConference({
+    intendedUrl: null,
+    event: { hangoutLink: RIH },
+  });
+  assert.equal(aligned.meetUrl, null);
+  assert.equal(aligned.conferenceUrl, RIH);
+  assert.equal(aligned.keepIntended, false);
+  const kept = alignMeetingToConference({
+    intendedUrl: null,
+    event: { hangoutLink: "https://meet.google.com/abc-defg-hij" },
+  });
+  assert.equal(kept.meetUrl, "https://meet.google.com/abc-defg-hij");
 });

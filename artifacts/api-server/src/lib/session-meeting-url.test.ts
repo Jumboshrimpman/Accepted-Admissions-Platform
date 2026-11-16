@@ -10,6 +10,7 @@ import {
   googleMeetUrl,
   MICHELLE_MAKAREM_MEET_URL,
   normalizeAdminMeetUrl,
+  persistableDedicatedMeetUrl,
   pinnedBookingMeetUrl,
   resolveSessionMeetingUrl,
   SOPHIA_LAMAS_MEET_URL,
@@ -142,7 +143,7 @@ const MICHELLE = {
   term: "Fall 2026",
 };
 
-test("htmlLink only on a Fall course with the shared room resolves to the shared room", () => {
+test("a non-Taito Fall course does not fall back to Taito's shared room", () => {
   assert.equal(googleMeetUrl(HTML_LINK), null);
   assert.equal(
     resolveSessionMeetingUrl({
@@ -151,11 +152,11 @@ test("htmlLink only on a Fall course with the shared room resolves to the shared
       providerEventUrl: HTML_LINK,
       courseMeetUrl: SHARED_FALL_MEETING_URL,
     }),
-    SHARED_FALL_MEETING_URL,
+    null,
   );
 });
 
-test("no provider url on a Fall course with the shared room resolves to the shared room", () => {
+test("no provider url on a Fall course does not invent Taito's room for another student", () => {
   assert.equal(
     resolveSessionMeetingUrl({
       ...MICHELLE,
@@ -163,11 +164,11 @@ test("no provider url on a Fall course with the shared room resolves to the shar
       providerEventUrl: null,
       courseMeetUrl: SHARED_FALL_MEETING_URL,
     }),
-    SHARED_FALL_MEETING_URL,
+    null,
   );
 });
 
-test("a providerEventUrl that is the shared room resolves to the shared room", () => {
+test("a providerEventUrl that is Taito's room is ignored for another student", () => {
   assert.equal(
     resolveSessionMeetingUrl({
       ...MICHELLE,
@@ -175,11 +176,11 @@ test("a providerEventUrl that is the shared room resolves to the shared room", (
       providerEventUrl: SHARED_FALL_MEETING_URL,
       courseMeetUrl: "https://meet.google.com/other-room",
     }),
-    SHARED_FALL_MEETING_URL,
+    "https://meet.google.com/other-room",
   );
 });
 
-test("Neel booking Nika still resolves to the shared room", () => {
+test("Neel booking Nika does not use Taito's room and waits for a persisted hangoutLink", () => {
   assert.equal(
     studentFacingMeetingUrl({
       clientUserId: NEEL_DHARNI_USER_ID,
@@ -187,13 +188,34 @@ test("Neel booking Nika still resolves to the shared room", () => {
       tutorEmail: "nika.raiffe@gmail.com",
       meetUrl: null,
       providerEventUrl: HTML_LINK,
-      courseMeetUrl: null,
+      courseMeetUrl: SHARED_FALL_MEETING_URL,
       dateTime: new Date("2026-11-02T16:00:00.000Z"),
       subject: "College Consulting",
       timezone: "America/New_York",
     }),
-    SHARED_FALL_MEETING_URL,
+    null,
   );
+  const neelRoom = "https://meet.google.com/abc-defg-hij";
+  assert.equal(
+    studentFacingMeetingUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "nika.raiffe@gmail.com",
+      dedicatedMeetUrl: neelRoom,
+    }),
+    neelRoom,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "nika.raiffe@gmail.com",
+      dedicatedMeetUrl: SHARED_FALL_MEETING_URL,
+    }),
+    null,
+  );
+  assert.equal(persistableDedicatedMeetUrl(SHARED_FALL_MEETING_URL), null);
+  assert.equal(persistableDedicatedMeetUrl(neelRoom), neelRoom);
 });
 
 test("Sophia with only a calendar htmlLink resolves to her room", () => {
@@ -369,7 +391,7 @@ test("Sophia Lamas the tutor does not use Sophia Sleiman's room or the shared Fa
       tutorName: "Nika Raiffe",
       tutorEmail: "nika.raiffe@gmail.com",
     }),
-    SHARED_FALL_MEETING_URL,
+    null,
   );
   assert.equal(
     studentFacingMeetingUrl({
@@ -431,6 +453,8 @@ test("Michelle's sessions with any tutor use her dedicated room in the portal an
     }),
     SHARED_FALL_MEETING_URL,
   );
+  // Existing Nov 22-style rows can still follow an explicit meet_url so the
+  // portal matches a button that has not been moved yet. New bookings persist ase.
   assert.equal(
     studentFacingMeetingUrl({
       ...MICHELLE_SHARED_FALL_INPUT,
@@ -484,7 +508,7 @@ test("Michelle's portal Join follows an explicit session.meet_url even when it i
   );
 });
 
-test("Sophia S, Taito, and Neel-Nika rooms stay unchanged when Michelle's room is pinned", () => {
+test("Sophia S stays on xqq, Taito stays on rih, and Neel does not inherit Taito's room", () => {
   assert.equal(
     studentFacingMeetingUrl({
       courseMeetUrl: SHARED_FALL_MEETING_URL,
@@ -519,7 +543,7 @@ test("Sophia S, Taito, and Neel-Nika rooms stay unchanged when Michelle's room i
       tutorName: "Nika Raiffe",
       tutorEmail: "nika.raiffe@gmail.com",
     }),
-    SHARED_FALL_MEETING_URL,
+    null,
   );
   assert.equal(
     pinnedBookingMeetUrl({
@@ -528,7 +552,7 @@ test("Sophia S, Taito, and Neel-Nika rooms stay unchanged when Michelle's room i
       clientUserId: SOPHIA_SLEIMAN_SAT_USER_ID,
       clientEmail: "sophiasleiman13@gmail.com",
     }),
-    SHARED_FALL_MEETING_URL,
+    SOPHIA_SLEIMAN_MEET_URL,
   );
 });
 
