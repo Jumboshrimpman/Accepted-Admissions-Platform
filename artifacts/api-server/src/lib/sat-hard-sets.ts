@@ -1164,6 +1164,25 @@ async function ensureDuringAssignment(session: SessionRow, target: number) {
   return created!;
 }
 
+
+async function assignmentMatchesRequiredSections(
+  assignmentId: string,
+  sections: readonly SatPracticeSection[],
+): Promise<boolean> {
+  if (sections.length !== 1) return true;
+  const required = sections[0]!;
+  const rows = await db
+    .select({ section: bankQuestionsTable.section })
+    .from(assignmentQuestionsTable)
+    .innerJoin(
+      bankQuestionsTable,
+      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
+    )
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  if (rows.length === 0) return false;
+  return rows.every((row) => satSection(row.section) === required);
+}
+
 export async function ensureHardSatInSession(session: SessionRow): Promise<{
   status: "not-hard" | "attempted" | "unchanged" | "updated" | "unavailable";
   questionCount: number;
@@ -1214,12 +1233,18 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       duringAssignmentId: primary.row.id,
     };
   }
+  const sections = await satSectionsForSession(session);
+  const replaceableIds: string[] = [];
   for (const item of classified) {
-    if (item.questionCount > 0 && !item.everyKeyIsHard) {
+    if (item.attempts > 0 || item.questionCount === 0) continue;
+    const sectionOk = await assignmentMatchesRequiredSections(item.row.id, sections);
+    if (!item.everyKeyIsHard || !sectionOk) {
       await archiveUnattemptedAssignment(session.id, item.row.id);
+      replaceableIds.push(item.row.id);
     }
   }
-  const fullHard = classified.find((item) => item.everyKeyIsHard && item.keys.length === target);
+  const remaining = classified.filter((item) => !replaceableIds.includes(item.row.id));
+  const fullHard = remaining.find((item) => item.everyKeyIsHard && item.keys.length === target);
   if (fullHard) {
     await suppressShortfallWhenAssigned(session, target);
     return {
@@ -1228,13 +1253,13 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       duringAssignmentId: fullHard.row.id,
     };
   }
-  const shortHard = classified.find(
+  const shortHard = remaining.find(
     (item) => item.everyKeyIsHard && item.keys.length < target,
   );
   try {
     const inSession = await officialHardInSessionItems(
       session,
-      shortHard ? [shortHard.row.id] : [],
+      shortHard ? [...replaceableIds, shortHard.row.id] : replaceableIds,
     );
     if (inSession.length !== target) {
       if (await suppressShortfallWhenAssigned(session, target)) {

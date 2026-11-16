@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { MICHELLE_MAKAREM_USER_ID, MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID } from "./no-auto-prework-clients.ts";
@@ -54,4 +55,13 @@ test("Michelle's Nov 16 session is never selected for a hard-set refresh", () =>
     }),
     false,
   );
+});
+
+test("an unattempted hard in-session set is replaced when it is not the required section", () => {
+  const source = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export async function ensureHardSatInSession(");
+  const body = source.slice(start, source.indexOf("\nexport async function fillUnattemptedOfficialHardInSession", start));
+  assert.match(body, /assignmentMatchesRequiredSections/);
+  assert.match(body, /!item\.everyKeyIsHard \|\| !sectionOk/);
+  assert.match(body, /officialHardInSessionItems\(\s*session,\s*shortHard \? \[\.\.\.replaceableIds, shortHard\.row\.id\] : replaceableIds,/);
 });
