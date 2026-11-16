@@ -32,7 +32,7 @@ import {
 } from "./xavier-identity.ts";
 
 export const XAVIER_SAT_CAPABILITY_SESSION_TITLE = "SAT capability test — Xavier";
-export const XAVIER_TUTOR_EMAIL = "xaver.rmz6@gmail.com";
+export const XAVIER_TUTOR_EMAIL = "xavier.rmz6@gmail.com";
 export const XAVIER_CANONICAL_CLERK_USER_ID =
   "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6";
 export const XAVIER_DUPLICATE_CLERK_USER_ID =

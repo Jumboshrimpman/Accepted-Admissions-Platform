@@ -74,13 +74,13 @@ test("assignment subjects always include SAT and IELTS and fold English into IEL
   ]);
 });
 
-test("People hides the superseded Xavier grant and inactive typo profile", () => {
+test("People hides the superseded Xavier grant and an inactive typo profile", () => {
   assert.equal(
     isSupersededAccessGrant({
       active: false,
       notes: "SUPERSEDED: duplicate Xavier Clerk user.",
       clerkUserId: "retired:user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
-      email: "xavier.rmz6@gmail.com",
+      email: "xsfam6@gmail.com",
     }),
     true,
   );
@@ -88,7 +88,7 @@ test("People hides the superseded Xavier grant and inactive typo profile", () =>
     isSupersededAccessGrant({
       active: true,
       clerkUserId: "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6",
-      email: "xaver.rmz6@gmail.com",
+      email: "xavier.rmz6@gmail.com",
     }),
     false,
   );
@@ -96,7 +96,7 @@ test("People hides the superseded Xavier grant and inactive typo profile", () =>
     isVisiblePeopleTutor({
       active: false,
       name: "Xavier Morales",
-      email: "xavier.rmz6@gmail.com",
+      email: "xaver.rmz6@gmail.com",
     }),
     false,
   );
@@ -104,7 +104,15 @@ test("People hides the superseded Xavier grant and inactive typo profile", () =>
     isVisiblePeopleTutor({
       active: true,
       name: "Xavier Morales",
-      email: "xaver.rmz6@gmail.com",
+      email: "xavier.rmz6@gmail.com",
+    }),
+    true,
+  );
+  assert.equal(
+    isVisiblePeopleTutor({
+      active: false,
+      name: "Xavier Morales",
+      email: "xavier.rmz6@gmail.com",
     }),
     true,
   );

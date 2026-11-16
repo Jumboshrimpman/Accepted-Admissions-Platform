@@ -6,6 +6,7 @@ const {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
   XAVIER_PROFILE_EMAIL,
+  XAVIER_TYPO_EMAIL,
   chooseXavierProfileToKeep,
   isXavierProfileEmail,
   RETIRED_XAVIER_CLERK_USER_ID,
@@ -31,18 +32,22 @@ test("treats the Production typo Clerk id as retired", () => {
   assert.equal(isRetiredXavierClerkUserId(undefined), false);
 });
 
-test("treats misspelled and historical Xavier emails as retired", () => {
-  assert.equal(isRetiredXavierEmail("Xavier.RMZ6@gmail.com"), true);
+test("treats only the historical xsfam6 address as a retired Xavier email", () => {
   assert.equal(isRetiredXavierEmail("xsfam6@gmail.com"), true);
   assert.equal(
     isRetiredXavierEmail("retired+xavier.rmz6@retired.accepted.local"),
     true,
   );
   assert.equal(isRetiredXavierEmail(CANONICAL_XAVIER_EMAIL), false);
+  assert.equal(isRetiredXavierEmail(XAVIER_TYPO_EMAIL), false);
+  assert.equal(isRetiredXavierEmail("Xavier.RMZ6@gmail.com"), false);
   assert.equal(isXavierProfileEmail(" Xavier.RMZ6@gmail.com "), true);
-  assert.equal(isRetiredXavierEmail(XAVIER_PROFILE_EMAIL), true);
-  assert.equal(XAVIER_PROFILE_EMAIL, "xavier.rmz6@gmail.com");
-  assert.equal(isCanonicalXavierEmail(" Xaver.RMZ6@Gmail.com "), true);
+  assert.equal(isRetiredXavierEmail(XAVIER_PROFILE_EMAIL), false);
+  assert.equal(CANONICAL_XAVIER_EMAIL, "xavier.rmz6@gmail.com");
+  assert.equal(XAVIER_PROFILE_EMAIL, CANONICAL_XAVIER_EMAIL);
+  assert.equal(XAVIER_TYPO_EMAIL, "xaver.rmz6@gmail.com");
+  assert.equal(isCanonicalXavierEmail(" Xavier.RMZ6@Gmail.com "), true);
+  assert.equal(isCanonicalXavierEmail(XAVIER_TYPO_EMAIL), false);
 });
 
 test("restored Xavier notes drop the superseded marker and keep other lines", () => {
@@ -59,18 +64,26 @@ test("restored Xavier notes drop the superseded marker and keep other lines", ()
   );
 });
 
-test("retired identity is clerk-or-email", () => {
+test("retired identity is the retired Clerk id or xsfam6, never the correct email", () => {
   assert.equal(
     isRetiredXavierIdentity(RETIRED_XAVIER_CLERK_USER_ID, CANONICAL_XAVIER_EMAIL),
     true,
   );
   assert.equal(
     isRetiredXavierIdentity(CANONICAL_XAVIER_CLERK_USER_ID, "xavier.rmz6@gmail.com"),
-    true,
+    false,
+  );
+  assert.equal(
+    isRetiredXavierIdentity(CANONICAL_XAVIER_CLERK_USER_ID, XAVIER_TYPO_EMAIL),
+    false,
   );
   assert.equal(
     isRetiredXavierIdentity(CANONICAL_XAVIER_CLERK_USER_ID, CANONICAL_XAVIER_EMAIL),
     false,
+  );
+  assert.equal(
+    isRetiredXavierIdentity(CANONICAL_XAVIER_CLERK_USER_ID, "xsfam6@gmail.com"),
+    true,
   );
 });
 
@@ -114,15 +127,15 @@ test("hides only inactive superseded grants", () => {
 test("either Xavier email spelling resolves to the same pair", () => {
   assert.deepEqual(xavierEmailSpellings(CANONICAL_XAVIER_EMAIL), [
     CANONICAL_XAVIER_EMAIL,
-    XAVIER_PROFILE_EMAIL,
+    XAVIER_TYPO_EMAIL,
   ]);
-  assert.deepEqual(xavierEmailSpellings(XAVIER_PROFILE_EMAIL), [
+  assert.deepEqual(xavierEmailSpellings(XAVIER_TYPO_EMAIL), [
     CANONICAL_XAVIER_EMAIL,
-    XAVIER_PROFILE_EMAIL,
+    XAVIER_TYPO_EMAIL,
   ]);
   assert.deepEqual(xavierEmailSpellings("xaver.rmz6@fixture.invalid"), [
-    "xaver.rmz6@fixture.invalid",
     "xavier.rmz6@fixture.invalid",
+    "xaver.rmz6@fixture.invalid",
   ]);
   assert.deepEqual(xavierEmailSpellings("other@example.invalid"), ["other@example.invalid"]);
 });

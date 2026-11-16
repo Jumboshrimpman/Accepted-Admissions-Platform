@@ -1,8 +1,13 @@
 export const CANONICAL_XAVIER_NAME = "Xavier Morales";
-/** Login and Clerk still use this address. Do not rewrite users.email to the profile spelling. */
-export const CANONICAL_XAVIER_EMAIL = "xaver.rmz6@gmail.com";
-/** Tutor profile and calendar guest address. Spelled with an i. */
-export const XAVIER_PROFILE_EMAIL = "xavier.rmz6@gmail.com";
+/** Clerk and portal login use this correctly spelled address. */
+export const CANONICAL_XAVIER_EMAIL = "xavier.rmz6@gmail.com";
+/**
+ * Historical typo that still appears on older rows. Kept as a login alias.
+ * Do not treat this as a retired identity and do not deny it.
+ */
+export const XAVIER_TYPO_EMAIL = "xaver.rmz6@gmail.com";
+/** Same as the canonical address. Tutor profile and calendar guest address. */
+export const XAVIER_PROFILE_EMAIL = CANONICAL_XAVIER_EMAIL;
 export const CANONICAL_XAVIER_CLERK_USER_ID =
   "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6";
 
@@ -11,12 +16,11 @@ export const RETIRED_XAVIER_CLERK_USER_ID =
   "user_3IsvKVDGAg5KdvwHhvODf2VFqtd";
 
 export const RETIRED_XAVIER_EMAILS = [
-  "xavier.rmz6@gmail.com",
   "xsfam6@gmail.com",
 ] as const;
 
 export const SUPERSEDED_XAVIER_GRANT_NOTE =
-  "SUPERSEDED: duplicate Xavier Clerk user. Canonical SAT tutor is user_3IxUfoT1xRnDsqhlx5NN1eGfRg6 / xaver.rmz6@gmail.com.";
+  "SUPERSEDED: duplicate Xavier Clerk user. Canonical SAT tutor is user_3IxUfoT1xRnDsqhlx5NN1eGfRg6 / xavier.rmz6@gmail.com.";
 
 /** Drop retirement lines so a restored public profile is not hidden from Connections. */
 export function profileNotesWithoutSupersededMarker(
@@ -85,7 +89,7 @@ export function xavierEmailSpellings(email: string): string[] {
   const local = normalized.slice(0, at);
   const domain = normalized.slice(at + 1);
   if (local === "xaver.rmz6" || local === "xavier.rmz6") {
-    return [`xaver.rmz6@${domain}`, `xavier.rmz6@${domain}`];
+    return [`xavier.rmz6@${domain}`, `xaver.rmz6@${domain}`];
   }
   return [normalized];
 }

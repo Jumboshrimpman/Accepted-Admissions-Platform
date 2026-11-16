@@ -2,7 +2,9 @@
 import {
   CANONICAL_XAVIER_EMAIL,
   RETIRED_XAVIER_EMAILS,
+  XAVIER_TYPO_EMAIL,
   isCanonicalXavierEmail,
+  xavierEmailSpellings,
 } from "./xavier-identity.ts";
 
 export type CalendarProfileScoreInput = {
@@ -35,16 +37,26 @@ export function isRetiredTutorProfile(profile: {
   );
 }
 
+function isXavierPortalEmail(email: string): boolean {
+  if (!email) return false;
+  return xavierEmailSpellings(email).length > 1 || isCanonicalXavierEmail(email);
+}
+
+function addXavierGoogleAliases(emails: Set<string>, email: string): void {
+  if (!isXavierPortalEmail(email)) return;
+  for (const spelling of xavierEmailSpellings(email)) emails.add(spelling);
+  emails.add(CANONICAL_XAVIER_EMAIL);
+  emails.add(XAVIER_TYPO_EMAIL);
+  for (const retired of RETIRED_XAVIER_EMAILS) emails.add(retired);
+}
+
 export function claimableEmailsForUser(user: {
   email?: string | null;
 }): string[] {
   const emails = new Set<string>();
   const userEmail = normalizeEmail(user.email);
   if (userEmail) emails.add(userEmail);
-  if (isCanonicalXavierEmail(userEmail)) {
-    emails.add(CANONICAL_XAVIER_EMAIL);
-    for (const email of RETIRED_XAVIER_EMAILS) emails.add(email);
-  }
+  addXavierGoogleAliases(emails, userEmail);
   return [...emails];
 }
 
@@ -52,15 +64,16 @@ export function portalEmailsForGoogleMatch(profile: {
   email?: string | null;
   userEmail?: string | null;
 }): string[] {
-  const emails = claimableEmailsForUser({
-    email: profile.userEmail ?? profile.email,
-  });
+  const emails = new Set(
+    claimableEmailsForUser({
+      email: profile.userEmail ?? profile.email,
+    }),
+  );
   const profileEmail = normalizeEmail(profile.email);
-  if (profileEmail) emails.push(profileEmail);
-  if (isCanonicalXavierEmail(profileEmail) || isCanonicalXavierEmail(profile.userEmail)) {
-    emails.push(CANONICAL_XAVIER_EMAIL, ...RETIRED_XAVIER_EMAILS);
-  }
-  return [...new Set(emails.filter(Boolean))];
+  if (profileEmail) emails.add(profileEmail);
+  addXavierGoogleAliases(emails, profileEmail);
+  addXavierGoogleAliases(emails, normalizeEmail(profile.userEmail));
+  return [...emails].filter(Boolean);
 }
 
 export function scoreCalendarProfile(
