@@ -2,9 +2,11 @@ import { and, asc, eq, ne, sql } from "drizzle-orm";
 import {
   assignmentQuestionsTable,
   assignmentsTable,
+  attemptsTable,
   bankQuestionsTable,
   db,
 } from "@workspace/db";
+import { MICHELLE_MAKAREM_USER_ID, skipsAutoPrework } from "./no-auto-prework-clients.ts";
 import { isOfficialSatExtract } from "./sat-bank-diagnostic-quality.ts";
 import { materializeHardSatQuestion } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
@@ -23,6 +25,7 @@ import {
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   isRenderableHardSatItem,
+  satSection,
   toRenderableHardSatInput,
 } from "./sat-set-difficulty.ts";
 
@@ -51,7 +54,11 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
   for (const row of rows) {
     const item = toRenderableHardSatInput(row);
     if (!isRenderableHardSatItem(item)) continue;
-    if (!isOfficialSatExtract(item)) continue;
+    const official = isOfficialSatExtract(item);
+    const michelleOriginal =
+      (row.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
+      (row.sourceKey ?? "").startsWith("original-hard-michelle-");
+    if (!official && !michelleOriginal) continue;
     selected.push({
       id: row.id,
       sourceKey: row.sourceKey,
@@ -98,9 +105,35 @@ export type HardReserveResult = {
   target: number;
 };
 
+
+async function unattemptedReserveNeedsSectionRefresh(
+  assignmentId: string,
+  sections: readonly ("rw" | "math")[],
+): Promise<boolean> {
+  if (sections.length !== 1) return false;
+  const required = sections[0]!;
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.assignmentId, assignmentId));
+  if (Number(count ?? 0) > 0) return false;
+  const rows = await db
+    .select({ section: bankQuestionsTable.section })
+    .from(assignmentQuestionsTable)
+    .innerJoin(
+      bankQuestionsTable,
+      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
+    )
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  if (rows.length === 0) return true;
+  return rows.some((row) => satSection(row.section) !== required);
+}
+
 /**
  * Create the draft hard reserve for one SAT session.
- * A live reserve is left untouched. Pre-work and other in-session assignments are not archived.
+ * A live reserve is left untouched unless it is unattempted and does not match a
+ * required single section (Michelle's Xavier math or Sophia Lamas reading).
+ * Pre-work and other in-session assignments are not archived.
  */
 export async function ensureHardChallengeReserve(session: {
   id: string;
@@ -108,9 +141,15 @@ export async function ensureHardChallengeReserve(session: {
   subject: string;
   title: string;
   clientUserId?: string | null;
+  tutorUserId?: string | null;
+  dateTime?: Date | string | null;
+  timezone?: string | null;
 }): Promise<HardReserveResult> {
   const target = HARD_RESERVE_DEFAULT;
   if (normalizedSessionSubject(session.subject) !== "SAT") {
+    return { action: "skipped", assignmentId: null, questionCount: 0, shortfall: 0, target };
+  }
+  if (skipsAutoPrework(session)) {
     return { action: "skipped", assignmentId: null, questionCount: 0, shortfall: 0, target };
   }
   const during = await db
@@ -127,25 +166,37 @@ export async function ensureHardChallengeReserve(session: {
         eq(assignmentsTable.deliveryPhase, "during_session"),
       ),
     );
+  const sections = await satSectionsForSession(session);
+  const includeMichelleOriginalHard = session.clientUserId === MICHELLE_MAKAREM_USER_ID;
   if (decideHardReserveWrite(during) === "keep") {
     const existing = during.find(
       (row) => row.status !== "archived" && isHardChallengeReserve(row),
     );
-    const questionCount = existing ? await assignmentQuestionCount(existing.id) : 0;
-    return {
-      action: "kept",
-      assignmentId: existing?.id ?? null,
-      questionCount,
-      shortfall: Math.max(0, target - questionCount),
-      target,
-    };
+    const shouldReplace = existing
+      ? await unattemptedReserveNeedsSectionRefresh(existing.id, sections)
+      : false;
+    if (!shouldReplace) {
+      const questionCount = existing ? await assignmentQuestionCount(existing.id) : 0;
+      return {
+        action: "kept",
+        assignmentId: existing?.id ?? null,
+        questionCount,
+        shortfall: Math.max(0, target - questionCount),
+        target,
+      };
+    }
+    if (existing) {
+      await db
+        .update(assignmentsTable)
+        .set({ status: "archived" })
+        .where(eq(assignmentsTable.id, existing.id));
+    }
   }
   const seen = session.clientUserId
     ? await loadSeenSatBankUsage(session.clientUserId, [])
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
   const onSession = await sourceKeysOnSession(session.id);
   const exclude = new Set<string>([...seen.sourceKeys, ...onSession]);
-  const sections = await satSectionsForSession(session);
   const pool = await loadOfficialHardReservePool();
   const unseenPool = filterUnseenBankItems(pool, {
     questionIds: seen.questionIds ?? new Set(),
@@ -157,6 +208,7 @@ export async function ensureHardChallengeReserve(session: {
     target,
     excludeSourceKeys: exclude,
     sections,
+    includeMichelleOriginalHard,
   });
   if (picked.selected.length === 0) {
     logger.info(

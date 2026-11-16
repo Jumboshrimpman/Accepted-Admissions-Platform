@@ -88,8 +88,9 @@ function drawBalancedFromForm<T extends RoutineFormQuestion>(
   seed: string,
   practiceTestNumber: number,
   target: number,
+  sections?: readonly ("rw" | "math")[] | null,
 ): T[] {
-  const quota = hardSatSectionQuotas(target, "sat");
+  const quota = hardSatSectionQuotas(target, "sat", sections);
   const ordered = [...items].sort(byStableFormOrder);
   const rw = shuffleWithSeed(
     ordered.filter((item) => satSection(item.section) === "rw"),
@@ -189,11 +190,13 @@ export type MichelleHardPreworkPick<T> = RoutineFormPick<T> & {
 };
 
 /**
- * Michelle's later SAT pre-work: 40 hard official items, one unused form
- * first. A form that still has 40 leftover hard items is used next, even if
- * she has seen a few questions from it. If no form can fill the set, leftover
- * hard items are widened across forms. Foundational / module 1 items stay out
- * because they are not in the caller's hard pool. Partial sets are not padded.
+ * Michelle's later SAT pre-work: 40 hard items, one leftover official form
+ * first when that form can fill the set. If no form can, leftover official
+ * hard items are taken first, then undated original hard items fill the
+ * remainder. Taito-dated originals stay out. Foundational / module 1 items
+ * stay out because they are not in the caller's hard pool. Partial sets are
+ * not padded. Pass `sections` to restrict the draw (math for Xavier, reading
+ * and writing for Sophia Lamas).
  */
 export function selectMichelleFutureHardPrework<
   T extends RoutineFormQuestion & { sourceKind?: string | null },
@@ -204,6 +207,7 @@ export function selectMichelleFutureHardPrework<
     usedPracticeTests?: ReadonlySet<number>;
     excludeSourceKeys?: ReadonlySet<string>;
     targetCount?: number;
+    sections?: readonly ("rw" | "math")[] | null;
   },
 ): MichelleHardPreworkPick<T> {
   const target = Math.min(
@@ -215,20 +219,40 @@ export function selectMichelleFutureHardPrework<
   const formNumber = (item: RoutineFormQuestion) => {
     const official = officialSatFormNumber(item);
     if (official != null) return official;
-    // Renderable hard-pool rows already passed the official SAT gate and may omit examFamily.
     const practiceTestNumber = coercePracticeTestNumber(item.practiceTestNumber);
     if (practiceTestNumber == null || !OFFICIAL_SAT_FORMS.has(practiceTestNumber)) return null;
     if (satSection(item.section) == null) return null;
     return practiceTestNumber;
   };
-  const eligible = items.filter((item) => {
+  const sectionOk = (item: T) => {
+    if (!options.sections || options.sections.length === 0) return true;
+    const section = satSection(item.section);
+    return section != null && options.sections.includes(section);
+  };
+  const isTaitoDatedOriginal = (item: T) => {
+    const key = item.sourceKey ?? "";
+    return (
+      (item.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
+      /^original-hard-\d{4}-\d{2}-\d{2}-/.test(key) &&
+      !key.startsWith("original-hard-michelle-")
+    );
+  };
+  const isMichelleOriginal = (item: T) =>
+    (item.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
+    (item.sourceKey ?? "").startsWith("original-hard-michelle-");
+  const officialEligible = items.filter((item) => {
     if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return false;
     if (formNumber(item) == null) return false;
     if (item.sourceKey && exclude.has(item.sourceKey)) return false;
-    return true;
+    return sectionOk(item);
+  });
+  const originalEligible = items.filter((item) => {
+    if (!isMichelleOriginal(item) || isTaitoDatedOriginal(item)) return false;
+    if (item.sourceKey && exclude.has(item.sourceKey)) return false;
+    return sectionOk(item);
   });
   const byForm = new Map<number, T[]>();
-  for (const item of eligible) {
+  for (const item of officialEligible) {
     const practiceTestNumber = formNumber(item);
     if (practiceTestNumber == null) continue;
     const list = byForm.get(practiceTestNumber) ?? [];
@@ -237,7 +261,13 @@ export function selectMichelleFutureHardPrework<
   }
   const forms = [...byForm.keys()].sort((left, right) => left - right);
   const drawForm = (practiceTestNumber: number) =>
-    drawBalancedFromForm(byForm.get(practiceTestNumber) ?? [], options.seed, practiceTestNumber, target);
+    drawBalancedFromForm(
+      byForm.get(practiceTestNumber) ?? [],
+      options.seed,
+      practiceTestNumber,
+      target,
+      options.sections,
+    );
 
   const unusedFull = forms.filter(
     (practiceTestNumber) => !used.has(practiceTestNumber) && drawForm(practiceTestNumber).length >= target,
@@ -265,11 +295,27 @@ export function selectMichelleFutureHardPrework<
     };
   }
 
-  const widened = drawBalancedFromForm(eligible, options.seed, 0, target);
+  const officialDraw = drawBalancedFromForm(officialEligible, options.seed, 0, target, options.sections);
+  if (officialDraw.length >= target) {
+    return {
+      selected: officialDraw,
+      practiceTestNumber: null,
+      recycled: forms.length > 0,
+      widened: true,
+    };
+  }
+  const usedKeys = new Set(officialDraw.flatMap((item) => (item.sourceKey ? [item.sourceKey] : [])));
+  const originalFill = drawBalancedFromForm(
+    originalEligible.filter((item) => !item.sourceKey || !usedKeys.has(item.sourceKey)),
+    options.seed,
+    0,
+    target - officialDraw.length,
+    options.sections,
+  );
   return {
-    selected: widened,
+    selected: [...officialDraw, ...originalFill].slice(0, target),
     practiceTestNumber: null,
-    recycled: forms.length > 0,
+    recycled: forms.length > 0 || originalFill.length > 0,
     widened: true,
   };
 }

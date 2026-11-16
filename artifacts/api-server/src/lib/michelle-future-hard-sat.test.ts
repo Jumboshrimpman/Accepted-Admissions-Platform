@@ -23,6 +23,14 @@ test("Michelle's Nov 16 session is never selected for a hard-set refresh", () =>
   assert.equal(
     isMichelleFutureHardSatSession({
       ...michelle,
+      id: "011e67c6-651d-4ab7-9a46-399635e4a4b4",
+      dateTime: new Date("2026-11-15T17:00:00.000Z"),
+    }),
+    false,
+  );
+  assert.equal(
+    isMichelleFutureHardSatSession({
+      ...michelle,
       id: "91ef8c28-9455-4c9c-aa37-d19881d50666",
       dateTime: new Date("2026-11-22T17:00:00.000Z"),
     }),

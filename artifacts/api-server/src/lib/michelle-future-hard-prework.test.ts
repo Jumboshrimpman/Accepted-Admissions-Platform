@@ -130,3 +130,55 @@ test("the same session id reproduces the same widened set", () => {
     again.selected.map((row) => row.id),
   );
 });
+
+function michelleOriginal(index: number): HardItem {
+  const id = `original-hard-michelle-2026-11-22-math-${String(index).padStart(2, "0")}`;
+  return {
+    id,
+    sourceKey: id,
+    section: "math",
+    examFamily: "sat",
+    practiceTestNumber: null,
+    position: 2000 + index,
+    sourceKind: "original_hard",
+  };
+}
+
+test("Michelle Xavier pre-work is 40 hard math items when sections are math-only", () => {
+  const pool = [...formItems(6, 30, 25), ...formItems(7, 30, 25)];
+  const picked = selectMichelleFutureHardPrework(pool, {
+    seed: "91ef8c28-9455-4c9c-aa37-d19881d50666",
+    usedPracticeTests: new Set([4, 5, 6, 7, 8, 9, 10, 11]),
+    sections: ["math"],
+  });
+  assert.equal(picked.selected.length, 40);
+  assert.equal(picked.selected.every((row) => row.section === "math"), true);
+  assert.equal(picked.selected.some((row) => row.section === "rw"), false);
+});
+
+test("leftover official math is used first, then Michelle original hard math fills the rest", () => {
+  const official = formItems(8, 0, 12);
+  const originals = Array.from({ length: 40 }, (_value, index) => michelleOriginal(index + 1));
+  const taito = {
+    id: "original-hard-2026-11-27-math-35",
+    sourceKey: "original-hard-2026-11-27-math-35",
+    section: "math" as const,
+    examFamily: "sat",
+    practiceTestNumber: null,
+    position: 1,
+    sourceKind: "original_hard",
+  };
+  const picked = selectMichelleFutureHardPrework([...official, ...originals, taito], {
+    seed: "session-official-first",
+    usedPracticeTests: new Set([8]),
+    sections: ["math"],
+  });
+  assert.equal(picked.selected.length, 40);
+  assert.equal(picked.selected.filter((row) => row.sourceKind !== "original_hard").length, 12);
+  assert.equal(picked.selected.filter((row) => (row.sourceKey ?? "").startsWith("original-hard-michelle-")).length, 28);
+  assert.equal(picked.selected[0]!.sourceKind !== "original_hard", true);
+  assert.equal(
+    picked.selected.some((row) => row.sourceKey === "original-hard-2026-11-27-math-35"),
+    false,
+  );
+});

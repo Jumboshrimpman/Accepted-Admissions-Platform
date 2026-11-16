@@ -36,10 +36,12 @@ import {
   HARD_SAT_PREWORK_QUESTIONS,
   inSessionQuestionTargetForStudent,
   isRenderableHardSatItem,
+  originalHardSatDateFromKey,
   originalHardSatDateKeyForSession,
   planHardSatSessionSets,
   sameSourceKeySet,
   satDifficultyForStudent,
+  satSection,
   satSectionsForStudent,
   toRenderableHardSatInput,
   type SatPracticeSection,
@@ -58,6 +60,8 @@ import {
   MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID,
   skipsAutoPrework,
 } from "./no-auto-prework-clients.ts";
+import { isMichelleOriginalHardSourceKey } from "./michelle-sat-sections.ts";
+import { michelleXavierHardMathBankRecords } from "./michelle-xavier-hard-math.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 const HARD_SAT_SHORTFALL_TITLE = "Hard SAT set needs questions";
@@ -93,18 +97,43 @@ async function studentIdentity(clientUserId?: string | null): Promise<{
   };
 }
 
+
+async function tutorIdentity(tutorUserId?: string | null): Promise<{
+  email: string | null;
+  name: string | null;
+}> {
+  if (!tutorUserId) return { email: null, name: null };
+  const [profile] = await db
+    .select({ email: tutorProfilesTable.email, name: tutorProfilesTable.name })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, tutorUserId))
+    .limit(1);
+  if (profile?.email || profile?.name) {
+    return { email: profile.email ?? null, name: profile.name ?? null };
+  }
+  const [user] = await db
+    .select({ email: usersTable.email, displayName: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, tutorUserId))
+    .limit(1);
+  return { email: user?.email ?? null, name: user?.displayName ?? null };
+}
+
 async function hardPlanOptionsForSession(session: {
   dateTime?: Date;
   timezone?: string | null;
   clientUserId?: string | null;
+  tutorUserId?: string | null;
   subject?: string | null;
   title?: string | null;
 }): Promise<{
   originalDateKey: string | null;
+  includeMichelleOriginalHard: boolean;
   balance: "sat" | "even";
   sections: readonly SatPracticeSection[];
 }> {
   const identity = await studentIdentity(session.clientUserId);
+  const tutor = await tutorIdentity(session.tutorUserId);
   const originalDateKey =
     session.dateTime && identity.email
       ? originalHardSatDateKeyForSession({
@@ -116,6 +145,7 @@ async function hardPlanOptionsForSession(session: {
       : null;
   return {
     originalDateKey,
+    includeMichelleOriginalHard: identity.userId === MICHELLE_MAKAREM_USER_ID && originalDateKey == null,
     balance: originalDateKey ? "even" : "sat",
     sections: satSectionsForStudent({
       email: identity.email,
@@ -125,6 +155,8 @@ async function hardPlanOptionsForSession(session: {
       sessionTitle: session.title,
       subject: session.subject ?? "SAT",
       session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
+      tutorEmail: tutor.email,
+      tutorName: tutor.name,
     }),
   };
 }
@@ -168,8 +200,10 @@ export async function satSectionsForSession(session: {
   dateTime?: Date;
   timezone?: string | null;
   clientUserId?: string | null;
+  tutorUserId?: string | null;
 }): Promise<readonly SatPracticeSection[]> {
   const identity = await studentIdentity(session.clientUserId);
+  const tutor = await tutorIdentity(session.tutorUserId);
   return satSectionsForStudent({
     email: identity.email,
     displayName: identity.displayName,
@@ -178,6 +212,8 @@ export async function satSectionsForSession(session: {
     sessionTitle: session.title,
     subject: session.subject ?? "SAT",
     session: session.dateTime ? { dateTime: session.dateTime, timezone: session.timezone } : null,
+    tutorEmail: tutor.email,
+    tutorName: tutor.name,
   });
 }
 
@@ -760,9 +796,17 @@ async function assignOfficialFormPrework(
   const michelleHard = isMichelleFutureHardSatSession(session);
   const pool = michelleHard
     ? (await loadRenderableHardBank()).filter((item) => {
-        if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return false;
+        if (originalHardSatDateFromKey(item.sourceKey)) return false;
+        if (
+          (item.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
+          !isMichelleOriginalHardSourceKey(item.sourceKey)
+        ) {
+          return false;
+        }
         if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
         if (item.sourceKey && duringKeys.has(item.sourceKey)) return false;
+        const section = satSection(item.section);
+        if (sections.length === 1 && section !== sections[0]) return false;
         return true;
       })
     : (await loadRoutineSatFormPool()).filter((item) => {
@@ -780,6 +824,7 @@ async function assignOfficialFormPrework(
         seed: session.id,
         usedPracticeTests: seen.practiceTests,
         excludeSourceKeys: seen.sourceKeys,
+        sections,
       })
     : selectRoutinePreworkFromOneForm(unseenPool, {
         seed: session.id,
@@ -1022,7 +1067,7 @@ export async function ensureHardSatPrework(
  * assigned, placeholders, and seeded originals.
  */
 export async function officialHardInSessionItems(
-  session: { id: string; clientUserId?: string | null; subject?: string; title?: string; dateTime?: Date; timezone?: string | null },
+  session: { id: string; clientUserId?: string | null; tutorUserId?: string | null; subject?: string; title?: string; dateTime?: Date; timezone?: string | null },
   ignoreAssignmentIds: readonly string[] = [],
 ): Promise<Array<HardSatCandidate & { bankId: string }>> {
   const live = await listLiveBeforeSessionHomework(session.id);
@@ -1124,6 +1169,12 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
   questionCount: number;
   duringAssignmentId: string | null;
 }> {
+  if (skipsAutoPrework(session)) {
+    const liveDuring = await liveDuringAssignments(session.id);
+    const current = liveDuring[0] ?? null;
+    const questionCount = current ? await assignmentQuestionCount(current.id) : 0;
+    return { status: "unchanged", questionCount, duringAssignmentId: current?.id ?? null };
+  }
   if ((await satDifficultyForSession(session)) !== "hard") {
     return { status: "not-hard", questionCount: 0, duringAssignmentId: null };
   }
@@ -1424,6 +1475,18 @@ export async function ensureTaitoOct30HardPrework(): Promise<{
   return { action: "unchanged", readingLeftInPlace: false };
 }
 
+
+/** Idempotent upsert of Michelle's original hard SAT math items. */
+export async function ensureMichelleXavierHardMathBank(): Promise<{ insertedOrUpdated: number }> {
+  const records = michelleXavierHardMathBankRecords();
+  const written = await upsertBankRecords(records);
+  logger.info(
+    { inserted: written.inserted, updated: written.updated },
+    "Michelle Xavier hard math bank ready",
+  );
+  return { insertedOrUpdated: written.inserted + written.updated };
+}
+
 /** Michelle's already-assigned Nov 16 sets must never be auto-refreshed. */
 export function isMichelleFutureHardSatSession(session: {
   id: string;
@@ -1438,6 +1501,7 @@ export function isMichelleFutureHardSatSession(session: {
   if (session.clientUserId !== MICHELLE_MAKAREM_USER_ID) return false;
   if ((session.status ?? "").trim() === "archived") return false;
   if ((session.bookingStatus ?? "").trim() === "cancelled") return false;
+  if (skipsAutoPrework(session)) return false;
   return (
     satDifficultyForStudent({
       userId: session.clientUserId,
@@ -1478,6 +1542,7 @@ export async function ensureMichelleFutureHardSatSets(): Promise<{
   }> = [];
   for (const session of sessions) {
     if (!isMichelleFutureHardSatSession(session)) continue;
+    await ensureMichelleXavierHardMathBank();
     const result = await ensureHardSatSessionSets(session);
     if (!skipsAutoPrework(session)) {
       try {

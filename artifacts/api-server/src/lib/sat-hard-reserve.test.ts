@@ -146,7 +146,9 @@ test("a second run keeps the existing reserve instead of creating another", () =
   const source = readFileSync(new URL("./sat-hard-reserve.ts", import.meta.url), "utf8");
   const plan = readFileSync(new URL("./sat-hard-reserve-plan.ts", import.meta.url), "utf8");
   assert.match(source, /decideHardReserveWrite\(during\) === "keep"/);
-  assert.doesNotMatch(source, /archiveUnattempted|update\(assignmentsTable\)/);
+  assert.match(source, /unattemptedReserveNeedsSectionRefresh/);
+  assert.match(source, /Number\(count \?\? 0\) > 0\) return false/);
+  assert.doesNotMatch(source, /archiveUnattempted/);
   assert.doesNotMatch(source, /Math\.random/);
   assert.doesNotMatch(plan, /Math\.random/);
 });
