@@ -7,6 +7,7 @@ import {
   bankQuestionsTable,
   curriculumBlocksTable,
   db,
+  questionsTable,
   sessionsTable,
   tutorProfilesTable,
   usersTable,
@@ -48,6 +49,9 @@ import {
   type HardSatCandidate,
   type SatDifficulty,
   isOfficialOneFormPreworkSet,
+  isOfficialHardTailItem,
+  isHardSatBankItem,
+  officialSatCoordsFromSourceKey,
 } from "./sat-set-difficulty.ts";
 import {
   EUNICE_TUTOR_EMAIL,
@@ -61,6 +65,7 @@ import {
   skipsAutoPrework,
 } from "./no-auto-prework-clients.ts";
 import { isMichelleOriginalHardSourceKey } from "./michelle-sat-sections.ts";
+import { formatMichelleHardAssignmentTitle } from "./michelle-hard-assignment-title.ts";
 import { michelleXavierHardMathBankRecords } from "./michelle-xavier-hard-math.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
@@ -278,17 +283,39 @@ async function archiveUnattemptedAssignment(sessionId: string, assignmentId: str
   });
 }
 
-async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> {
+function sourceKeyFromQuestionTags(tags: unknown): string | null {
+  if (!Array.isArray(tags)) return null;
+  const tagged = tags.find(
+    (tag): tag is string => typeof tag === "string" && /^(sat-pt|psat-pt|original-hard-)/i.test(tag),
+  );
+  if (tagged) return tagged;
+  return typeof tags[0] === "string" ? tags[0] : null;
+}
+
+/**
+ * Resolve official / original source keys for an assignment.
+ * Some official extracts are attached to a `questions` row that is not the
+ * bank's linkedQuestionId; fall back to the question's source-key tag.
+ */
+export async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> {
   const rows = await db
-    .select({ sourceKey: bankQuestionsTable.sourceKey })
+    .select({
+      linkedSourceKey: bankQuestionsTable.sourceKey,
+      tags: questionsTable.tags,
+      position: assignmentQuestionsTable.position,
+    })
     .from(assignmentQuestionsTable)
-    .innerJoin(
+    .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+    .leftJoin(
       bankQuestionsTable,
       eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
     )
     .where(eq(assignmentQuestionsTable.assignmentId, assignmentId))
     .orderBy(asc(assignmentQuestionsTable.position));
-  return rows.map((row) => row.sourceKey);
+  return rows.flatMap((row) => {
+    const key = row.linkedSourceKey || sourceKeyFromQuestionTags(row.tags);
+    return key ? [key] : [];
+  });
 }
 
 /** Official SAT (not PSAT) routine-form bank items, keyed to their practice form. */
@@ -304,6 +331,32 @@ async function officialSatFormByKey(): Promise<Map<string, number>> {
 async function hardPoolSourceKeys(): Promise<Set<string>> {
   const pool = await loadRenderableHardBank();
   return new Set(pool.map((item) => item.sourceKey));
+}
+
+function isMichelleHardPoolItem(item: {
+  sourceKey?: string | null;
+  section?: string | null;
+  module?: number | string | null;
+  questionNumber?: number | string | null;
+}): boolean {
+  if (isMichelleOriginalHardSourceKey(item.sourceKey)) return true;
+  return isOfficialHardTailItem(item) || isHardSatBankItem({
+    section: item.section,
+    module: item.module as number | null,
+    questionNumber: item.questionNumber as number | null,
+  });
+}
+
+async function michelleHardPoolSourceKeys(): Promise<Set<string>> {
+  const pool = await loadRenderableHardBank();
+  return new Set(
+    pool.filter((item) => isMichelleHardPoolItem(item)).map((item) => item.sourceKey),
+  );
+}
+
+async function hardKeysForSession(session: { id: string; clientUserId?: string | null; subject: string; dateTime: Date; timezone?: string | null; status?: string | null; bookingStatus?: string | null; }): Promise<Set<string>> {
+  if (isMichelleFutureHardSatSession(session)) return michelleHardPoolSourceKeys();
+  return hardPoolSourceKeys();
 }
 
 /** True only when every attached question is a renderable hard-pool item. */
@@ -469,12 +522,12 @@ export function hardSatShortfallBlockedByAssignedSet(input: {
   );
 }
 
-async function assignedHardSetChecks(sessionId: string): Promise<{
+async function assignedHardSetChecks(session: SessionRow): Promise<{
   preworkSets: HardSatAssignedSetCheck[];
   inSessionSets: HardSatAssignedSetCheck[];
 }> {
-  const hardKeys = await hardPoolSourceKeys();
-  const live = await listLiveBeforeSessionHomework(sessionId);
+  const hardKeys = await hardKeysForSession(session);
+  const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
   const officialForms = await officialSatFormByKey();
   const preworkSets: HardSatAssignedSetCheck[] = [];
@@ -484,16 +537,17 @@ async function assignedHardSetChecks(sessionId: string): Promise<{
       questionCount: info.questionCount,
       everyKeyIsHard:
         info.everyKeyIsHard ||
-        isOfficialOneFormPreworkSet({
-          keys: info.keys,
-          questionCount: info.questionCount,
-          fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
-          officialFormByKey: officialForms,
-        }),
+        (!isMichelleFutureHardSatSession(session) &&
+          isOfficialOneFormPreworkSet({
+            keys: info.keys,
+            questionCount: info.questionCount,
+            fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
+            officialFormByKey: officialForms,
+          })),
     });
   }
   const inSessionSets: HardSatAssignedSetCheck[] = [];
-  for (const row of await liveDuringAssignments(sessionId)) {
+  for (const row of await liveDuringAssignments(session.id)) {
     const info = await classifyBankAssignment(row.id, hardKeys);
     inSessionSets.push({
       questionCount: info.questionCount,
@@ -554,7 +608,7 @@ export async function resolveHardSatShortfallAlert(sessionId: string): Promise<n
 }
 
 async function suppressShortfallWhenAssigned(session: SessionRow, target: number): Promise<boolean> {
-  const sets = await assignedHardSetChecks(session.id);
+  const sets = await assignedHardSetChecks(session);
   if (
     !hardSatShortfallBlockedByAssignedSet({
       preworkSets: sets.preworkSets,
@@ -577,7 +631,7 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   needsQuestions: boolean;
 }> {
   const target = await inSessionTargetForSession(session);
-  const hardKeys = await hardPoolSourceKeys();
+  const hardKeys = await hardKeysForSession(session);
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
   const officialForms = await officialSatFormByKey();
@@ -589,12 +643,13 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
       questionCount: info.questionCount,
       everyKeyIsHard:
         info.everyKeyIsHard ||
-        isOfficialOneFormPreworkSet({
-          keys: info.keys,
-          questionCount: info.questionCount,
-          fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
-          officialFormByKey: officialForms,
-        }),
+        (!isMichelleFutureHardSatSession(session) &&
+          isOfficialOneFormPreworkSet({
+            keys: info.keys,
+            questionCount: info.questionCount,
+            fullCount: HARD_SAT_PREWORK_MIN_COMPLETE,
+            officialFormByKey: officialForms,
+          })),
     });
     preworkCount += info.questionCount;
   }
@@ -807,7 +862,7 @@ async function assignOfficialFormPrework(
         if (item.sourceKey && duringKeys.has(item.sourceKey)) return false;
         const section = satSection(item.section);
         if (sections.length === 1 && section !== sections[0]) return false;
-        return true;
+        return isMichelleHardPoolItem(item);
       })
     : (await loadRoutineSatFormPool()).filter((item) => {
         if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
@@ -871,6 +926,9 @@ async function assignOfficialFormPrework(
       return { action: "shortfall", assignmentId: result.assignmentId };
     }
     await resolveHardSatShortfallAlert(session.id);
+    if (michelleHard && result.assignmentId) {
+      await applyMichelleHardAssignmentTitle(session, result.assignmentId, "prework");
+    }
     return { action: "assigned", result };
   } catch (err) {
     logger.warn({ err, sessionId: session.id, michelleHard }, "Official SAT form pre-work assign failed");
@@ -889,6 +947,31 @@ async function assignOfficialFormPrework(
  * Every other hard session draws 40 questions from one unused official SAT form.
  * Attempted pre-work stays. A shortfall does not publish a partial set.
  */
+
+async function applyMichelleHardAssignmentTitle(
+  session: SessionRow,
+  assignmentId: string,
+  kind: "prework" | "in-session" | "reserve",
+): Promise<void> {
+  if (!isMichelleFutureHardSatSession(session)) return;
+  const sections = await satSectionsForSession(session);
+  const tutor = await tutorIdentity(session.tutorUserId);
+  const title = formatMichelleHardAssignmentTitle({
+    dateTime: session.dateTime,
+    timezone: session.timezone,
+    kind,
+    tutorName: tutor.name,
+    tutorEmail: tutor.email,
+    sessionTitle: session.title,
+    sections,
+  });
+  const subject = sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English";
+  await db
+    .update(assignmentsTable)
+    .set({ title, subject })
+    .where(eq(assignmentsTable.id, assignmentId));
+}
+
 export async function ensureHardSatPrework(
   session: SessionRow,
   actorUserId?: string | null,
@@ -909,7 +992,7 @@ export async function ensureHardSatPrework(
   const oct30 = await sessionIsTaitoOct30Eunice(session);
   if (oct30) await ensureOct30HardRwBank();
   const target = await inSessionTargetForSession(session);
-  const hardKeys = await hardPoolSourceKeys();
+  const hardKeys = await hardKeysForSession(session);
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
   const classified = [];
@@ -1081,7 +1164,20 @@ export async function officialHardInSessionItems(
     ? await loadSeenSatBankUsage(session.clientUserId, ignoreAssignmentIds)
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
   const exclude = new Set<string>([...seen.sourceKeys, ...preworkKeys]);
-  const pool = filterUnseenBankItems(await loadRenderableHardBank(), seen);
+  const rawPool = await loadRenderableHardBank();
+  const michelleSession = session.dateTime && session.subject
+    ? isMichelleFutureHardSatSession({
+        id: session.id,
+        clientUserId: session.clientUserId,
+        subject: session.subject,
+        dateTime: session.dateTime,
+        timezone: session.timezone,
+      })
+    : session.clientUserId === MICHELLE_MAKAREM_USER_ID;
+  const pool = filterUnseenBankItems(
+    michelleSession ? rawPool.filter((item) => isMichelleHardPoolItem(item)) : rawPool,
+    seen,
+  );
   const target =
     session.dateTime && session.subject
       ? await inSessionTargetForSession({
@@ -1165,22 +1261,25 @@ async function ensureDuringAssignment(session: SessionRow, target: number) {
 }
 
 
+function sectionFromAssignedSourceKey(sourceKey: string): SatPracticeSection | null {
+  const fromKey = officialSatCoordsFromSourceKey(sourceKey);
+  if (fromKey?.section) return fromKey.section;
+  const key = sourceKey.toLowerCase();
+  if (key.includes("-math-") || key.includes("-math")) return "math";
+  if (key.includes("-rw-") || key.includes("-rw")) return "rw";
+  return null;
+}
+
 async function assignmentMatchesRequiredSections(
   assignmentId: string,
   sections: readonly SatPracticeSection[],
 ): Promise<boolean> {
   if (sections.length !== 1) return true;
   const required = sections[0]!;
-  const rows = await db
-    .select({ section: bankQuestionsTable.section })
-    .from(assignmentQuestionsTable)
-    .innerJoin(
-      bankQuestionsTable,
-      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
-    )
-    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
-  if (rows.length === 0) return false;
-  return rows.every((row) => satSection(row.section) === required);
+  const keys = await sourceKeysForAssignment(assignmentId);
+  const questionCount = await assignmentQuestionCount(assignmentId);
+  if (keys.length === 0 || keys.length !== questionCount) return false;
+  return keys.every((sourceKey) => sectionFromAssignedSourceKey(sourceKey) === required);
 }
 
 export async function ensureHardSatInSession(session: SessionRow): Promise<{
@@ -1198,7 +1297,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
     return { status: "not-hard", questionCount: 0, duringAssignmentId: null };
   }
   const target = await inSessionTargetForSession(session);
-  const hardKeys = await hardPoolSourceKeys();
+  const hardKeys = await hardKeysForSession(session);
   const liveDuring = await liveDuringAssignments(session.id);
   const classified = [];
   for (const row of liveDuring) {
@@ -1247,6 +1346,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
   const fullHard = remaining.find((item) => item.everyKeyIsHard && item.keys.length === target);
   if (fullHard) {
     await suppressShortfallWhenAssigned(session, target);
+    await applyMichelleHardAssignmentTitle(session, fullHard.row.id, "in-session");
     return {
       status: "unchanged",
       questionCount: fullHard.keys.length,
@@ -1310,6 +1410,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       (await hardPlanOptionsForSession(session)).originalDateKey != null,
     );
     await suppressShortfallWhenAssigned(session, target);
+    await applyMichelleHardAssignmentTitle(session, during.id, "in-session");
     return {
       status: written,
       questionCount: inSession.length,
@@ -1390,6 +1491,12 @@ export async function ensureHardSatSessionSets(
   const inSession = await ensureHardSatInSession(session);
   if (prework?.action === "shortfall" || inSession.status === "unavailable") {
     return { difficulty, inSessionStatus: "unavailable" };
+  }
+  if (inSession.duringAssignmentId) {
+    await applyMichelleHardAssignmentTitle(session, inSession.duringAssignmentId, "in-session");
+  }
+  if (prework && "assignmentId" in prework && prework.assignmentId) {
+    await applyMichelleHardAssignmentTitle(session, prework.assignmentId, "prework");
   }
   return { difficulty, inSessionStatus: inSession.status };
 }

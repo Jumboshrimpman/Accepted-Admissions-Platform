@@ -39,6 +39,7 @@ import {
   planHardSatSessionSets,
   satBankUsageCountsAsSeen,
   satDifficultyForStudent,
+  isOfficialHardTailItem,
   satSectionsForStudent,
   selectHardSatQuestions,
   shouldRefreshUnattemptedHardPrework,
@@ -1116,6 +1117,7 @@ test("Michelle is a hard SAT student on Nov 15 and on sessions after Nov 16, on 
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-15" }), "hard");
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-14" }), "standard");
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-16" }), "standard");
+  assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-17" }), "hard");
   assert.equal(satDifficultyForStudent({ ...michelle, sessionDateKey: "2026-11-22" }), "hard");
   assert.equal(
     satDifficultyForStudent({
@@ -1189,4 +1191,11 @@ test("Michelle's Nov 15 hard setting also matches her Clerk user id", () => {
     }),
     "standard",
   );
+});
+
+test("isOfficialHardTailItem keeps official module 2 hard-tail items and drops early module 2", () => {
+  assert.equal(isOfficialHardTailItem({ sourceKey: "sat-pt10-rw-m2-q15", section: "rw" }), true);
+  assert.equal(isOfficialHardTailItem({ sourceKey: "sat-pt10-rw-m2-q1", section: "rw" }), false);
+  assert.equal(isOfficialHardTailItem({ sourceKey: "sat-pt11-math-m2-q18", section: "math" }), true);
+  assert.equal(isOfficialHardTailItem({ sourceKey: "sat-pt11-math-m2-q3", section: "math" }), false);
 });

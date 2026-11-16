@@ -210,6 +210,43 @@ export function isHardSatBankItem(item: {
 }
 
 /**
+ * Official module 2 hard tail, including items whose module / question number
+ * only appear in the SAT source key (`sat-pt10-rw-m2-q1` is not hard).
+ */
+export function officialSatCoordsFromSourceKey(sourceKey: string | null | undefined): {
+  module: number;
+  questionNumber: number;
+  section: "rw" | "math" | null;
+} | null {
+  const match = /(?:^|-)(?:(rw|math)-)?m(\d+)-q(\d+)\b/i.exec(sourceKey ?? "");
+  if (!match) return null;
+  const sectionToken = (match[1] ?? "").toLowerCase();
+  const key = (sourceKey ?? "").toLowerCase();
+  const section = sectionToken === "math" || key.includes("-math-")
+    ? "math"
+    : sectionToken === "rw" || key.includes("-rw-")
+      ? "rw"
+      : null;
+  return { module: Number(match[2]), questionNumber: Number(match[3]), section };
+}
+
+export function isOfficialHardTailItem(item: {
+  section?: string | null;
+  module?: number | string | null;
+  questionNumber?: number | string | null;
+  sourceKey?: string | null;
+}): boolean {
+  const fromKey = officialSatCoordsFromSourceKey(item.sourceKey);
+  const module = Number(item.module);
+  const questionNumber = Number(item.questionNumber);
+  return isHardSatBankItem({
+    section: item.section ?? fromKey?.section,
+    module: Number.isFinite(module) ? module : fromKey?.module,
+    questionNumber: Number.isFinite(questionNumber) ? questionNumber : fromKey?.questionNumber,
+  });
+}
+
+/**
  * Restore exponents and split minus signs that PDF extraction glued on
  * (`x2` → `x²`, `−14x` → `− 14x`). This does not invent missing stems.
  */

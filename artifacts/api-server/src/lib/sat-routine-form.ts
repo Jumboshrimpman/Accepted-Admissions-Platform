@@ -5,6 +5,7 @@ import {
 import {
   coercePracticeTestNumber,
   hardSatSectionQuotas,
+  isOfficialHardTailItem,
   satSection,
 } from "./sat-set-difficulty.ts";
 
@@ -190,13 +191,15 @@ export type MichelleHardPreworkPick<T> = RoutineFormPick<T> & {
 };
 
 /**
- * Michelle's later SAT pre-work: 40 hard items, one leftover official form
- * first when that form can fill the set. If no form can, leftover official
- * hard items are taken first, then undated original hard items fill the
- * remainder. Taito-dated originals stay out. Foundational / module 1 items
- * stay out because they are not in the caller's hard pool. Partial sets are
- * not padded. Pass `sections` to restrict the draw (math for Xavier, reading
- * and writing for Sophia Lamas).
+ * Michelle's later SAT pre-work: 40 hard-tail official module 2 items
+ * (reading and writing q ≥ 15, math q ≥ 18). One leftover official form is
+ * used first when that form can fill the set with hard-tail items only.
+ * If no form can, leftover official hard-tail items are widened across
+ * forms, then undated Michelle original hard items fill the remainder.
+ * Early module 2 items, module 1, and foundational questions stay out.
+ * Taito-dated originals stay out. Partial sets are not padded. Pass
+ * `sections` to restrict the draw (math for Xavier, reading and writing
+ * for Sophia Lamas).
  */
 export function selectMichelleFutureHardPrework<
   T extends RoutineFormQuestion & { sourceKind?: string | null },
@@ -243,6 +246,7 @@ export function selectMichelleFutureHardPrework<
   const officialEligible = items.filter((item) => {
     if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return false;
     if (formNumber(item) == null) return false;
+    if (!isOfficialHardTailItem(item)) return false;
     if (item.sourceKey && exclude.has(item.sourceKey)) return false;
     return sectionOk(item);
   });

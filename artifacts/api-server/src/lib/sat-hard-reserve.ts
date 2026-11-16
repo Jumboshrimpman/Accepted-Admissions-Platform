@@ -11,7 +11,8 @@ import { isOfficialSatExtract } from "./sat-bank-diagnostic-quality.ts";
 import { materializeHardSatQuestion } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
 import { filterUnseenBankItems } from "./student-question-usage.ts";
-import { satSectionsForSession } from "./sat-hard-sets.ts";
+import { isMichelleFutureHardSatSession, satSectionsForSession, sourceKeysForAssignment } from "./sat-hard-sets.ts";
+import { formatMichelleHardAssignmentTitle } from "./michelle-hard-assignment-title.ts";
 import { logger } from "./logger.ts";
 import { normalizedSessionSubject } from "./session-schedule.ts";
 import {
@@ -24,6 +25,7 @@ import {
 } from "./sat-hard-reserve-plan.ts";
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
+  isOfficialHardTailItem,
   isRenderableHardSatItem,
   satSection,
   toRenderableHardSatInput,
@@ -59,6 +61,7 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
       (row.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
       (row.sourceKey ?? "").startsWith("original-hard-michelle-");
     if (!official && !michelleOriginal) continue;
+    if (official && !isOfficialHardTailItem(item)) continue;
     selected.push({
       id: row.id,
       sourceKey: row.sourceKey,
@@ -76,18 +79,19 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
 }
 
 async function sourceKeysOnSession(sessionId: string): Promise<Set<string>> {
-  const rows = await db
-    .select({ sourceKey: bankQuestionsTable.sourceKey })
-    .from(assignmentQuestionsTable)
-    .innerJoin(assignmentsTable, eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId))
-    .innerJoin(
-      bankQuestionsTable,
-      eq(bankQuestionsTable.linkedQuestionId, assignmentQuestionsTable.questionId),
-    )
+  const assignments = await db
+    .select({ id: assignmentsTable.id })
+    .from(assignmentsTable)
     .where(
       and(eq(assignmentsTable.sessionId, sessionId), ne(assignmentsTable.status, "archived")),
     );
-  return new Set(rows.map((row) => row.sourceKey).filter((key): key is string => Boolean(key)));
+  const keys = new Set<string>();
+  for (const row of assignments) {
+    for (const sourceKey of await sourceKeysForAssignment(row.id)) {
+      keys.add(sourceKey);
+    }
+  }
+  return keys;
 }
 
 function reserveInstructions(count: number, target: number): string {
@@ -274,6 +278,28 @@ export async function ensureHardChallengeReserve(session: {
     }
     return { assignmentId: assignment!.id, created: true as const };
   });
+  if (created.created && created.assignmentId && session.dateTime && session.clientUserId) {
+    const dateTime = new Date(session.dateTime);
+    if (!Number.isNaN(dateTime.getTime())) {
+      const title = formatMichelleHardAssignmentTitle({
+        dateTime,
+        timezone: session.timezone,
+        kind: "reserve",
+        sessionTitle: session.title,
+        sections,
+      });
+      // Only rewrite Michelle's later SAT sessions; other students keep the stock title.
+      if (isMichelleFutureHardSatSession({
+        id: session.id,
+        clientUserId: session.clientUserId,
+        subject: session.subject || "SAT",
+        dateTime,
+        timezone: session.timezone,
+      })) {
+        await db.update(assignmentsTable).set({ title, subject: sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English" }).where(eq(assignmentsTable.id, created.assignmentId));
+      }
+    }
+  }
   if (!created.created) {
     const questionCount = created.assignmentId ? await assignmentQuestionCount(created.assignmentId) : 0;
     return {

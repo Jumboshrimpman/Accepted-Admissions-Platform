@@ -32,6 +32,15 @@ test("Michelle's Nov 16 session is never selected for a hard-set refresh", () =>
   assert.equal(
     isMichelleFutureHardSatSession({
       ...michelle,
+      id: "3499bc71-7efd-479d-b386-a48f321d369d",
+      dateTime: new Date("2026-11-17T14:00:00.000Z"),
+      timezone: "Asia/Dubai",
+    }),
+    true,
+  );
+  assert.equal(
+    isMichelleFutureHardSatSession({
+      ...michelle,
       id: "91ef8c28-9455-4c9c-aa37-d19881d50666",
       dateTime: new Date("2026-11-22T17:00:00.000Z"),
     }),
@@ -64,4 +73,28 @@ test("an unattempted hard in-session set is replaced when it is not the required
   assert.match(body, /assignmentMatchesRequiredSections/);
   assert.match(body, /!item\.everyKeyIsHard \|\| !sectionOk/);
   assert.match(body, /officialHardInSessionItems\(\s*session,\s*shortHard \? \[\.\.\.replaceableIds, shortHard\.row\.id\] : replaceableIds,/);
+});
+
+test("assignment source keys fall back to question tags when the bank link is missing", () => {
+  const source = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  assert.match(source, /sourceKeyFromQuestionTags/);
+  assert.match(source, /michelleHardPoolSourceKeys/);
+  assert.match(source, /isOfficialHardTailItem/);
+  assert.match(source, /formatMichelleHardAssignmentTitle/);
+});
+
+test("Michelle hard refresh classifies with the hard-tail pool, not all of module 2", () => {
+  const source = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export async function ensureHardSatPrework(");
+  const body = source.slice(start, source.indexOf("export async function officialHardInSessionItems", start));
+  assert.match(body, /const hardKeys = await hardKeysForSession\(session\)/);
+  assert.doesNotMatch(body, /const hardKeys = await hardPoolSourceKeys\(\)/);
+  const checksStart = source.indexOf("async function assignedHardSetChecks(");
+  const checks = source.slice(
+    checksStart,
+    source.indexOf("export async function resolveHardSatShortfallAlert", checksStart),
+  );
+  assert.match(checks, /hardKeysForSession\(session\)/);
+  assert.match(checks, /!isMichelleFutureHardSatSession\(session\)/);
+  assert.match(source, /sectionFromAssignedSourceKey/);
 });

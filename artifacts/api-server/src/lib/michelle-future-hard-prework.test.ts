@@ -33,6 +33,32 @@ function formItems(form: number, rw: number, math: number, sourceKind = "officia
   return rows;
 }
 
+function tailFormItems(
+  form: number,
+  rwCount: number,
+  mathCount: number,
+  sourceKind = "official_extract",
+): HardItem[] {
+  const rows: HardItem[] = [];
+  for (let index = 0; index < rwCount; index += 1) {
+    rows.push(item(form, "rw", 15 + index, sourceKind));
+  }
+  for (let index = 0; index < mathCount; index += 1) {
+    rows.push(item(form, "math", 18 + index, sourceKind));
+  }
+  return rows;
+}
+
+function questionNumber(row: HardItem): number {
+  const match = /-q(\d+)$/i.exec(row.sourceKey ?? "");
+  return match ? Number(match[1]) : 0;
+}
+
+function isHardTail(row: HardItem): boolean {
+  const number = questionNumber(row);
+  return row.section === "rw" ? number >= 15 : number >= 18;
+}
+
 function sectionOf(section: "rw"): "rw" {
   return section;
 }
@@ -45,45 +71,48 @@ function counts(selected: readonly HardItem[]): { rw: number; math: number; form
   };
 }
 
-test("Michelle's later pre-work prefers 40 hard items from one unused form", () => {
-  const pool = [...formItems(6, 30, 25), ...formItems(7, 30, 25)];
+test("Michelle's later pre-work takes 40 hard-tail items, widening when one form cannot fill", () => {
+  const pool = [...formItems(6, 30, 25), ...formItems(7, 30, 25), ...formItems(8, 30, 25)];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "91ef8c28-9455-4c9c-aa37-d19881d50666",
     usedPracticeTests: new Set([4, 5]),
   });
   assert.equal(picked.selected.length, 40);
-  assert.equal(picked.practiceTestNumber, 6);
-  assert.equal(picked.widened, false);
-  assert.equal(picked.recycled, false);
-  assert.deepEqual(counts(picked.selected), { rw: 22, math: 18, forms: [6] });
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
+  assert.equal(picked.selected.some((row) => questionNumber(row) < 15 && row.section === "rw"), false);
+  assert.equal(picked.widened, true);
+  assert.ok(counts(picked.selected).forms.length > 1);
 });
 
-test("an unused form that cannot fill 40 is skipped for the next unused form", () => {
-  const pool = [...formItems(6, 10, 5), ...formItems(8, 30, 25)];
-  const picked = selectMichelleFutureHardPrework(pool, {
-    seed: "session-skip-short",
-    usedPracticeTests: new Set([4, 5]),
+test("early module 2 items are not treated as hard official items", () => {
+  const early = [...formItems(6, 14, 17), ...formItems(7, 14, 17)];
+  const tail = [...tailFormItems(8, 20, 20), ...tailFormItems(9, 20, 20)];
+  const picked = selectMichelleFutureHardPrework([...early, ...tail], {
+    seed: "session-skip-early-m2",
+    usedPracticeTests: new Set(),
   });
   assert.equal(picked.selected.length, 40);
-  assert.equal(picked.practiceTestNumber, 8);
-  assert.equal(picked.widened, false);
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
+  assert.equal(
+    picked.selected.every((row) => (row.sourceKey ?? "").includes("-pt8-") || (row.sourceKey ?? "").includes("-pt9-")),
+    true,
+  );
 });
 
-test("a previously dipped-into form is used when it still has 40 leftover hard items", () => {
-  const pool = [...formItems(6, 10, 5), ...formItems(7, 30, 25)];
+test("a previously dipped-into form is used when leftover hard-tail items can fill after widening", () => {
+  const pool = [...tailFormItems(6, 20, 15), ...tailFormItems(7, 20, 15), ...tailFormItems(8, 20, 15)];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "session-leftover-form",
     usedPracticeTests: new Set([4, 5, 6, 7, 8, 9, 10, 11]),
   });
   assert.equal(picked.selected.length, 40);
-  assert.equal(picked.practiceTestNumber, 7);
-  assert.equal(picked.widened, false);
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
+  assert.equal(picked.widened, true);
   assert.equal(picked.recycled, true);
-  assert.deepEqual(counts(picked.selected), { rw: 22, math: 18, forms: [7] });
 });
 
-test("leftover hard items are widened across forms when no form can fill 40", () => {
-  const pool = [...formItems(6, 14, 10), ...formItems(7, 12, 10)];
+test("leftover hard-tail items are widened across forms when no form can fill 40", () => {
+  const pool = [...tailFormItems(6, 14, 10), ...tailFormItems(7, 12, 10)];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "session-widen",
     usedPracticeTests: new Set([4, 5, 6, 7]),
@@ -91,15 +120,14 @@ test("leftover hard items are widened across forms when no form can fill 40", ()
   assert.equal(picked.selected.length, 40);
   assert.equal(picked.practiceTestNumber, null);
   assert.equal(picked.widened, true);
-  assert.deepEqual(counts(picked.selected).rw, 22);
-  assert.deepEqual(counts(picked.selected).math, 18);
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
   assert.ok(counts(picked.selected).forms.length > 1);
 });
 
 test("already-used source keys and original-hard items stay out", () => {
-  const excluded = item(8, "rw", 1);
+  const excluded = item(8, "rw", 20);
   const original = item(8, "rw", 99, "original_hard");
-  const pool = [...formItems(8, 30, 25), excluded, original];
+  const pool = [...tailFormItems(8, 20, 20), ...tailFormItems(9, 20, 20), excluded, original];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "session-exclude",
     usedPracticeTests: new Set(),
@@ -108,10 +136,11 @@ test("already-used source keys and original-hard items stay out", () => {
   assert.equal(picked.selected.length, 40);
   assert.equal(picked.selected.some((row) => row.sourceKey === excluded.sourceKey), false);
   assert.equal(picked.selected.some((row) => row.sourceKind === "original_hard"), false);
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
 });
 
-test("a short leftover hard pool is not padded to 40", () => {
-  const pool = [...formItems(9, 10, 8), ...formItems(10, 10, 8)];
+test("a short leftover hard-tail pool is not padded to 40", () => {
+  const pool = [...tailFormItems(9, 10, 8), ...tailFormItems(10, 10, 8)];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "session-short",
     usedPracticeTests: new Set([9, 10]),
@@ -119,12 +148,14 @@ test("a short leftover hard pool is not padded to 40", () => {
   assert.ok(picked.selected.length < 40);
   assert.equal(picked.selected.length, 36);
   assert.equal(picked.widened, true);
+  assert.equal(picked.selected.every((row) => isHardTail(row)), true);
 });
 
-test("the same session id reproduces the same widened set", () => {
-  const pool = [...formItems(6, 14, 10), ...formItems(7, 12, 10)];
+test("the same session id reproduces the same widened hard-tail set", () => {
+  const pool = [...tailFormItems(6, 14, 10), ...tailFormItems(7, 12, 10)];
   const first = selectMichelleFutureHardPrework(pool, { seed: "session-stable" });
   const again = selectMichelleFutureHardPrework([...pool].reverse(), { seed: "session-stable" });
+  assert.equal(first.selected.length, 40);
   assert.deepEqual(
     first.selected.map((row) => row.id),
     again.selected.map((row) => row.id),
@@ -144,20 +175,20 @@ function michelleOriginal(index: number): HardItem {
   };
 }
 
-test("Michelle Xavier pre-work is 40 hard math items when sections are math-only", () => {
-  const pool = [...formItems(6, 30, 25), ...formItems(7, 30, 25)];
+test("Michelle Xavier pre-work is 40 hard-tail math items when sections are math-only", () => {
+  const pool = [...tailFormItems(6, 20, 25), ...tailFormItems(7, 20, 25), ...tailFormItems(8, 20, 25)];
   const picked = selectMichelleFutureHardPrework(pool, {
     seed: "91ef8c28-9455-4c9c-aa37-d19881d50666",
     usedPracticeTests: new Set([4, 5, 6, 7, 8, 9, 10, 11]),
     sections: ["math"],
   });
   assert.equal(picked.selected.length, 40);
-  assert.equal(picked.selected.every((row) => row.section === "math"), true);
+  assert.equal(picked.selected.every((row) => row.section === "math" && isHardTail(row)), true);
   assert.equal(picked.selected.some((row) => row.section === "rw"), false);
 });
 
-test("leftover official math is used first, then Michelle original hard math fills the rest", () => {
-  const official = formItems(8, 0, 12);
+test("leftover official hard-tail math is used first, then Michelle original hard math fills the rest", () => {
+  const official = tailFormItems(8, 0, 12);
   const originals = Array.from({ length: 40 }, (_value, index) => michelleOriginal(index + 1));
   const taito = {
     id: "original-hard-2026-11-27-math-35",
@@ -181,4 +212,15 @@ test("leftover official math is used first, then Michelle original hard math fil
     picked.selected.some((row) => row.sourceKey === "original-hard-2026-11-27-math-35"),
     false,
   );
+});
+
+test("Michelle Sophia L pre-work is 40 hard-tail reading and writing items", () => {
+  const pool = [...tailFormItems(6, 20, 20), ...tailFormItems(7, 20, 20), ...tailFormItems(8, 20, 20)];
+  const picked = selectMichelleFutureHardPrework(pool, {
+    seed: "3499bc71-7efd-479d-b386-a48f321d369d",
+    sections: ["rw"],
+  });
+  assert.equal(picked.selected.length, 40);
+  assert.equal(picked.selected.every((row) => row.section === "rw" && isHardTail(row)), true);
+  assert.equal(picked.selected.some((row) => row.section === "math"), false);
 });
