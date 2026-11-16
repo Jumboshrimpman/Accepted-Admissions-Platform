@@ -2,11 +2,40 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 // @ts-expect-error Native Node test execution requires the source extension.
-import { MICHELLE_MAKAREM_USER_ID, skipsAutoPrework } from "./no-auto-prework-clients.ts";
+import {
+  MICHELLE_MAKAREM_USER_ID,
+  MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID,
+  skipsAutoPrework,
+} from "./no-auto-prework-clients.ts";
 
-test("Michelle's sessions never get automatic pre-work; other clients still do", () => {
+test("Michelle's Nov 16 pre-work stays locked; later sessions may auto-generate hard sets", () => {
   assert.equal(skipsAutoPrework({ clientUserId: MICHELLE_MAKAREM_USER_ID }), true);
   assert.equal(skipsAutoPrework({ clientUserId: ` ${MICHELLE_MAKAREM_USER_ID.toUpperCase()} ` }), true);
+  assert.equal(
+    skipsAutoPrework({
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+      id: MICHELLE_NOV16_SOPHIA_LAMAS_SESSION_ID,
+      dateTime: new Date("2026-11-16T14:00:00.000Z"),
+      timezone: "America/New_York",
+    }),
+    true,
+  );
+  assert.equal(
+    skipsAutoPrework({
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+      dateTime: new Date("2026-11-16T14:00:00.000Z"),
+      timezone: "America/New_York",
+    }),
+    true,
+  );
+  assert.equal(
+    skipsAutoPrework({
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+      dateTime: new Date("2026-11-22T17:00:00.000Z"),
+      timezone: "America/New_York",
+    }),
+    false,
+  );
   assert.equal(skipsAutoPrework({ clientUserId: "1c8c622f-a75f-471c-9b5e-34e136905118" }), false);
   assert.equal(skipsAutoPrework({ clientUserId: null }), false);
   assert.equal(skipsAutoPrework({}), false);
