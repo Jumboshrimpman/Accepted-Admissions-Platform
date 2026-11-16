@@ -171,7 +171,12 @@ async function applyMichelleHardReserveTitle(
     sessionTitle: session.title,
     sections,
   });
-  const subject = sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English";
+  const subject =
+    sections.length === 1 && sections[0] === "math"
+      ? "SAT Math"
+      : sections.length === 1 && sections[0] === "rw"
+        ? "SAT English"
+        : "SAT";
   await db.update(assignmentsTable).set({ title, subject }).where(eq(assignmentsTable.id, assignmentId));
 }
 
