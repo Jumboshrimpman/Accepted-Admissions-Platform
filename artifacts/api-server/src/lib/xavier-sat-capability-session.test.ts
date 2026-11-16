@@ -58,7 +58,7 @@ function easternParts(date: Date) {
 }
 
 test("keeps the canonical Xavier Clerk id and capability-test title", () => {
-  assert.equal(XAVIER_TUTOR_EMAIL, "xaver.rmz6@gmail.com");
+  assert.equal(XAVIER_TUTOR_EMAIL, "xavier.rmz6@gmail.com");
   assert.equal(XAVIER_CANONICAL_CLERK_USER_ID, "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6");
   assert.equal(XAVIER_DUPLICATE_CLERK_USER_ID, "user_3IsvKVDGAg5KdvwHhvODf2VFqtd");
   assert.equal(SAMA_TEST_CLIENT_EMAIL, "samapostgrad@gmail.com");

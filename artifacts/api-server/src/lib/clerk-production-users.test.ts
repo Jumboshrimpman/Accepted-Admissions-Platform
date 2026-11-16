@@ -123,18 +123,18 @@ test("rejects pending placeholders as Clerk user IDs", () => {
   assert.equal(looksLikeClerkUserId("sama@example.com"), false);
 });
 
-test("ignores the retired Xavier Clerk id and refuses retired Xavier emails", async () => {
+test("ignores the retired Xavier Clerk id and refuses the historical xsfam6 email", async () => {
   const canonical = {
     id: "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6",
     primaryEmailAddress: {
       id: "idn_xavier",
-      emailAddress: "xaver.rmz6@gmail.com",
+      emailAddress: "xavier.rmz6@gmail.com",
       verification: { status: "verified" },
     },
     emailAddresses: [
       {
         id: "idn_xavier",
-        emailAddress: "xaver.rmz6@gmail.com",
+        emailAddress: "xavier.rmz6@gmail.com",
         verification: { status: "verified" },
       },
     ],
@@ -144,18 +144,18 @@ test("ignores the retired Xavier Clerk id and refuses retired Xavier emails", as
       user_3IsvKVDGAg5KdvwHhvODf2VFqtd: {
         id: "user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
         primaryEmailAddress: {
-          id: "idn_typo",
-          emailAddress: "xavier.rmz6@gmail.com",
+          id: "idn_old",
+          emailAddress: "xsfam6@gmail.com",
           verification: { status: "verified" },
         },
       },
     },
-    usersByEmail: { "xaver.rmz6@gmail.com": canonical },
+    usersByEmail: { "xavier.rmz6@gmail.com": canonical },
   });
 
   const result = await resolveProductionClerkUser(
     {
-      email: "xaver.rmz6@gmail.com",
+      email: "xavier.rmz6@gmail.com",
       displayName: "Xavier Morales",
       pastedClerkUserId: "user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
     },
@@ -171,7 +171,7 @@ test("ignores the retired Xavier Clerk id and refuses retired Xavier emails", as
     () =>
       resolveProductionClerkUser(
         {
-          email: "xavier.rmz6@gmail.com",
+          email: "xsfam6@gmail.com",
           displayName: "Xavier Morales",
         },
         mock.client,
@@ -179,7 +179,7 @@ test("ignores the retired Xavier Clerk id and refuses retired Xavier emails", as
     (error: unknown) =>
       error instanceof ClerkProductionUserError &&
       error.httpStatus === 400 &&
-      /xaver\.rmz6@gmail\.com/.test(error.message),
+      /xavier\.rmz6@gmail\.com/.test(error.message),
   );
 });
 

@@ -59,7 +59,7 @@ test("samapostgrad membership migration is idempotent and scoped to her Clerk id
   assert.match(migrationSql, new RegExp(COLLEGE_CONSULTING_COURSE_ID));
   assert.match(migrationSql, new RegExp(VICTORIA_USER_ID));
   assert.match(migrationSql, new RegExp(NIKA_CONSULTING_EMAIL));
-  assert.match(migrationSql, new RegExp(CANONICAL_XAVIER_EMAIL));
+  assert.match(migrationSql, /xaver\.rmz6@gmail\.com/); // historical typo in 0067, kept as written
   assert.match(migrationSql, new RegExp(EUNICE_CONSULTING_EMAIL));
   assert.equal((migrationSql.match(/ON CONFLICT DO NOTHING/g) ?? []).length, 2);
   const entry = journal.entries.find((item) => item.tag === "0067_samapostgrad_tutor_trial");

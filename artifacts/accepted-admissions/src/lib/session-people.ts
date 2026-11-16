@@ -70,7 +70,6 @@ export function isSupersededAccessGrant(grant: {
     notes.startsWith("SUPERSEDED:") ||
     clerkUserId.startsWith("retired:") ||
     clerkUserId === "user_3IsvKVDGAg5KdvwHhvODf2VFqtd" ||
-    email === "xavier.rmz6@gmail.com" ||
     email === "xsfam6@gmail.com" ||
     email.endsWith("@retired.accepted.local")
   );
@@ -84,6 +83,6 @@ export function isVisiblePeopleTutor(tutor: {
   if (tutor.active) return true;
   const email = tutor.email.trim().toLowerCase();
   return !(
-    tutor.name === "Xavier Morales" && email !== "xaver.rmz6@gmail.com"
+    tutor.name === "Xavier Morales" && email !== "xavier.rmz6@gmail.com"
   );
 }

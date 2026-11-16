@@ -141,7 +141,9 @@ function taitoKeepsSharedRoom(input: SessionMeetingInput): boolean {
  * session.meetUrl, then a meet.google.com providerEventUrl, then a course Meet
  * link that is not the shared Fall room. The shared room is the final fallback
  * for every course that uses it, and for Taito's Fall sessions. Sophia's own
- * room is applied before that fallback.
+ * room is applied before that fallback. studentFacingMeetingUrl lets an
+ * explicit session.meetUrl (the real calendar conference button) win over
+ * Michelle's default room; new bookings still target her dedicated room.
  */
 export function resolveSessionMeetingUrl(input: SessionMeetingInput): string | null {
   if (taitoKeepsSharedRoom(input)) return SHARED_FALL_MEETING_URL;
@@ -157,12 +159,16 @@ export function resolveSessionMeetingUrl(input: SessionMeetingInput): string | n
 }
 
 export function studentFacingMeetingUrl(input: SessionMeetingInput): string | null {
+  const explicitMeetUrl = taitoKeepsSharedRoom(input)
+    ? SHARED_FALL_MEETING_URL
+    : googleMeetUrl(input.meetUrl);
   return (
     neelNikaMeetUrl({
       clientUserId: input.clientUserId,
       tutorName: input.tutorName,
       tutorEmail: input.tutorEmail,
     }) ??
+    explicitMeetUrl ??
     michelleMakaremMeetUrl({
       clientUserId: input.clientUserId,
       clientEmail: input.clientEmail,

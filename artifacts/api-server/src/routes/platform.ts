@@ -68,6 +68,7 @@ import {
   updateGoogleEvent,
   updateGoogleEventWithMeetFallback,
   type CalendarOAuthOutcome,
+  type GoogleCalendarEvent,
 } from "../lib/google-calendar";
 import {
   disconnectGoogleCalendarConnection,
@@ -284,6 +285,10 @@ import {
   twelveSessionPlanForEmail,
 } from "../lib/session-schedule";
 import { loadMeetingContext } from "../lib/session-meeting-context";
+import {
+  eventConferenceMeetUrl,
+  reconcileCreatedMeetEvent,
+} from "../lib/meet-conference-align";
 import {
   coursePageJoinMeetUrl,
   meetingUrlFromContext,
@@ -5429,6 +5434,29 @@ async function calendarInviteParty(
   };
 }
 
+async function alignWrittenCalendarEvent(
+  token: string,
+  calendarId: string,
+  intendedUrl: string | null | undefined,
+  event: GoogleCalendarEvent,
+): Promise<GoogleCalendarEvent> {
+  const { event: aligned } = await reconcileCreatedMeetEvent({
+    accessToken: token,
+    calendarId,
+    event,
+    intendedUrl,
+    log: (fields, message) => logger.warn(fields, message),
+  });
+  return aligned;
+}
+
+function storedConferenceMeetUrl(
+  event: GoogleCalendarEvent,
+  intendedUrl: string | null | undefined,
+): string | null {
+  return eventConferenceMeetUrl(event) ?? (intendedUrl ? intendedUrl : null);
+}
+
 function neelNikaCalendarEvent(args: {
   title: string;
   start: Date;
@@ -5481,7 +5509,7 @@ async function syncGoogleCalendarForSessionChange(args: {
     tutorUserId: string | null;
     clientUserId: string | null;
   };
-}): Promise<{ providerEventId: string | null; providerEventUrl: string | null }> {
+}): Promise<{ providerEventId: string | null; providerEventUrl: string | null; meetUrl?: string | null }> {
   const cancelling =
     args.next.bookingStatus === "cancelled" && args.existing.bookingStatus !== "cancelled";
   const eventChanged =
@@ -5570,22 +5598,27 @@ async function syncGoogleCalendarForSessionChange(args: {
     tutorEmail,
   });
   const written = await runTutorCalendarCall(access, (token) =>
-    writeStoredSessionEvent(args.existing, token, () =>
-      pinned.meetUrl
-        ? updateGoogleEventWithMeetFallback(
-            token,
-            calendarId,
-            args.existing.providerEventId!,
-            pinned.body,
-            sendUpdates,
-          )
-        : updateGoogleEvent(
-            token,
-            calendarId,
-            args.existing.providerEventId!,
-            pinned.body,
-            sendUpdates,
-          ),
+    writeStoredSessionEvent(args.existing, token, async () =>
+      alignWrittenCalendarEvent(
+        token,
+        calendarId,
+        pinned.meetUrl,
+        await (pinned.meetUrl
+          ? updateGoogleEventWithMeetFallback(
+              token,
+              calendarId,
+              args.existing.providerEventId!,
+              pinned.body,
+              sendUpdates,
+            )
+          : updateGoogleEvent(
+              token,
+              calendarId,
+              args.existing.providerEventId!,
+              pinned.body,
+              sendUpdates,
+            )),
+      ),
     ),
   );
   if (written.status === "manual") {
@@ -5598,6 +5631,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
     providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? args.existing.providerEventUrl,
+    meetUrl: storedConferenceMeetUrl(event, pinned.meetUrl),
   };
 }
 
@@ -9052,26 +9086,33 @@ async function respondWithPrepaidBooking(
           tutorEmail: tutor.email,
         });
         const event = await runTutorCalendarCall(adminAccess, (token) =>
-          pinned.meetUrl
-            ? createGoogleEventWithMeetFallback(
-                token,
-                adminWriter.appCalendarId,
-                pinned.body,
-                sendUpdates,
-              )
-            : createGoogleEvent(
-                token,
-                adminWriter.appCalendarId,
-                pinned.body,
-                sendUpdates,
-              ),
+          (async () =>
+            alignWrittenCalendarEvent(
+              token,
+              adminWriter.appCalendarId,
+              pinned.meetUrl,
+              await (pinned.meetUrl
+                ? createGoogleEventWithMeetFallback(
+                    token,
+                    adminWriter.appCalendarId,
+                    pinned.body,
+                    sendUpdates,
+                  )
+                : createGoogleEvent(
+                    token,
+                    adminWriter.appCalendarId,
+                    pinned.body,
+                    sendUpdates,
+                  )),
+            ))(),
         );
         const [updated] = await db
           .update(sessionsTable)
           .set({
             providerEventId: event.id ?? null,
-            providerEventUrl: pinned.meetUrl ?? event.hangoutLink ?? event.htmlLink ?? null,
+            providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? event.hangoutLink ?? null,
             providerCalendarId: adminWriter.appCalendarId,
+            meetUrl: storedConferenceMeetUrl(event, pinned.meetUrl),
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, created.id))
@@ -9107,20 +9148,25 @@ async function respondWithPrepaidBooking(
             tutorUserId: tutor.userId,
           },
           token,
-          () =>
-            pinned.meetUrl
-              ? createGoogleEventWithMeetFallback(
-                  token,
-                  appCalendarId,
-                  pinned.body,
-                  sendUpdates,
-                )
-              : createGoogleEvent(
-                  token,
-                  appCalendarId,
-                  pinned.body,
-                  sendUpdates,
-                ),
+          async () =>
+            alignWrittenCalendarEvent(
+              token,
+              appCalendarId,
+              pinned.meetUrl,
+              await (pinned.meetUrl
+                ? createGoogleEventWithMeetFallback(
+                    token,
+                    appCalendarId,
+                    pinned.body,
+                    sendUpdates,
+                  )
+                : createGoogleEvent(
+                    token,
+                    appCalendarId,
+                    pinned.body,
+                    sendUpdates,
+                  )),
+            ),
         ),
       );
       if (written.status === "manual") {
@@ -9137,6 +9183,7 @@ async function respondWithPrepaidBooking(
           providerEventId: event.id ?? null,
           providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? null,
           providerCalendarId: appCalendarId,
+          meetUrl: storedConferenceMeetUrl(event, pinned.meetUrl),
           updatedAt: new Date(),
         })
         .where(eq(sessionsTable.id, created.id))
@@ -9547,22 +9594,27 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     const moved = inviteAt(start, rule.timezone);
     const eventWrite = session.providerEventId
       ? await runTutorCalendarCall(writeAccess, (token) =>
-          writeStoredSessionEvent(calendarSession, token, () =>
-            moved.meetUrl
-              ? updateGoogleEventWithMeetFallback(
-                  token,
-                  sessionEventCalendarId(session.providerCalendarId),
-                  session.providerEventId!,
-                  moved.body,
-                  sendUpdates,
-                )
-              : updateGoogleEvent(
-                  token,
-                  sessionEventCalendarId(session.providerCalendarId),
-                  session.providerEventId!,
-                  moved.body,
-                  sendUpdates,
-                ),
+          writeStoredSessionEvent(calendarSession, token, async () =>
+            alignWrittenCalendarEvent(
+              token,
+              sessionEventCalendarId(session.providerCalendarId),
+              moved.meetUrl,
+              await (moved.meetUrl
+                ? updateGoogleEventWithMeetFallback(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    moved.body,
+                    sendUpdates,
+                  )
+                : updateGoogleEvent(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    moved.body,
+                    sendUpdates,
+                  )),
+            ),
           ),
         )
       : null;
@@ -9590,6 +9642,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             bookingStatus: "rescheduled",
             providerEventId: event?.id ?? session.providerEventId,
             providerEventUrl: event?.htmlLink ?? moved.meetUrl ?? session.providerEventUrl,
+            meetUrl: event ? storedConferenceMeetUrl(event, moved.meetUrl) : session.meetUrl,
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, session.id))
@@ -13623,7 +13676,7 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
-    let calendarFields: { providerEventId: string | null; providerEventUrl: string | null } = {
+    let calendarFields: { providerEventId: string | null; providerEventUrl: string | null; meetUrl?: string | null } = {
       providerEventId: existing.providerEventId,
       providerEventUrl: existing.providerEventUrl,
     };
@@ -13663,7 +13716,11 @@ router.patch(
           .set({
             ...next,
             ...calendarFields,
-            ...(meetUrlInput.meetUrl !== undefined ? { meetUrl: meetUrlInput.meetUrl } : {}),
+            ...(meetUrlInput.meetUrl !== undefined
+              ? { meetUrl: meetUrlInput.meetUrl }
+              : calendarFields.meetUrl !== undefined
+                ? { meetUrl: calendarFields.meetUrl }
+                : {}),
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, existing.id))

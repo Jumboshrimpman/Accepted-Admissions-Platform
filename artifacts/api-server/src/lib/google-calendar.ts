@@ -384,7 +384,13 @@ export type GoogleCalendarEvent = {
   id?: string;
   htmlLink?: string;
   hangoutLink?: string;
+  location?: string;
+  description?: string;
   attendees?: GoogleCalendarAttendee[];
+  conferenceData?: {
+    conferenceId?: string;
+    entryPoints?: Array<{ entryPointType?: string; uri?: string }>;
+  };
 };
 
 function signingKey(): Buffer {

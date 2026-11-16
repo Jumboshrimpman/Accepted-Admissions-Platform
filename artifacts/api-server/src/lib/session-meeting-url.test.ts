@@ -429,7 +429,7 @@ test("Michelle's sessions with any tutor use her dedicated room in the portal an
       tutorName: "Eunice Chon",
       tutorEmail: "eunice_chon@berkeley.edu",
     }),
-    MICHELLE_MAKAREM_MEET_URL,
+    SHARED_FALL_MEETING_URL,
   );
   assert.equal(
     studentFacingMeetingUrl({
@@ -453,6 +453,32 @@ test("Michelle's sessions with any tutor use her dedicated room in the portal an
       tutorName: "Eunice Chon",
       tutorEmail: "eunice_chon@berkeley.edu",
       clientUserId: MICHELLE_MAKAREM_USER_ID,
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+});
+
+test("Michelle's portal Join follows an explicit session.meet_url even when it is not her dedicated room", () => {
+  assert.equal(
+    studentFacingMeetingUrl({
+      ...MICHELLE_SHARED_FALL_INPUT,
+      meetUrl: SHARED_FALL_MEETING_URL,
+    }),
+    SHARED_FALL_MEETING_URL,
+  );
+  assert.equal(
+    studentFacingMeetingUrl({
+      ...MICHELLE_SHARED_FALL_INPUT,
+      meetUrl: null,
+    }),
+    MICHELLE_MAKAREM_MEET_URL,
+  );
+  assert.equal(
+    pinnedBookingMeetUrl({
+      tutorName: "Xavier Morales",
+      tutorEmail: "xavier.rmz6@gmail.com",
+      clientUserId: MICHELLE_MAKAREM_USER_ID,
+      clientEmail: "makaremmichelle7@gmail.com",
     }),
     MICHELLE_MAKAREM_MEET_URL,
   );

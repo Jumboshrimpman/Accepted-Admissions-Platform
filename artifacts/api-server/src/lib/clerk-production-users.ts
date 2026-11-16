@@ -84,7 +84,7 @@ const PASTED_ID_EMAIL_MISMATCH_WARNING =
   "The pasted Clerk user ID is in Production but belongs to a different email, so it was ignored and replaced with the Production user for this email.";
 
 const RETIRED_XAVIER_PASTED_ID_WARNING =
-  "That Clerk user is the retired Xavier duplicate. Production access uses xaver.rmz6@gmail.com / user_3IxUfoT1xRnDsqhlx5NN1eGfRg6.";
+  "That Clerk user is the retired Xavier duplicate. Production access uses xavier.rmz6@gmail.com / user_3IxUfoT1xRnDsqhlx5NN1eGfRg6.";
 
 let clientOverride: ProductionClerkUsersClient | null = null;
 
