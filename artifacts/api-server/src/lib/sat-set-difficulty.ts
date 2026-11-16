@@ -25,6 +25,7 @@ import {
   normalizedSessionSubject,
   sessionLocalDateKey,
 } from "./session-schedule.ts";
+import { michelleSatSectionsForTutor } from "./michelle-sat-sections.ts";
 
 /**
  * Reusable SAT difficulty. Add a row to apply the hard bank to another student.
@@ -69,7 +70,7 @@ export const SOPHIA_HARD_RW_EFFECTIVE_AFTER_DATE_KEY = "2026-10-31";
  * Michelle's Nov 15 session has hand-built hard SAT sets. That date stays in
  * its own window. Nov 16 keeps the sets already assigned (do not auto-refresh
  * them). Sessions after Nov 16 use hard-only pre-work, in-session, and reserve
- * sets on both SAT sections.
+ * sets. Xavier sessions are math; Sophia Lamas sessions are reading and writing.
  */
 export const MICHELLE_HARD_SAT_STUDENT_EMAIL = "makaremmichelle7@gmail.com";
 /** Same Clerk user as MICHELLE_MAKAREM_CLERK_USER_ID. */
@@ -639,6 +640,8 @@ type StudentSatSettingInput = {
   sessionDateKey?: string | null;
   session?: { dateTime: Date; timezone?: string | null } | null;
   userId?: string | null;
+  tutorEmail?: string | null;
+  tutorName?: string | null;
   settings?: readonly SatDifficultySetting[];
 };
 
@@ -660,8 +663,18 @@ export function satDifficultyForStudent(input: StudentSatSettingInput): SatDiffi
   return activeSatSetting(input)?.difficulty ?? "standard";
 }
 
-/** Both sections when the student has no restriction. Taito and Sophia stay on reading and writing only. */
+/** Both sections when the student has no restriction. Taito and Sophia stay on reading and writing only.
+ * Michelle's Xavier sessions are math, and her Sophia Lamas sessions are reading and writing.
+ */
 export function satSectionsForStudent(input: StudentSatSettingInput): readonly SatPracticeSection[] {
+  const michelle = michelleSatSectionsForTutor({
+    clientUserId: input.userId,
+    userId: input.userId,
+    tutorEmail: input.tutorEmail,
+    tutorName: input.tutorName,
+    sessionTitle: input.sessionTitle,
+  });
+  if (michelle) return michelle;
   const sections = activeSatSetting(input)?.sections;
   if (!sections || sections.length === 0) return ["rw", "math"];
   const allowed = sections.filter(
@@ -747,7 +760,11 @@ function takeBalancedHardestFirst<T extends HardSatCandidate>(
  * numbers sort first. `seenPracticeTests` does not change the order:
  * repeats are excluded by source key.
  */
-function hardSatPoolEligible(item: HardSatCandidate, originalDateKey: string | null | undefined): boolean {
+function hardSatPoolEligible(
+  item: HardSatCandidate,
+  originalDateKey: string | null | undefined,
+  includeMichelleOriginalHard?: boolean,
+): boolean {
   const original = isOriginalHardSatItem(item);
   if (originalDateKey) {
     return (
@@ -756,7 +773,14 @@ function hardSatPoolEligible(item: HardSatCandidate, originalDateKey: string | n
       isOfficialModule2BankItem(item)
     );
   }
-  if (original) return false;
+  if (original) {
+    return (
+      includeMichelleOriginalHard === true &&
+      originalHardSatDateFromKey(item.sourceKey) == null &&
+      (item.sourceKey ?? "").startsWith("original-hard-michelle-") &&
+      isOfficialModule2BankItem(item)
+    );
+  }
   return isOfficialModule2BankItem(item);
 }
 
@@ -769,6 +793,7 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
     excludeSourceKeys?: ReadonlySet<string>;
     seenPracticeTests?: ReadonlySet<number>;
     originalDateKey?: string | null;
+    includeMichelleOriginalHard?: boolean;
     balance?: HardSatBalance;
     sections?: readonly SatPracticeSection[] | null;
   } = {},
@@ -782,7 +807,7 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
   const seenKeys = new Set<string>();
   for (const item of restrictToSections(items, options.sections)) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
-    if (!hardSatPoolEligible(item, options.originalDateKey)) continue;
+    if (!hardSatPoolEligible(item, options.originalDateKey, options.includeMichelleOriginalHard)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
@@ -866,6 +891,7 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
     inSessionMax?: number;
     /** When set, draw only original_hard items for this session date. */
     originalDateKey?: string | null;
+    includeMichelleOriginalHard?: boolean;
     balance?: HardSatBalance;
     sections?: readonly SatPracticeSection[] | null;
   } = {},
@@ -885,13 +911,21 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
   const seenKeys = new Set<string>();
   for (const item of items) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
-    if (!hardSatPoolEligible(item, options.originalDateKey)) continue;
+    if (!hardSatPoolEligible(item, options.originalDateKey, options.includeMichelleOriginalHard)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
   const restricted = restrictToSections(unique, options.sections);
-  const rw = restricted.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
-  const math = restricted.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
+  const sectionOrder = (left: T, right: T) => {
+    if (options.includeMichelleOriginalHard) {
+      const leftOriginal = isOriginalHardSatItem(left);
+      const rightOriginal = isOriginalHardSatItem(right);
+      if (leftOriginal !== rightOriginal) return leftOriginal ? 1 : -1;
+    }
+    return byHardestFirst(left, right);
+  };
+  const rw = restricted.filter((item) => satSection(item.section) === "rw").sort(sectionOrder);
+  const math = restricted.filter((item) => satSection(item.section) === "math").sort(sectionOrder);
   const allocated = allocateHardSatSets(
     rw,
     math,

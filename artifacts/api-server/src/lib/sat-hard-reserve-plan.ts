@@ -1,4 +1,6 @@
 import { isOfficialSatExtract } from "./sat-bank-diagnostic-quality.ts";
+import { isMichelleOriginalHardSourceKey } from "./michelle-sat-sections.ts";
+import { satSection } from "./sat-set-difficulty.ts";
 import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 
 /** Tutor-held hard items for a student who is doing well in the session. */
@@ -130,6 +132,8 @@ export function selectHardReserve<T extends HardReserveCandidate>(
     excludeIds?: ReadonlySet<string>;
     /** Omit for both sections. A single section drops the other. */
     sections?: readonly ("rw" | "math")[] | null;
+    /** Allow Michelle's undated original hard items after official extracts. */
+    includeMichelleOriginalHard?: boolean;
   },
 ): HardReservePick<T> {
   const target = hardReserveTarget(options.target);
@@ -141,20 +145,32 @@ export function selectHardReserve<T extends HardReserveCandidate>(
   for (const item of items) {
     if (!item.sourceKey || unique.has(item.sourceKey)) continue;
     if (item.inHardPool === false) continue;
-    if (restrict && item.section !== restrict) continue;
+    const section = satSection(item.section ?? "");
+    if (restrict && section !== restrict) continue;
     if (excludeKeys.has(item.sourceKey) || excludeIds.has(item.id)) continue;
-    if (
-      !isOfficialSatExtract({
-        examFamily: item.examFamily,
-        sourceKind: item.sourceKind ?? "official_extract",
-      })
-    ) {
-      continue;
-    }
+    const official = isOfficialSatExtract({
+      examFamily: item.examFamily,
+      sourceKind: item.sourceKind ?? "official_extract",
+    });
+    const michelleOriginal =
+      options.includeMichelleOriginalHard === true &&
+      (item.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
+      isMichelleOriginalHardSourceKey(item.sourceKey);
+    if (!official && !michelleOriginal) continue;
     unique.set(item.sourceKey, item);
   }
-  const ordered = [...unique.values()].sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
-  const selected = shuffleWithSeed(ordered, `${options.seed}:hard-reserve`).slice(0, target);
+  const officialItems = [...unique.values()].filter((item) =>
+    isOfficialSatExtract({
+      examFamily: item.examFamily,
+      sourceKind: item.sourceKind ?? "official_extract",
+    }),
+  );
+  const originalItems = [...unique.values()].filter((item) => !officialItems.includes(item));
+  const officialOrdered = officialItems.sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
+  const originalOrdered = originalItems.sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
+  const officialPicked = shuffleWithSeed(officialOrdered, `${options.seed}:hard-reserve:official`);
+  const originalPicked = shuffleWithSeed(originalOrdered, `${options.seed}:hard-reserve:original`);
+  const selected = [...officialPicked, ...originalPicked].slice(0, target);
   return { selected, target, shortfall: Math.max(0, target - selected.length) };
 }
 
