@@ -139,6 +139,42 @@ async function unattemptedReserveNeedsSectionRefresh(
  * required single section (Michelle's Xavier math or Sophia Lamas reading).
  * Pre-work and other in-session assignments are not archived.
  */
+
+async function applyMichelleHardReserveTitle(
+  session: {
+    id: string;
+    subject: string;
+    title: string;
+    clientUserId?: string | null;
+    dateTime?: Date | string | null;
+    timezone?: string | null;
+  },
+  assignmentId: string,
+  sections: readonly ("rw" | "math")[],
+): Promise<void> {
+  if (!session.dateTime || !session.clientUserId) return;
+  const dateTime = new Date(session.dateTime);
+  if (Number.isNaN(dateTime.getTime())) return;
+  if (!isMichelleFutureHardSatSession({
+    id: session.id,
+    clientUserId: session.clientUserId,
+    subject: session.subject || "SAT",
+    dateTime,
+    timezone: session.timezone,
+  })) {
+    return;
+  }
+  const title = formatMichelleHardAssignmentTitle({
+    dateTime,
+    timezone: session.timezone,
+    kind: "reserve",
+    sessionTitle: session.title,
+    sections,
+  });
+  const subject = sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English";
+  await db.update(assignmentsTable).set({ title, subject }).where(eq(assignmentsTable.id, assignmentId));
+}
+
 export async function ensureHardChallengeReserve(session: {
   id: string;
   courseId: string;
@@ -180,6 +216,7 @@ export async function ensureHardChallengeReserve(session: {
       ? await unattemptedReserveNeedsSectionRefresh(existing.id, sections)
       : false;
     if (!shouldReplace) {
+      if (existing) await applyMichelleHardReserveTitle(session, existing.id, sections);
       const questionCount = existing ? await assignmentQuestionCount(existing.id) : 0;
       return {
         action: "kept",
@@ -278,27 +315,8 @@ export async function ensureHardChallengeReserve(session: {
     }
     return { assignmentId: assignment!.id, created: true as const };
   });
-  if (created.created && created.assignmentId && session.dateTime && session.clientUserId) {
-    const dateTime = new Date(session.dateTime);
-    if (!Number.isNaN(dateTime.getTime())) {
-      const title = formatMichelleHardAssignmentTitle({
-        dateTime,
-        timezone: session.timezone,
-        kind: "reserve",
-        sessionTitle: session.title,
-        sections,
-      });
-      // Only rewrite Michelle's later SAT sessions; other students keep the stock title.
-      if (isMichelleFutureHardSatSession({
-        id: session.id,
-        clientUserId: session.clientUserId,
-        subject: session.subject || "SAT",
-        dateTime,
-        timezone: session.timezone,
-      })) {
-        await db.update(assignmentsTable).set({ title, subject: sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English" }).where(eq(assignmentsTable.id, created.assignmentId));
-      }
-    }
+  if (created.assignmentId) {
+    await applyMichelleHardReserveTitle(session, created.assignmentId, sections);
   }
   if (!created.created) {
     const questionCount = created.assignmentId ? await assignmentQuestionCount(created.assignmentId) : 0;

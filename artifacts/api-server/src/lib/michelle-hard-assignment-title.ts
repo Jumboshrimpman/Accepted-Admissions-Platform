@@ -37,9 +37,9 @@ export function michelleTutorShortName(input: {
   const name = (input.tutorName ?? "").trim();
   const email = (input.tutorEmail ?? "").trim().toLowerCase();
   const title = (input.sessionTitle ?? "").trim();
-  if (/lamas/i.test(name) || /lamas/i.test(email)) return "Sophia L";
-  if (/xavier/i.test(name) || /xavier/i.test(email) || /with Xavier/i.test(title)) return "Xavier";
-  if (/sophia/i.test(name) && /lamas|with Sophia/i.test(`${name} ${title}`)) return "Sophia L";
+  const blob = `${name} ${email} ${title}`;
+  if (/xavier/i.test(blob) || /with Xavier/i.test(title)) return "Xavier";
+  if (/lamas/i.test(blob) || /with Sophia\b/i.test(title) || /sophia/i.test(name)) return "Sophia L";
   if (name) {
     const parts = name.split(/\s+/).filter(Boolean);
     if (parts.length >= 2) return `${parts[0]} ${parts[1]![0]}`;

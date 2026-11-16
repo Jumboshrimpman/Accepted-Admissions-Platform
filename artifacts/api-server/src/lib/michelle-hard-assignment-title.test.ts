@@ -37,3 +37,20 @@ test("Michelle hard titles use the session date, English or Math, and a short tu
   );
   assert.equal(michelleTutorShortName({ tutorName: "Sophia Lamas" }), "Sophia L");
 });
+
+test("Michelle hard titles still resolve Sophia L from the session title alone", () => {
+  assert.equal(
+    michelleTutorShortName({ sessionTitle: "Michelle’s SAT Session with Sophia" }),
+    "Sophia L",
+  );
+  assert.equal(
+    formatMichelleHardAssignmentTitle({
+      dateTime: new Date("2026-11-17T14:00:00.000Z"),
+      timezone: "Asia/Dubai",
+      kind: "reserve",
+      sessionTitle: "Michelle’s SAT Session with Sophia",
+      sections: ["rw"],
+    }),
+    "Nov 17 In-session SAT English Reserve (Hard) — Michelle x Sophia L",
+  );
+});
