@@ -98,3 +98,11 @@ test("Michelle hard refresh classifies with the hard-tail pool, not all of modul
   assert.match(checks, /!isMichelleFutureHardSatSession\(session\)/);
   assert.match(source, /sectionFromAssignedSourceKey/);
 });
+
+test("Michelle official pre-work does not reshuffle a full hard-tail set", () => {
+  const source = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  const start = source.indexOf("async function assignOfficialFormPrework(");
+  const body = source.slice(start, source.indexOf("export async function ensureHardSatPrework(", start));
+  assert.match(body, /if \(michelleHard && fullHard\)/);
+  assert.match(body, /return \{ action: "unchanged", assignmentId: fullHard\.row\.id \}/);
+});
