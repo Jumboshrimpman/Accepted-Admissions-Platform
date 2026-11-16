@@ -849,6 +849,19 @@ async function assignOfficialFormPrework(
     (sections.includes("rw") && !sections.includes("math")) ||
     (sections.includes("math") && !sections.includes("rw"));
   const michelleHard = isMichelleFutureHardSatSession(session);
+  // A full hard-tail Michelle set must stay put. Re-picking from the leftover
+  // official pool can choose a different valid 40 and would churn on every deploy.
+  const fullHard = classified.find(
+    (item) =>
+      item.everyKeyIsHard &&
+      item.questionCount === HARD_SAT_PREWORK_QUESTIONS &&
+      item.keys.length === HARD_SAT_PREWORK_QUESTIONS,
+  );
+  if (michelleHard && fullHard) {
+    await resolveHardSatShortfallAlert(session.id);
+    await applyMichelleHardAssignmentTitle(session, fullHard.row.id, "prework");
+    return { action: "unchanged", assignmentId: fullHard.row.id };
+  }
   const pool = michelleHard
     ? (await loadRenderableHardBank()).filter((item) => {
         if (originalHardSatDateFromKey(item.sourceKey)) return false;
