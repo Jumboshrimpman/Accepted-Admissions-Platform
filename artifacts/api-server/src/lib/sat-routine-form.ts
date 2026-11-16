@@ -182,3 +182,94 @@ export function selectRoutinePreworkFromOneForm<T extends RoutineFormQuestion>(
   }
   return best ?? { selected: [], practiceTestNumber: null, recycled: false };
 }
+
+export type MichelleHardPreworkPick<T> = RoutineFormPick<T> & {
+  /** True when no single form could supply the full hard set. */
+  widened: boolean;
+};
+
+/**
+ * Michelle's later SAT pre-work: 40 hard official items, one unused form
+ * first. A form that still has 40 leftover hard items is used next, even if
+ * she has seen a few questions from it. If no form can fill the set, leftover
+ * hard items are widened across forms. Foundational / module 1 items stay out
+ * because they are not in the caller's hard pool. Partial sets are not padded.
+ */
+export function selectMichelleFutureHardPrework<
+  T extends RoutineFormQuestion & { sourceKind?: string | null },
+>(
+  items: readonly T[],
+  options: {
+    seed: string;
+    usedPracticeTests?: ReadonlySet<number>;
+    excludeSourceKeys?: ReadonlySet<string>;
+    targetCount?: number;
+  },
+): MichelleHardPreworkPick<T> {
+  const target = Math.min(
+    DEFAULT_ROUTINE_PREWORK_QUESTIONS,
+    Math.max(1, options.targetCount ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS),
+  );
+  const used = options.usedPracticeTests ?? new Set<number>();
+  const exclude = options.excludeSourceKeys ?? new Set<string>();
+  const formNumber = (item: RoutineFormQuestion) => {
+    const official = officialSatFormNumber(item);
+    if (official != null) return official;
+    // Renderable hard-pool rows already passed the official SAT gate and may omit examFamily.
+    const practiceTestNumber = coercePracticeTestNumber(item.practiceTestNumber);
+    if (practiceTestNumber == null || !OFFICIAL_SAT_FORMS.has(practiceTestNumber)) return null;
+    if (satSection(item.section) == null) return null;
+    return practiceTestNumber;
+  };
+  const eligible = items.filter((item) => {
+    if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return false;
+    if (formNumber(item) == null) return false;
+    if (item.sourceKey && exclude.has(item.sourceKey)) return false;
+    return true;
+  });
+  const byForm = new Map<number, T[]>();
+  for (const item of eligible) {
+    const practiceTestNumber = formNumber(item);
+    if (practiceTestNumber == null) continue;
+    const list = byForm.get(practiceTestNumber) ?? [];
+    list.push(item);
+    byForm.set(practiceTestNumber, list);
+  }
+  const forms = [...byForm.keys()].sort((left, right) => left - right);
+  const drawForm = (practiceTestNumber: number) =>
+    drawBalancedFromForm(byForm.get(practiceTestNumber) ?? [], options.seed, practiceTestNumber, target);
+
+  const unusedFull = forms.filter(
+    (practiceTestNumber) => !used.has(practiceTestNumber) && drawForm(practiceTestNumber).length >= target,
+  );
+  if (unusedFull[0] != null) {
+    const practiceTestNumber = unusedFull[0];
+    return {
+      selected: drawForm(practiceTestNumber),
+      practiceTestNumber,
+      recycled: false,
+      widened: false,
+    };
+  }
+
+  const leftoverFull = forms.filter(
+    (practiceTestNumber) => drawForm(practiceTestNumber).length >= target,
+  );
+  if (leftoverFull[0] != null) {
+    const practiceTestNumber = leftoverFull[0];
+    return {
+      selected: drawForm(practiceTestNumber),
+      practiceTestNumber,
+      recycled: used.has(practiceTestNumber),
+      widened: false,
+    };
+  }
+
+  const widened = drawBalancedFromForm(eligible, options.seed, 0, target);
+  return {
+    selected: widened,
+    practiceTestNumber: null,
+    recycled: forms.length > 0,
+    widened: true,
+  };
+}
