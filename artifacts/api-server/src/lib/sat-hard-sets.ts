@@ -19,7 +19,7 @@ import {
 } from "./sat-bank-service.ts";
 import { loadSeenSatBankUsage } from "./sat-bank-usage.ts";
 import { filterUnseenBankItems } from "./student-question-usage.ts";
-import { selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
+import { selectMichelleFutureHardPrework, selectRoutinePreworkFromOneForm } from "./sat-routine-form.ts";
 import { isHardChallengeReserve } from "./sat-hard-reserve-plan.ts";
 import { logger } from "./logger.ts";
 import {
@@ -308,6 +308,7 @@ async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bank
       module: Number(row.module),
       questionNumber: Number(row.questionNumber),
       practiceTestNumber: item.practiceTestNumber ?? null,
+      examFamily: row.examFamily,
       sourceKind: row.sourceKind,
       linkedQuestionId: row.linkedQuestionId,
       prompt: row.prompt,
@@ -747,27 +748,50 @@ async function assignOfficialFormPrework(
     : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
   const sections = await satSectionsForSession(session);
   const reserveKeys = await hardReserveSourceKeys(session.id);
-  const pool = (await loadRoutineSatFormPool()).filter((item) => {
-    if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
-    if (sections.includes("rw") && sections.includes("math")) return true;
-    return sections.includes(item.section === "math" ? "math" : "rw");
-  });
+  const duringKeys = new Set<string>();
+  for (const row of await liveDuringAssignments(session.id)) {
+    for (const sourceKey of await sourceKeysForAssignment(row.id)) {
+      duringKeys.add(sourceKey);
+    }
+  }
   const sectionRestricted =
     (sections.includes("rw") && !sections.includes("math")) ||
     (sections.includes("math") && !sections.includes("rw"));
+  const michelleHard = isMichelleFutureHardSatSession(session);
+  const pool = michelleHard
+    ? (await loadRenderableHardBank()).filter((item) => {
+        if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return false;
+        if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
+        if (item.sourceKey && duringKeys.has(item.sourceKey)) return false;
+        return true;
+      })
+    : (await loadRoutineSatFormPool()).filter((item) => {
+        if (item.sourceKey && reserveKeys.has(item.sourceKey)) return false;
+        if (item.sourceKey && duringKeys.has(item.sourceKey)) return false;
+        if (sections.includes("rw") && sections.includes("math")) return true;
+        return sections.includes(item.section === "math" ? "math" : "rw");
+      });
   const unseenPool = filterUnseenBankItems(
     pool.map((item) => item),
     seen,
   );
-  const picked = selectRoutinePreworkFromOneForm(unseenPool, {
-    seed: session.id,
-    usedPracticeTests: seen.practiceTests,
-    requireFullCount: sectionRestricted,
-  });
+  const picked = michelleHard
+    ? selectMichelleFutureHardPrework(unseenPool, {
+        seed: session.id,
+        usedPracticeTests: seen.practiceTests,
+        excludeSourceKeys: seen.sourceKeys,
+      })
+    : selectRoutinePreworkFromOneForm(unseenPool, {
+        seed: session.id,
+        usedPracticeTests: seen.practiceTests,
+        requireFullCount: sectionRestricted,
+      });
   if (picked.selected.length !== HARD_SAT_PREWORK_QUESTIONS) {
     await raiseHardSatShortfallAlert(
       session,
-      `No official SAT practice form could supply ${HARD_SAT_PREWORK_QUESTIONS} questions. No partial set was assigned, and seeded mini homework was left in place.`,
+      michelleHard
+        ? `The leftover hard official SAT pool has ${picked.selected.length} pre-work items available. A full set is ${HARD_SAT_PREWORK_QUESTIONS}. No partial set was assigned, and foundational questions were not used.`
+        : `No official SAT practice form could supply ${HARD_SAT_PREWORK_QUESTIONS} questions. No partial set was assigned, and seeded mini homework was left in place.`,
     );
     return { action: "shortfall", assignmentId: classified[0]?.row.id ?? null };
   }
@@ -792,6 +816,7 @@ async function assignOfficialFormPrework(
       bankQuestionIds: picked.selected.map((item) => item.id),
       archiveAssignmentIds: replaceableIds,
       allowSingleSection: sectionRestricted,
+      ...(michelleHard ? { difficulty: "hard" as const } : {}),
     });
     if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
       await raiseHardSatShortfallAlert(
@@ -802,10 +827,13 @@ async function assignOfficialFormPrework(
     }
     await resolveHardSatShortfallAlert(session.id);
     return { action: "assigned", result };
-  } catch {
+  } catch (err) {
+    logger.warn({ err, sessionId: session.id, michelleHard }, "Official SAT form pre-work assign failed");
     await raiseHardSatShortfallAlert(
       session,
-      "The official SAT form pre-work could not be assigned.",
+      michelleHard
+        ? "The hard official SAT pre-work could not be assigned from the leftover hard pool."
+        : "The official SAT form pre-work could not be assigned.",
     );
     return { action: "shortfall", assignmentId: classified[0]?.row.id ?? null };
   }
@@ -1451,6 +1479,14 @@ export async function ensureMichelleFutureHardSatSets(): Promise<{
   for (const session of sessions) {
     if (!isMichelleFutureHardSatSession(session)) continue;
     const result = await ensureHardSatSessionSets(session);
+    if (!skipsAutoPrework(session)) {
+      try {
+        const { ensureHardChallengeReserve } = await import("./sat-hard-reserve.ts");
+        await ensureHardChallengeReserve(session);
+      } catch {
+        // Reserve fill is best-effort on startup; a shortfall is logged by the helper.
+      }
+    }
     results.push({
       sessionId: session.id,
       difficulty: result.difficulty,

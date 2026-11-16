@@ -129,6 +129,7 @@ export type HardSatCandidate = {
   module: number;
   questionNumber: number;
   practiceTestNumber: number | null;
+  examFamily?: string | null;
   sourceKind?: string | null;
 };
 
