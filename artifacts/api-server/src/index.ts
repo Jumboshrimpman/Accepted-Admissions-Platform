@@ -5,6 +5,7 @@ import { reconnectStoredGoogleCalendarGrants } from "./lib/calendar-persistence"
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureMichelleFutureHardSatSets, ensureTaitoOct30HardPrework } from "./lib/sat-hard-sets";
+import { startMichelleFutureHardSatSetRefresh } from "./lib/michelle-hard-booking";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
 import { resetSamaXavierSatCapabilityAttempts } from "./lib/reset-sama-xavier-capability";
 import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
@@ -61,13 +62,17 @@ void ensureRyoTaitoParentMirror()
         )
         .catch(() => logger.warn("Taito Oct 30 hard pre-work check skipped"))
         .then(() => ensureMichelleFutureHardSatSets())
-        .then((result) =>
+        .then((result) => {
           logger.info(
             { considered: result.considered, shortfalls: result.shortfalls },
             "Michelle future hard SAT sets check",
-          ),
-        )
-        .catch((err) => logger.warn({ err }, "Michelle future hard SAT sets check skipped"))
+          );
+          startMichelleFutureHardSatSetRefresh({ runOnStart: false });
+        })
+        .catch((err) => {
+          logger.warn({ err }, "Michelle future hard SAT sets check skipped");
+          startMichelleFutureHardSatSetRefresh({ runOnStart: false });
+        })
         .then(() =>
           ensureTaitoOct23RemainingHomework()
             .then((result) => logger.info(result, "Taito Oct 23 remaining homework ready"))

@@ -978,7 +978,12 @@ async function applyMichelleHardAssignmentTitle(
     sessionTitle: session.title,
     sections,
   });
-  const subject = sections.length === 1 && sections[0] === "math" ? "SAT Math" : "SAT English";
+  const subject =
+    sections.length === 1 && sections[0] === "math"
+      ? "SAT Math"
+      : sections.length === 1 && sections[0] === "rw"
+        ? "SAT English"
+        : "SAT";
   await db
     .update(assignmentsTable)
     .set({ title, subject })
@@ -1696,6 +1701,14 @@ export async function ensureMichelleFutureHardSatSets(): Promise<{
       } catch {
         // Reserve fill is best-effort on startup; a shortfall is logged by the helper.
       }
+    }
+    try {
+      const { ensureMichelleSophiaLamasSatPrepSlidesSafe } = await import(
+        "./michelle-sophia-lamas-sat-prep-slides.ts"
+      );
+      await ensureMichelleSophiaLamasSatPrepSlidesSafe(session.id);
+    } catch {
+      // Deck attach is best-effort; missing slides are retried on the next refresh.
     }
     results.push({
       sessionId: session.id,

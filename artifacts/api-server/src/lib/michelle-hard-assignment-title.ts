@@ -50,8 +50,10 @@ export function michelleTutorShortName(input: {
 
 export function michelleHardSubjectLabel(
   sections?: readonly SatPracticeSection[] | null,
-): "SAT Math (Hard)" | "SAT English (Hard)" {
+): "SAT Math (Hard)" | "SAT English (Hard)" | "SAT (Hard)" {
   if (sections?.length === 1 && sections[0] === "math") return "SAT Math (Hard)";
+  if (sections?.length === 1 && sections[0] === "rw") return "SAT English (Hard)";
+  if (sections && sections.includes("math") && sections.includes("rw")) return "SAT (Hard)";
   return "SAT English (Hard)";
 }
 

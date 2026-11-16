@@ -54,3 +54,17 @@ test("Michelle hard titles still resolve Sophia L from the session title alone",
     "Nov 17 In-session SAT English Reserve (Hard) — Michelle x Sophia L",
   );
 });
+
+test("Michelle hard titles use SAT (Hard) when both sections apply", () => {
+  assert.equal(
+    formatMichelleHardAssignmentTitle({
+      dateTime: new Date("2026-12-01T14:00:00.000Z"),
+      timezone: "America/New_York",
+      kind: "prework",
+      tutorName: "Eunice",
+      sessionTitle: "Michelle’s SAT Session with Eunice",
+      sections: ["rw", "math"],
+    }),
+    "Dec 1 Pre-work SAT (Hard) — Michelle x Eunice",
+  );
+});
