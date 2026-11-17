@@ -1,0 +1,461 @@
+[
+ {
+  "part": 1,
+  "mp3": "taito-2026-11-20-part1.mp3",
+  "seconds": 287.1,
+  "voices": [
+   "en_GB-alan-medium",
+   "en_GB-cori-high",
+   "en_GB-northern_english_male-medium"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 1. You will hear a telephone conversation between a man who wants to hire a canal boat and a booking agent. First, you have some time to look at questions 1 to 6."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 1 to 6."
+   ],
+   [
+    "P1_AGENT",
+    "Good morning, Westbridge Canal Holidays, Priya speaking. How can I help?"
+   ],
+   [
+    "P1_CALLER",
+    "Hi there. I'm ringing about hiring a narrowboat in the spring. I filled in half of the form on your website and then it crashed, so I thought I'd better just phone."
+   ],
+   [
+    "P1_AGENT",
+    "No problem at all, I can take the details now. Can I start with your surname?"
+   ],
+   [
+    "P1_CALLER",
+    "Yes, it's Thwaite. That's T; H; W; A; I; T; E."
+   ],
+   [
+    "P1_AGENT",
+    "T; H; W; A; I; T; E. Lovely. And how many people would be on board?"
+   ],
+   [
+    "P1_CALLER",
+    "Four adults. My brother-in-law says every year that he'll come, and he never does, so let's say four."
+   ],
+   [
+    "P1_AGENT",
+    "Four adults. And when were you hoping to set off?"
+   ],
+   [
+    "P1_CALLER",
+    "Well, on the website I'd typed in the twelfth of April, but I've since realised that's the day of my daughter's recital. So could we make it the Tuesday after that? The fourteenth."
+   ],
+   [
+    "P1_AGENT",
+    "The fourteenth of April. Let me just check. Yes, we have availability from the fourteenth."
+   ],
+   [
+    "P1_AGENT",
+    "Now, which boat did you have in mind?"
+   ],
+   [
+    "P1_CALLER",
+    "We'd looked at the Heron, because it's got the bigger saloon."
+   ],
+   [
+    "P1_AGENT",
+    "The Heron is lovely, but I should warn you. It's sixty-two feet long, and two of the locks on the northern loop only take boats up to fifty-eight feet. If you're planning to do the loop, you'd be better off with the Kingfisher."
+   ],
+   [
+    "P1_CALLER",
+    "Ah. We definitely want to do the loop. The Kingfisher it is, then. How long is that one?"
+   ],
+   [
+    "P1_AGENT",
+    "Fifty-seven feet. So you'd get through those locks with a foot to spare."
+   ],
+   [
+    "P1_CALLER",
+    "And where do we pick it up? Your website lists two bases."
+   ],
+   [
+    "P1_AGENT",
+    "It does, but the Tillford base is closed for refurbishment until May, so all April departures leave from Brindley Wharf. That's B; R; I; N; D; L; E; Y."
+   ],
+   [
+    "P1_CALLER",
+    "Right. And what's the deposit? I think the website said two hundred and fifty pounds."
+   ],
+   [
+    "P1_AGENT",
+    "It did last season. It's gone up to two hundred and seventy-five, I'm afraid, but it's fully refundable as long as the boat comes back undamaged, and it now includes the fuel check, which we used to charge for separately."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 7 to 10."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 7 to 10."
+   ],
+   [
+    "P1_CALLER",
+    "A couple of other things. We'd like to bring our dog. Is that allowed?"
+   ],
+   [
+    "P1_AGENT",
+    "Yes, we take up to two dogs per boat, and there's no extra charge. There is one condition, though. Whenever the dog is out on deck, it has to wear a lifejacket. We don't supply those for dogs, so you'd need to bring your own."
+   ],
+   [
+    "P1_CALLER",
+    "Fair enough. She's a spaniel. She'll love it."
+   ],
+   [
+    "P1_CALLER",
+    "None of us has ever steered one of these before. Is there any training?"
+   ],
+   [
+    "P1_AGENT",
+    "There's a handover session before you leave. The brochure says about an hour, but honestly, with first-timers it's usually closer to ninety minutes, because we take you through a lock as well. So I'd allow for that."
+   ],
+   [
+    "P1_CALLER",
+    "And on the day, do we go to the office first?"
+   ],
+   [
+    "P1_AGENT",
+    "Normally you would, but on Tuesdays the office doesn't open until eleven, so you'll collect the keys from the chandlery. That's the shop that sells boat equipment, right beside the water point."
+   ],
+   [
+    "P1_CALLER",
+    "Last thing. Can we leave our car at the wharf?"
+   ],
+   [
+    "P1_AGENT",
+    "You can. There's a secure car park, which is six pounds fifty a day. There's also a long-stay field at four pounds, but it floods in the spring, so we really don't recommend it in April."
+   ],
+   [
+    "P1_CALLER",
+    "Perfect. The car park, then. Thanks very much for your help."
+   ],
+   [
+    "N",
+    "That is the end of Part 1. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 2,
+  "mp3": "taito-2026-11-20-part2.mp3",
+  "seconds": 286.8,
+  "voices": [
+   "en_GB-alan-medium",
+   "en_GB-jenny_dioco-medium"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 2. You will hear a volunteer coordinator talking to new volunteers at a wetland nature reserve. First, you have some time to look at questions 11 to 14."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 11 to 14."
+   ],
+   [
+    "P2_GUIDE",
+    "Hello everyone, and welcome to your first morning as volunteers at Harrowby Wetland Centre. I'm Fiona Lacey, the volunteer coordinator, and I'll be giving you a quick overview before we walk round the site."
+   ],
+   [
+    "P2_GUIDE",
+    "You'll probably have noticed that we now open at ten rather than eight. A lot of people assume that's about saving money, and I can see why, but in fact the staffing bill hasn't changed at all. Nor was it that the early slot was unpopular. If anything, it was our busiest time for photographers. The reason is that our survey team found the wading birds were being disturbed and driven off the lagoon every morning before they'd had a chance to feed, so we're giving them those first two hours to themselves. Maintenance, by the way, still happens after closing time, as it always has."
+   ],
+   [
+    "P2_GUIDE",
+    "A word on uniform. You'll each be given a green fleece, free of charge, and you're welcome to wear it or not, as you like. What we do insist on is that you wear your name badge where visitors can see it, because that's how they know they can come and ask you things. And please don't worry about what colour you wear underneath."
+   ],
+   [
+    "P2_GUIDE",
+    "Now, the two old hides on the lagoon. People complain about them being a long walk, but they're actually only about four hundred metres away, which isn't far at all. The real issue is that they were built on stilts with steps up to them, so anyone using a wheelchair or a pushchair simply can't get in. Noise inside them used to be a problem too, but the new signs have largely sorted that out."
+   ],
+   [
+    "P2_GUIDE",
+    "Finally, feeding. We sell a seed mix in the shop, and visitors may use it at the feeding station only. If you see someone throwing bread anywhere else, please don't confront them. That has led to some unpleasant moments in the past. And there's no need to go and fetch a member of staff either. Just make a note in the daily log of where it happened, because we use that to decide where to put up extra signs."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 15 to 20."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 15 to 20."
+   ],
+   [
+    "P2_GUIDE",
+    "Right, let me show you the plan of the site, because a few things have moved since the old leaflets were printed. We're in the Visitor Centre, at the bottom of the plan."
+   ],
+   [
+    "P2_GUIDE",
+    "If you walk north from the Visitor Centre up the main path, you come to the south shore of the lake. Turn left there, and only a few metres along, still on the south shore, is the pond-dipping platform."
+   ],
+   [
+    "P2_GUIDE",
+    "Families often ask about the picnic meadow. It used to be the grassy area just beside the car park, but people kept parking on it, so it's now on the other side of the Visitor Centre, on the east side, away from the car park."
+   ],
+   [
+    "P2_GUIDE",
+    "The first-aid point has also moved. It's no longer here in the Visitor Centre. It's in a small cabin halfway up the western shore of the lake."
+   ],
+   [
+    "P2_GUIDE",
+    "Directly across the water from the first-aid cabin, on the eastern shore, is the otter viewing screen. Please don't let visitors wander into the reedbed looking for otters. The screen is right beside the path, at the edge of the reeds, not in them."
+   ],
+   [
+    "P2_GUIDE",
+    "At the northern end of the lake, the stream flows in, and there's a footbridge over it. The old bird-ringing hut on the western side of the bridge has been taken down. The new one is just over the bridge, on the eastern bank."
+   ],
+   [
+    "P2_GUIDE",
+    "And finally, the sensory garden. There's a signpost for it on the western shore, near the edge of the woodland, and people tend to stop there thinking they've arrived. They haven't. The garden is in a clearing right in the middle of the woodland, so do keep following the signs."
+   ],
+   [
+    "P2_GUIDE",
+    "OK, if you'd all like to collect your fleeces, we'll head out."
+   ],
+   [
+    "N",
+    "That is the end of Part 2. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 3,
+  "mp3": "taito-2026-11-20-part3.mp3",
+  "seconds": 306.9,
+  "voices": [
+   "en_GB-alan-medium",
+   "en_GB-alba-medium",
+   "en_GB-northern_english_male-medium",
+   "en_US-ryan-high"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 3. You will hear two students, Maya and Daniel, talking to their tutor about an experiment they are replicating for a research methods course. First, you have some time to look at questions 21 to 25."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 21 to 25."
+   ],
+   [
+    "P3_TUTOR",
+    "Come in, both of you. So, you're replicating the Mpemba experiment for the methods module. How far have you got?"
+   ],
+   [
+    "P3_MAYA",
+    "We've done three rounds of trials, and honestly, the results are all over the place."
+   ],
+   [
+    "P3_DANIEL",
+    "Which is partly why we wanted to see you. We're not sure whether to write up what we've got or redesign the whole thing."
+   ],
+   [
+    "P3_TUTOR",
+    "Let's go back a step. Why this experiment in the first place?"
+   ],
+   [
+    "P3_MAYA",
+    "Well, Daniel wanted it because it's famous."
+   ],
+   [
+    "P3_DANIEL",
+    "That's not quite fair. What I liked is that people still argue about it. Whether hot water really freezes faster than cold isn't settled, so nobody could accuse us of just confirming a textbook result."
+   ],
+   [
+    "P3_MAYA",
+    "And the equipment is cheap, although that wasn't really why we chose it."
+   ],
+   [
+    "P3_TUTOR",
+    "Good. So what's gone wrong?"
+   ],
+   [
+    "P3_MAYA",
+    "The thing we expected to be a problem was the freezer temperature drifting, so we logged it, and it's actually very stable. The problem is deciding when the water counts as frozen. In round one we went by when ice first appeared on the surface, but that's misleading, because a skin of ice can form while the middle is still liquid."
+   ],
+   [
+    "P3_DANIEL",
+    "So in round two we put a probe in the centre and called it frozen when that reached zero. But water can supercool. It can sit below zero without turning solid, so that wasn't reliable either."
+   ],
+   [
+    "P3_TUTOR",
+    "That's the crux of the whole literature, you know. Half the disagreement comes from people defining frozen differently. And round three?"
+   ],
+   [
+    "P3_DANIEL",
+    "We timed it to complete solidification, judged by the probe reading levelling off after the supercooling dip. The curves are much cleaner."
+   ],
+   [
+    "P3_TUTOR",
+    "And the result?"
+   ],
+   [
+    "P3_MAYA",
+    "The hot sample froze first in four of nine pairs. So, no effect, basically."
+   ],
+   [
+    "P3_TUTOR",
+    "Careful. Nine pairs is a tiny sample. You can say you didn't detect an effect. You can't say there isn't one."
+   ],
+   [
+    "P3_TUTOR",
+    "Did you check for evaporation? Hot water loses mass."
+   ],
+   [
+    "P3_DANIEL",
+    "We weighed the containers before and after. The hot samples lost about three per cent."
+   ],
+   [
+    "P3_MAYA",
+    "We thought about topping them up with extra water, but then it wouldn't be the same sample."
+   ],
+   [
+    "P3_TUTOR",
+    "Exactly. Don't fiddle with the samples, and don't put lids on either, because that changes how they cool. Just report the loss as a limitation of the study."
+   ],
+   [
+    "P3_DANIEL",
+    "I'll be honest, I was worried at first that showing rounds one and two would make us look sloppy. But now I think they're actually the most interesting part. They show exactly how the definition changes the answer."
+   ],
+   [
+    "P3_MAYA",
+    "My only concern is fitting all three rounds onto one graph."
+   ],
+   [
+    "P3_TUTOR",
+    "I agree with Daniel. Keep them in."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 26 to 30."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 26 to 30."
+   ],
+   [
+    "P3_TUTOR",
+    "Let's go through your sources. The original nineteen sixty-nine paper by Mpemba and Osborne."
+   ],
+   [
+    "P3_MAYA",
+    "We were going to use that as our main comparison."
+   ],
+   [
+    "P3_TUTOR",
+    "I'd resist that. Their method was quite informal. It's perfect, though, for telling the story of how the question first came up."
+   ],
+   [
+    "P3_DANIEL",
+    "Then there's the twenty sixteen study with hundreds of trials, which found no effect."
+   ],
+   [
+    "P3_TUTOR",
+    "That's the one to set your procedure against. They defined freezing very carefully, much like your round three. And their data set is already public, so you don't need to chase it."
+   ],
+   [
+    "P3_MAYA",
+    "We also watched a video by a science presenter that got millions of views."
+   ],
+   [
+    "P3_TUTOR",
+    "Fine for getting your head round the idea, and you can mention it in the background, but don't treat anything in it as evidence."
+   ],
+   [
+    "P3_DANIEL",
+    "And a chemistry society once ran a competition where members of the public sent in explanations."
+   ],
+   [
+    "P3_TUTOR",
+    "Hmm. Those entries are a very mixed bag, and most were never checked by experts. I'd leave them out of the report entirely."
+   ],
+   [
+    "P3_MAYA",
+    "And our own lab notebook?"
+   ],
+   [
+    "P3_TUTOR",
+    "Markers love seeing raw records. Don't paste the whole thing into the main text, but put the key pages at the back."
+   ],
+   [
+    "N",
+    "That is the end of Part 3. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 4,
+  "mp3": "taito-2026-11-20-part4.mp3",
+  "seconds": 281.0,
+  "voices": [
+   "en_GB-alan-medium",
+   "en_GB-cori-high"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 4. You will hear a lecture about glacial archaeology. First, you have some time to look at questions 31 to 40."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 31 to 40."
+   ],
+   [
+    "P4_LECT",
+    "Good afternoon. Today I want to look at one of the youngest branches of archaeology, usually called glacial archaeology, or sometimes ice-patch archaeology. It barely existed before the early two thousands, and its rapid growth is, sadly, a direct result of climate change."
+   ],
+   [
+    "P4_LECT",
+    "First, a distinction. People often use the words glacier and ice patch as if they meant the same thing, but for archaeologists the difference is crucial. A glacier flows. Anything trapped in it is crushed and carried downhill, sometimes for kilometres. An ice patch, by contrast, is essentially static. It doesn't move, so an object dropped on it thousands of years ago can stay more or less where it fell. That stability is what makes the whole field possible."
+   ],
+   [
+    "P4_LECT",
+    "So why were people up on these patches at all? You might imagine they were crossing mountain passes to trade, and in a few places they were. But at most sites the answer is reindeer, or caribou in North America. On hot summer days these animals climb onto the ice to escape from insects, which can torment them so badly that they stop feeding. And where the reindeer went, the hunters followed."
+   ],
+   [
+    "P4_LECT",
+    "That explains the single most common category of find, which is hunting equipment. Above all, arrows. Or more precisely, arrow shafts, since the stone or iron heads have often broken off and been lost."
+   ],
+   [
+    "P4_LECT",
+    "What makes these sites extraordinary is the survival of organic material: wood, leather, textiles, even feathers. In ordinary soil, these would rot within decades. In the ice, they can last for millennia. One of the most remarkable finds is a complete tunic from Norway, dated to around three hundred A.D. Many people expect clothing from that period to be made of leather, but this one is made of wool, and you can still see how it was patched and repaired."
+   ],
+   [
+    "P4_LECT",
+    "The problem is what happens when these objects melt out. A leather shoe that has survived three thousand years in the ice can be destroyed in a single summer once it's exposed. It dries out, it cracks, and sunlight and bacteria do the rest. So timing is everything."
+   ],
+   [
+    "P4_LECT",
+    "This is why fieldwork is not done in the middle of summer, when you might expect it. Teams wait until the ice reaches its minimum size, which is usually in September, just before the first snow. That's when the largest area of old ground is exposed."
+   ],
+   [
+    "P4_LECT",
+    "Technology helps, but less than people think. Satellite images are very good at showing us which patches are shrinking fastest, so we know where to look. What they can't do is spot the artefacts themselves, some of which are no bigger than a pencil. In the end, it comes down to people walking slowly along the edge of the ice."
+   ],
+   [
+    "P4_LECT",
+    "The finds also tell us about past climate. If an arrow that was lost four thousand years ago is only now melting out, then the ice has not been this small for four thousand years. Each dated object becomes a kind of climate record."
+   ],
+   [
+    "P4_LECT",
+    "Increasingly, the public is involved. Hikers in some regions can report finds through a mobile app. We ask them to photograph the object and record the location, but please, never pick it up or move it. Its exact position matters as much as the object itself."
+   ],
+   [
+    "P4_LECT",
+    "Finally, the outlook. Within perhaps fifty years, many of these ice patches will have disappeared completely, and whatever they still contain will be lost. So some colleagues describe this work as rescue archaeology, in the most literal sense. We have one chance, and it's now."
+   ],
+   [
+    "N",
+    "That is the end of Part 4. You now have some time to check your answers."
+   ]
+  ]
+ }
+]

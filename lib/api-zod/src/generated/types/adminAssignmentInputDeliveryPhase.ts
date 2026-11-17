@@ -12,4 +12,5 @@ export type AdminAssignmentInputDeliveryPhase = typeof AdminAssignmentInputDeliv
 export const AdminAssignmentInputDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;

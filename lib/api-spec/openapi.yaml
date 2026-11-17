@@ -3057,7 +3057,7 @@ components:
         sessionId: { type: ["string", "null"] }
         programTitle: { type: string }
         sessionTitle: { type: ["string", "null"] }
-        deliveryPhase: { type: string, enum: [before_session, during_session] }
+        deliveryPhase: { type: string, enum: [before_session, during_session, skill_practice] }
         title: { type: string }
         subject: { type: string }
         instructions: { type: string }
@@ -3081,7 +3081,7 @@ components:
       properties:
         courseId: { type: string }
         sessionId: { type: ["string", "null"] }
-        deliveryPhase: { type: string, enum: [before_session, during_session] }
+        deliveryPhase: { type: string, enum: [before_session, during_session, skill_practice] }
         title: { type: string, minLength: 2, maxLength: 200 }
         subject: { type: string, minLength: 1, maxLength: 100 }
         instructions: { type: string, minLength: 1, maxLength: 10000 }
@@ -3094,7 +3094,7 @@ components:
       properties:
         courseId: { type: string }
         sessionId: { type: ["string", "null"] }
-        deliveryPhase: { type: string, enum: [before_session, during_session] }
+        deliveryPhase: { type: string, enum: [before_session, during_session, skill_practice] }
         title: { type: string, minLength: 2, maxLength: 200 }
         subject: { type: string, minLength: 1, maxLength: 100 }
         instructions: { type: string, minLength: 1, maxLength: 10000 }
@@ -3619,7 +3619,7 @@ components:
       properties:
         id: { type: string }
         sessionId: { type: ["string", "null"] }
-        deliveryPhase: { type: string, enum: [before_session, during_session] }
+        deliveryPhase: { type: string, enum: [before_session, during_session, skill_practice] }
         title: { type: string }
         subject: { type: string }
         status: { type: string, enum: [draft, published, completed, archived] }

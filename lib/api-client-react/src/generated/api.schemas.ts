@@ -1145,6 +1145,7 @@ export type AdminAssignmentDeliveryPhase = typeof AdminAssignmentDeliveryPhase[k
 export const AdminAssignmentDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;
 
 export type AdminAssignmentStatus = typeof AdminAssignmentStatus[keyof typeof AdminAssignmentStatus];
@@ -1203,6 +1204,7 @@ export type AdminAssignmentInputDeliveryPhase = typeof AdminAssignmentInputDeliv
 export const AdminAssignmentInputDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;
 
 export type AdminAssignmentInputStatus = typeof AdminAssignmentInputStatus[keyof typeof AdminAssignmentInputStatus];
@@ -1256,6 +1258,7 @@ export type AdminAssignmentUpdateDeliveryPhase = typeof AdminAssignmentUpdateDel
 export const AdminAssignmentUpdateDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;
 
 export type AdminAssignmentUpdateStatus = typeof AdminAssignmentUpdateStatus[keyof typeof AdminAssignmentUpdateStatus];
@@ -1612,6 +1615,7 @@ export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPha
 export const AssignmentSummaryDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;
 
 export type AssignmentSummaryStatus = typeof AssignmentSummaryStatus[keyof typeof AssignmentSummaryStatus];

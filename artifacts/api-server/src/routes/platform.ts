@@ -329,6 +329,7 @@ import {
   enqueueMissedReviewItems,
   prepareSessionCurriculum,
 } from "../lib/session-curriculum-prep";
+import { SKILL_PRACTICE_PHASE } from "../lib/skill-practice";
 import {
   assignmentTiedToCancelledSession,
   canViewSession,
@@ -15330,7 +15331,9 @@ async function listAssignmentsForUser(
         deliveryPhase:
           assignment.deliveryPhase === "during_session"
             ? "during_session"
-            : "before_session",
+            : assignment.deliveryPhase === SKILL_PRACTICE_PHASE
+              ? SKILL_PRACTICE_PHASE
+              : "before_session",
         title: studentFacing ? studentFacingAssignmentTitle(liveTitle) : liveTitle,
         subject: assignment.subject,
         status: assignment.status,
