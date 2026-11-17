@@ -198,6 +198,12 @@ test("Nov 23 and Dec 1 titles keep the existing Michelle x Sophia L style", () =
   );
 });
 
+test("the curated queue ignores past and attempted sessions so they cannot reserve unused bundles", () => {
+  const source = fs.readFileSync(path.join(here, "michelle-sophia-lamas-curated-sets.ts"), "utf8");
+  assert.match(source, /Past official quizzes \(Nov 16\/17\) must not reserve/);
+  assert.match(source, /Upcoming unattempted sets stay pending/);
+});
+
 test("hard SAT session setup tries the curated Sophia Lamas bundles before the official picker", () => {
   const source = fs.readFileSync(path.join(here, "sat-hard-sets.ts"), "utf8");
   const start = source.indexOf("export async function ensureHardSatSessionSets(");

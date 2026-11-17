@@ -119,16 +119,14 @@ export async function ensureMichelleSophiaLamasCuratedRwSets(
 
   const currentBundle = bundleAssignedFromSourceKeys(await allSourceKeys(live.map((row) => row.id)));
   const peers = await curatedQueuePeers(session.id);
-  const bundle =
-    currentBundle ??
-    nextCuratedRwBundleForSession({
-      currentSessionId: session.id,
-      currentCreatedAt: session.createdAt,
-      peers,
-    });
+  const bundle = nextCuratedRwBundleForSession({
+    currentSessionId: session.id,
+    currentCreatedAt: session.createdAt,
+    peers,
+  });
   if (!bundle) return { action: "exhausted" };
 
-  if (currentBundle && (await setsAreComplete(live, currentBundle))) {
+  if (currentBundle === bundle && (await setsAreComplete(live, currentBundle))) {
     await retitleLiveSets(session, live);
     await markCuratedPrepReady(session.id);
     await markSessionHasHomework(session.id);
@@ -538,11 +536,26 @@ async function curatedQueuePeers(exceptSessionId: string): Promise<CuratedRwQueu
     if (!sessionConsumesSatPrepQueue(session)) continue;
     const live = await liveSessionAssignments(session.id);
     const keys = await allSourceKeys(live.map((row) => row.id));
-    peers.push({
-      id: session.id,
-      createdAt: session.createdAt,
-      assignedBundle: bundleAssignedFromSourceKeys(keys),
-    });
+    const heldBundle = bundleAssignedFromSourceKeys(keys);
+    let attempted = false;
+    for (const row of live) {
+      if ((await attemptCount(row.id)) > 0) {
+        attempted = true;
+        break;
+      }
+    }
+    const ended =
+      session.dateTime.getTime() + Number(session.durationMinutes ?? 60) * 60_000 <= Date.now();
+    // Lock a bundle only after the student has started it, or after the
+    // session has ended. Past official quizzes (Nov 16/17) must not reserve
+    // unused bundles. Upcoming unattempted sets stay pending so a queue
+    // repair can renumber them.
+    if (heldBundle && (attempted || ended)) {
+      peers.push({ id: session.id, createdAt: session.createdAt, assignedBundle: heldBundle });
+      continue;
+    }
+    if (attempted || ended) continue;
+    peers.push({ id: session.id, createdAt: session.createdAt, assignedBundle: null });
   }
   return peers;
 }
