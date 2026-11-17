@@ -7,6 +7,7 @@ import {
   isCoarseSectionLabel,
   isIeltsSkillContext,
   isMissingExtractSkill,
+  mentionsSatOrPsat,
   quizSubject,
   sectionSkillLabel,
   skillBreakdownFromItems,
@@ -165,4 +166,44 @@ test("IELTS items do not fall back to the SAT section label", () => {
     ]),
     [],
   );
+});
+
+test("a SAT or PSAT title is never an IELTS context, even when it also says English", () => {
+  assert.equal(mentionsSatOrPsat("SAT English pre-work — Michelle’s SAT Session with Sophia"), true);
+  assert.equal(
+    isIeltsSkillContext({
+      assignmentTitle: "SAT English pre-work — Michelle’s SAT Session with Sophia",
+      subject: "English",
+    }),
+    false,
+  );
+  assert.equal(
+    isIeltsSkillContext({
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Sophia",
+    }),
+    false,
+  );
+  assert.equal(
+    isIeltsSkillContext({
+      assignmentTitle: "PSAT Reading and Writing practice",
+      subject: "English",
+    }),
+    false,
+  );
+  assert.equal(
+    isIeltsSkillContext({
+      assignmentTitle: "English Session",
+      subject: "English",
+    }),
+    true,
+  );
+  assert.equal(
+    isIeltsSkillContext({
+      assignmentTitle: "IELTS Academic Reading — Taito’s IELTS Session",
+      examFamily: "ielts",
+    }),
+    true,
+  );
+  assert.equal(isIeltsSkillContext({ examFamily: "ielts", section: "writing" }), true);
+  assert.equal(isIeltsSkillContext({ subject: "IELTS Reading" }), true);
 });

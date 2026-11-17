@@ -12,6 +12,7 @@ import {
   isGuidanceFiller,
   isIeltsSkillContext,
   isMissingExtractSkill,
+  mentionsSatOrPsat,
   normalizeFocusKey,
   usefulFocusLabels,
 } from "./sat-bank-skill.ts";
@@ -189,6 +190,13 @@ export function isNonSatQuiz(input: {
   examFamily?: string | null;
   items?: ReadonlyArray<Pick<AnalysisItem, "subject" | "domain" | "skill">> | null;
 }): boolean {
+  const identity = [
+    input.assignmentTitle,
+    input.subject,
+    ...((input.items ?? []).map((item) => item.subject)),
+  ].join(" ");
+  // SAT/PSAT in the title, subject, or items always wins over a bare "English".
+  if (mentionsSatOrPsat(identity)) return false;
   if (
     isIeltsSkillContext({
       assignmentTitle: input.assignmentTitle,
