@@ -82,8 +82,13 @@ export function usefulFocusLabels(labels: readonly string[], limit = 3): string[
 }
 
 function isSatSubject(subject: string | null | undefined): boolean {
-  const value = subject ?? "";
-  return /\b(sat|psat)\b/i.test(value) && !/\bielts\b/i.test(value);
+  return mentionsSatOrPsat(subject);
+}
+
+/** SAT/PSAT in a title or subject wins over a bare "English" word. */
+export function mentionsSatOrPsat(value: string | null | undefined): boolean {
+  const text = value ?? "";
+  return /\b(sat|psat)\b/i.test(text) && !/\bielts\b/i.test(text);
 }
 
 /** SAT Bluebook domain. The word "English" here is not an IELTS/English quiz. */
@@ -93,8 +98,10 @@ export function isStandardEnglishConventions(value: string | null | undefined): 
 
 /**
  * IELTS/English comes from the quiz exam family, assignment title, or session
- * subject. Item domains are ignored. "Standard English Conventions" and SAT
- * subjects never count.
+ * subject. Item domains are ignored. "Standard English Conventions" and a
+ * title or subject that mentions SAT or PSAT never count as IELTS, even when
+ * the same string also says "English". Only examFamily ielts, explicit IELTS
+ * wording, or a legacy non-SAT "English" title/subject should.
  */
 export function isIeltsSkillContext(input: {
   section?: string | null;
@@ -108,11 +115,12 @@ export function isIeltsSkillContext(input: {
   }
   const family = (input.examFamily ?? "").trim().toLowerCase();
   if (family === "sat" || family === "psat") return false;
+  const identity = `${input.assignmentTitle ?? ""} ${input.subject ?? ""}`;
+  if (mentionsSatOrPsat(identity)) return false;
   if (family === "ielts") return true;
   const subjectIsSat = isSatSubject(input.subject);
   const section = (input.section ?? "").trim().toLowerCase();
   if ((section === "reading" || section === "writing") && !subjectIsSat) return true;
-  const identity = `${input.assignmentTitle ?? ""} ${input.subject ?? ""}`;
   if (/\bielts\b/i.test(identity)) return true;
   if (subjectIsSat) return false;
   return /\benglish\b/i.test(identity);

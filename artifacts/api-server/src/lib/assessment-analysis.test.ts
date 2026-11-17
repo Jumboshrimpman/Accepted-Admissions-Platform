@@ -349,3 +349,112 @@ test("a reading diagnostic without an English or IELTS title stays an SAT estima
   assert.match(analysis.label, /estimated SAT score range/i);
   assert.equal(analysis.sectionBreakdown?.[0]?.label, "Reading and Writing");
 });
+
+test("SAT English titles keep SAT section labels and never say IELTS", () => {
+  const items = [
+    {
+      correct: true,
+      skill: "Reading and Writing",
+      subject: "SAT Reading & Writing",
+      domain: "Information and Ideas",
+    },
+    {
+      correct: true,
+      skill: "Reading and Writing",
+      subject: "SAT Reading & Writing",
+      domain: "Craft and Structure",
+    },
+    {
+      correct: false,
+      skill: "Reading and Writing",
+      subject: "SAT Reading & Writing",
+      domain: "Standard English Conventions",
+    },
+  ];
+  const quiz = {
+    assignmentTitle: "SAT English pre-work — Michelle’s SAT Session with Sophia",
+    subject: "English",
+    items,
+  };
+  assert.equal(isNonSatQuiz(quiz), false);
+  const analysis = buildAttemptAnalysis(
+    [{ skill: "Reading and Writing", correct: 2, total: 3, accuracy: 67 }],
+    items,
+    67,
+    { assignmentTitle: quiz.assignmentTitle },
+  );
+  assert.equal(analysis.sectionBreakdown?.[0]?.label, "Reading and Writing");
+  assert.equal(analysis.sectionBreakdown?.[0]?.section, "rw");
+  assert.equal(
+    (analysis.sectionBreakdown ?? []).some((row) => /ielts/i.test(row.label)),
+    false,
+  );
+  assert.doesNotMatch(analysis.strengths.join(" "), /ielts/i);
+  assert.doesNotMatch(JSON.stringify(analysis), /ielts/i);
+});
+
+test("SAT Math titles stay Math, and real IELTS quizzes stay IELTS", () => {
+  const mathItems = [
+    {
+      correct: true,
+      skill: "Heart of Algebra",
+      subject: "SAT Math",
+      domain: "Algebra",
+    },
+    {
+      correct: true,
+      skill: "Problem-Solving and Data Analysis",
+      subject: "SAT Math",
+      domain: "Problem-Solving and Data Analysis",
+    },
+  ];
+  const mathAnalysis = buildAttemptAnalysis(
+    [
+      { skill: "Heart of Algebra", correct: 1, total: 1, accuracy: 100 },
+      { skill: "Problem-Solving and Data Analysis", correct: 1, total: 1, accuracy: 100 },
+    ],
+    mathItems,
+    100,
+    { assignmentTitle: "SAT Math pre-work — Michelle’s SAT Session with Xavier" },
+  );
+  assert.equal(isNonSatQuiz({ assignmentTitle: "SAT Math pre-work", items: mathItems }), false);
+  assert.equal(mathAnalysis.sectionBreakdown?.[0]?.label, "Math");
+  assert.equal(mathAnalysis.sectionBreakdown?.[0]?.section, "math");
+  assert.doesNotMatch(JSON.stringify(mathAnalysis), /ielts/i);
+
+  const ieltsItems = [
+    {
+      correct: true,
+      skill: "True / False / Not Given",
+      subject: "IELTS Reading",
+      domain: "IELTS Reading",
+    },
+    {
+      correct: false,
+      skill: "Matching headings",
+      subject: "IELTS Reading",
+      domain: "IELTS Reading",
+    },
+  ];
+  const ieltsQuiz = {
+    assignmentTitle: "IELTS Academic Reading — Taito’s IELTS Session",
+    examFamily: "ielts",
+    items: ieltsItems,
+  };
+  assert.equal(isNonSatQuiz(ieltsQuiz), true);
+  const ieltsAnalysis = buildAttemptAnalysis(
+    [
+      { skill: "True / False / Not Given", correct: 1, total: 1, accuracy: 100 },
+      { skill: "Matching headings", correct: 0, total: 1, accuracy: 0 },
+    ],
+    ieltsItems,
+    50,
+    { assignmentTitle: ieltsQuiz.assignmentTitle },
+  );
+  assert.deepEqual(
+    (ieltsAnalysis.sectionBreakdown ?? []).map((row) => row.label),
+    ["IELTS Reading"],
+  );
+  assert.equal(ieltsAnalysis.sectionBreakdown?.[0]?.section, "other");
+  assert.match(ieltsAnalysis.strengths.join(" ") + JSON.stringify(ieltsAnalysis.sectionBreakdown), /IELTS Reading/);
+});
