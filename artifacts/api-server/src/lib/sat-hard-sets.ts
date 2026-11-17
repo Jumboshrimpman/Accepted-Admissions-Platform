@@ -67,6 +67,7 @@ import {
 import { isMichelleOriginalHardSourceKey } from "./michelle-sat-sections.ts";
 import { formatMichelleHardAssignmentTitle } from "./michelle-hard-assignment-title.ts";
 import { michelleXavierHardMathBankRecords } from "./michelle-xavier-hard-math.ts";
+import { allCuratedRwSourceKeys } from "./michelle-sophia-lamas-curated-rw.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 const HARD_SAT_SHORTFALL_TITLE = "Hard SAT set needs questions";
@@ -355,8 +356,11 @@ async function michelleHardPoolSourceKeys(): Promise<Set<string>> {
 }
 
 async function hardKeysForSession(session: { id: string; clientUserId?: string | null; subject: string; dateTime: Date; timezone?: string | null; status?: string | null; bookingStatus?: string | null; }): Promise<Set<string>> {
-  if (isMichelleFutureHardSatSession(session)) return michelleHardPoolSourceKeys();
-  return hardPoolSourceKeys();
+  const keys = isMichelleFutureHardSatSession(session)
+    ? await michelleHardPoolSourceKeys()
+    : await hardPoolSourceKeys();
+  for (const key of allCuratedRwSourceKeys()) keys.add(key);
+  return keys;
 }
 
 /** True only when every attached question is a renderable hard-pool item. */
@@ -1503,6 +1507,20 @@ export async function ensureHardSatSessionSets(
 }> {
   const difficulty = await satDifficultyForSession(session);
   if (difficulty !== "hard") return { difficulty, inSessionStatus: null };
+  const { ensureMichelleSophiaLamasCuratedRwSets } = await import(
+    "./michelle-sophia-lamas-curated-sets.ts"
+  );
+  const curated = await ensureMichelleSophiaLamasCuratedRwSets(session);
+  if (curated.action === "assigned" || curated.action === "unchanged") {
+    return {
+      difficulty,
+      inSessionStatus: curated.action === "assigned" ? "updated" : "unchanged",
+    };
+  }
+  if (curated.action === "blocked-by-attempts") {
+    return { difficulty, inSessionStatus: "attempted" };
+  }
+  // skipped or exhausted: keep the existing official hard picker.
   // Clients with no automatic pre-work keep their in-session set only.
   const prework = skipsAutoPrework(session)
     ? null

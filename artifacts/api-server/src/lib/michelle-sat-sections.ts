@@ -52,5 +52,9 @@ export function michelleSatSectionsForTutor(input: {
 }
 
 export function isMichelleOriginalHardSourceKey(sourceKey: string | null | undefined): boolean {
-  return (sourceKey ?? "").startsWith("original-hard-michelle-");
+  const key = sourceKey ?? "";
+  // Curated Sophia Lamas English bundles share the original-hard-michelle-
+  // prefix but must not enter Xavier math / generic hard pickers.
+  if (key.startsWith("original-hard-michelle-sophia-lamas-")) return false;
+  return key.startsWith("original-hard-michelle-");
 }
