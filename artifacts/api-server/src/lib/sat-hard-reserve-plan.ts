@@ -1,6 +1,6 @@
 import { isOfficialSatExtract } from "./sat-bank-diagnostic-quality.ts";
 import { isMichelleOriginalHardSourceKey } from "./michelle-sat-sections.ts";
-import { satSection } from "./sat-set-difficulty.ts";
+import { isIeltsContent, isSatExamFamily, michelleSkillRank, satSection } from "./sat-set-difficulty.ts";
 import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 
 /** Tutor-held hard items for a student who is doing well in the session. */
@@ -14,6 +14,7 @@ export type HardReserveCandidate = {
   examFamily?: string | null;
   sourceKind?: string | null;
   section?: string | null;
+  domain?: string | null;
   /** False when the row is not from the renderable module-2 hard bank. */
   inHardPool?: boolean;
   linkedQuestionId?: string | null;
@@ -145,6 +146,7 @@ export function selectHardReserve<T extends HardReserveCandidate>(
   for (const item of items) {
     if (!item.sourceKey || unique.has(item.sourceKey)) continue;
     if (item.inHardPool === false) continue;
+    if (!isSatExamFamily(item.examFamily) || isIeltsContent(item)) continue;
     const section = satSection(item.section ?? "");
     if (restrict && section !== restrict) continue;
     if (excludeKeys.has(item.sourceKey) || excludeIds.has(item.id)) continue;
@@ -170,7 +172,15 @@ export function selectHardReserve<T extends HardReserveCandidate>(
   const originalOrdered = originalItems.sort((left, right) => left.sourceKey.localeCompare(right.sourceKey));
   const officialPicked = shuffleWithSeed(officialOrdered, `${options.seed}:hard-reserve:official`);
   const originalPicked = shuffleWithSeed(originalOrdered, `${options.seed}:hard-reserve:original`);
-  const selected = [...officialPicked, ...originalPicked].slice(0, target);
+  const combined = [...officialPicked, ...originalPicked];
+  // Michelle: weak-skill items first; the seeded shuffle order breaks ties.
+  const ordered = options.includeMichelleOriginalHard === true
+    ? combined
+        .map((item, index) => ({ item, index, rank: michelleSkillRank(item) }))
+        .sort((left, right) => left.rank - right.rank || left.index - right.index)
+        .map((entry) => entry.item)
+    : combined;
+  const selected = ordered.slice(0, target);
   return { selected, target, shortfall: Math.max(0, target - selected.length) };
 }
 

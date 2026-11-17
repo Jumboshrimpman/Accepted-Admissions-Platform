@@ -26,7 +26,9 @@ import {
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   isOfficialHardTailItem,
+  isIeltsContent,
   isRenderableHardSatItem,
+  isSatExamFamily,
   satSection,
   toRenderableHardSatInput,
 } from "./sat-set-difficulty.ts";
@@ -56,6 +58,7 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
   for (const row of rows) {
     const item = toRenderableHardSatInput(row);
     if (!isRenderableHardSatItem(item)) continue;
+    if (!isSatExamFamily(row.examFamily) || isIeltsContent(row)) continue;
     const official = isOfficialSatExtract(item);
     const michelleOriginal =
       (row.sourceKind ?? "").trim().toLowerCase() === "original_hard" &&
@@ -68,6 +71,7 @@ async function loadOfficialHardReservePool(): Promise<HardReserveCandidate[]> {
       examFamily: row.examFamily,
       sourceKind: row.sourceKind,
       section: row.section,
+      domain: row.domain,
       inHardPool: true,
       linkedQuestionId: row.linkedQuestionId,
       prompt: row.prompt,

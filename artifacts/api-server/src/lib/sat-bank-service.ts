@@ -89,7 +89,9 @@ import {
 import {
   HARD_SAT_PREWORK_QUESTIONS,
   hardSatStudentFacing,
+  isIeltsContent,
   isRenderableHardSatItem,
+  isSatExamFamily,
   toRenderableHardSatInput,
   type SatDifficulty,
 } from "./sat-set-difficulty.ts";
@@ -1347,6 +1349,9 @@ export async function assignPreworkFromBank(input: {
   } else if (collectionId) {
     pool = pool.filter((row) => row.collectionId === collectionId);
   }
+  // SAT sessions never take IELTS (or other non-SAT) bank rows, even from an
+  // explicit collection or id list. IELTS goes to Taito's English sessions only.
+  pool = pool.filter((row) => isSatExamFamily(row.examFamily) && !isIeltsContent(row));
   pool = pool.filter((row) =>
     isAssignableBankItem({
       prompt: row.prompt,

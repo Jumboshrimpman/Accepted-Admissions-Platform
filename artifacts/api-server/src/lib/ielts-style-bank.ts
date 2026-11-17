@@ -7,6 +7,7 @@ import {
   examSourceCollectionsTable,
   sessionPreworkPlansTable,
   sessionsTable,
+  usersTable,
 } from "@workspace/db";
 import {
   englishDiagnosticTimeLimitMinutes,
@@ -33,6 +34,7 @@ import {
 import { materializeBankQuestion } from "./sat-bank-service.ts";
 import { filterUnseenBankItems, loadSeenStudentQuestions } from "./student-question-usage.ts";
 import {
+  TAITO_STUDENT_EMAIL,
   isEnglishSessionSubject,
   isTaitoFirstEnglishSession,
   taitoEnglishSessionIndex,
@@ -241,6 +243,28 @@ async function archiveSessionPrework(sessionId: string) {
   }
 }
 
+/** IELTS goes to Taito only. Any other student, or no student, is refused. */
+export function isIeltsEligibleEmail(email: string | null | undefined): boolean {
+  return (email ?? "").trim().toLowerCase() === TAITO_STUDENT_EMAIL;
+}
+
+/**
+ * Taito's sessions only. A session with a client must belong to Taito; an
+ * unlinked legacy session qualifies only when it is titled as Taito's.
+ */
+async function isIeltsEligibleSession(session: {
+  clientUserId: string | null;
+  title: string | null;
+}): Promise<boolean> {
+  if (!session.clientUserId) return /\btaito\b/i.test(session.title ?? "");
+  const [client] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, session.clientUserId))
+    .limit(1);
+  return isIeltsEligibleEmail(client?.email);
+}
+
 export async function assignEnglishPreworkFromBank(input: {
   sessionId: string;
   actorUserId?: string | null;
@@ -272,6 +296,12 @@ export async function assignEnglishPreworkFromBank(input: {
   if (!isEnglishSessionSubject(session.subject)) {
     throw Object.assign(
       new Error("IELTS-style pre-work can only be assigned to English or IELTS sessions."),
+      { status: 409 },
+    );
+  }
+  if (!(await isIeltsEligibleSession(session))) {
+    throw Object.assign(
+      new Error("IELTS material is reserved for Taito Goto and cannot be assigned to this student."),
       { status: 409 },
     );
   }
