@@ -12,4 +12,5 @@ export type AdminAssignmentUpdateDeliveryPhase = typeof AdminAssignmentUpdateDel
 export const AdminAssignmentUpdateDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;

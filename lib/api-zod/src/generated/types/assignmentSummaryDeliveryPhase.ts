@@ -12,4 +12,5 @@ export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPha
 export const AssignmentSummaryDeliveryPhase = {
   before_session: 'before_session',
   during_session: 'during_session',
+  skill_practice: 'skill_practice',
 } as const;

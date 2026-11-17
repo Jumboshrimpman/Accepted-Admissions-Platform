@@ -1,5 +1,6 @@
 import type { CurriculumBlock } from "@workspace/api-client-react";
 import { BookOpen, ExternalLink, Target } from "lucide-react";
+import { IeltsSpeakingBlock, readIeltsSpeakingConfig } from "@/components/ielts-speaking-block";
 import {
   isDeferredUnfinishedPrepBlock,
   isUnfinishedHomeworkClientCopy,
@@ -53,6 +54,8 @@ export function CurriculumBlockView({
 
   const { kind } = block;
   const config = block.config;
+  const ieltsSpeaking = readIeltsSpeakingConfig(config);
+  if (ieltsSpeaking) return <IeltsSpeakingBlock config={ieltsSpeaking} studentFacing={studentFacing} />;
   const libraryKind = textValue(config.libraryKind);
   const title = textValue(config.title || config.label, studentFacing);
   const url = textValue(config.url);

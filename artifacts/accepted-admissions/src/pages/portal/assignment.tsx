@@ -88,7 +88,7 @@ import {
   isAuthoredGridInQuestion,
   shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
-import { splitQuizRichText } from "@/lib/quiz-rich-text";
+import { quizAudioFromText, splitQuizRichText } from "@/lib/quiz-rich-text";
 import {
   quizMathRepairScope,
   repairMichelleQuizMathText,
@@ -96,12 +96,43 @@ import {
 } from "@/lib/stacked-math-notation";
 import { splitWrittenFeedback, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
+/**
+ * One listening recording for the current question. Rendered at a stable spot and keyed by
+ * src, so moving between questions of the same part keeps the audio playing.
+ */
+function ListeningAudioPlayer({
+  src,
+  label,
+  tone = "default",
+}: {
+  src: string;
+  label: string;
+  tone?: "default" | "ink";
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-4 ${tone === "ink" ? "border-white/25 bg-white/10 text-white" : "bg-muted/30"}`}
+      data-testid="listening-audio"
+    >
+      <p className="text-sm font-semibold">{label}</p>
+      <p className={`mt-1 text-xs ${tone === "ink" ? "text-white/70" : "text-muted-foreground"}`}>
+        In the real test you hear each recording once. For exam practice, press play once and answer as you
+        listen. The recording keeps playing while you move between its questions.
+      </p>
+      <audio controls preload="metadata" src={src} className="mt-3 w-full">
+        Your browser cannot play this recording.
+      </audio>
+    </div>
+  );
+}
+
 function QuizRichText({
   text,
   className,
   imageClassName,
   hideGarbledText,
   hideImages,
+  hideAudio,
   formatMath = false,
 }: {
   text: string | null | undefined;
@@ -109,10 +140,11 @@ function QuizRichText({
   imageClassName?: string;
   hideGarbledText?: boolean;
   hideImages?: boolean;
+  hideAudio?: boolean;
   formatMath?: boolean;
 }) {
   if (!text) return null;
-  const parts = splitQuizRichText(formatStudentStemText(text), { hideGarbledText, hideImages });
+  const parts = splitQuizRichText(formatStudentStemText(text), { hideGarbledText, hideImages, hideAudio });
   if (parts.length === 0) return null;
   return (
     <div
@@ -120,7 +152,12 @@ function QuizRichText({
       data-testid="quiz-rich-text"
     >
       {parts.map((part, index) =>
-        part.type === "image" ? (
+        part.type === "audio" ? (
+          <div key={`${part.src}-${index}`} className="my-3" data-testid="quiz-audio">
+            <p className="text-sm font-medium">{part.label}</p>
+            <audio controls preload="none" src={part.src} className="mt-2 w-full" />
+          </div>
+        ) : part.type === "image" ? (
           <img
             key={`${part.src}-${index}`}
             src={part.src}
@@ -168,6 +205,9 @@ function QuizRichText({
     </div>
   );
 }
+
+const IELTS_WRITTEN_ANSWER_HINT =
+  "Follow the word limit in the instructions. Spelling counts; capital letters do not. For a letter answer, type just the letter.";
 
 function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -543,6 +583,7 @@ function AnswerChoices({
     .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
     .filter((choice) => isStudentReadableChoiceText(choice.text));
   if (isAuthoredGridInQuestion(question)) {
+    const ieltsWritten = /\bielts\b/i.test(question.subject ?? "");
     return (
       <label className={`block space-y-2 ${ink ? "text-white" : ""}`} data-testid="grid-in-answer">
         <span className="text-lg font-semibold">{ink ? "Enter the answer together" : "Your answer"}</span>
@@ -550,7 +591,7 @@ function AnswerChoices({
           type="text"
           value={selected ?? ""}
           disabled={disabled}
-          placeholder="Type a number or expression"
+          placeholder={ieltsWritten ? "Type your answer" : "Type a number or expression"}
           onChange={(event) => onSelect(event.target.value)}
           className={`h-12 w-full rounded-xl border px-4 text-base ${
             ink
@@ -559,7 +600,7 @@ function AnswerChoices({
           }`}
         />
         <span className={`text-sm ${ink ? "text-white/70" : "text-muted-foreground"}`} data-testid="grid-in-format-hint">
-          {FREE_RESPONSE_FORMAT_HINT}
+          {ieltsWritten ? IELTS_WRITTEN_ANSWER_HINT : FREE_RESPONSE_FORMAT_HINT}
         </span>
       </label>
     );
@@ -1418,6 +1459,7 @@ export default function PortalAssignment() {
   if (!question) return null;
   const response = localResponses[question.id] ?? {};
   const showPrediction = studentSeesPredictionStep(question.predictionFirst);
+  const listeningAudio = quizAudioFromText(question.stimulus) ?? quizAudioFromText(question.prompt);
   const recordedHere = Boolean(response.finalAnswer?.trim());
   const revealedHere = isQuestionFeedbackRevealed(response);
 
@@ -1455,9 +1497,15 @@ export default function PortalAssignment() {
           {question.skill ? (
             <Badge className="mt-4 border-0 bg-white/20 text-white">{question.skill}</Badge>
           ) : null}
+          {listeningAudio ? (
+            <div className="mt-5">
+              <ListeningAudioPlayer key={listeningAudio.src} src={listeningAudio.src} label={listeningAudio.label} tone="ink" />
+            </div>
+          ) : null}
           {question.stimulus ? (
             <QuizRichText
               text={question.stimulus}
+              hideAudio
               className="mt-5 text-white/90"
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
               hideGarbledText={shouldHideQuizOcrStem(question)}
@@ -1468,6 +1516,7 @@ export default function PortalAssignment() {
           {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
+              hideAudio
               className="mt-5 text-xl font-medium leading-relaxed"
               hideGarbledText={shouldHideQuizOcrStem(question)}
               formatMath={formatMath}
@@ -1740,12 +1789,16 @@ export default function PortalAssignment() {
         className="min-w-0 space-y-6 overflow-visible pt-4"
         data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : "quiz-question-stem"}
       >
+        {listeningAudio ? (
+          <ListeningAudioPlayer key={listeningAudio.src} src={listeningAudio.src} label={listeningAudio.label} />
+        ) : null}
         <div className="min-w-0 space-y-6 overflow-visible" data-testid="quiz-stimulus-panel">
           {question.stimulus && (
             <Card className="overflow-visible border-0 bg-muted/30 shadow-none">
               <CardContent className="min-w-0 overflow-x-auto overflow-y-visible p-6">
                 <QuizRichText
                   text={question.stimulus}
+                  hideAudio
                   hideGarbledText={shouldHideQuizOcrStem(question)}
                   hideImages={shouldHideMismatchedQuizFigures(question)}
                   formatMath={formatMath}
@@ -1756,6 +1809,7 @@ export default function PortalAssignment() {
           {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
+              hideAudio
               className="text-lg font-medium leading-relaxed"
               hideGarbledText={shouldHideQuizOcrStem(question)}
               formatMath={formatMath}

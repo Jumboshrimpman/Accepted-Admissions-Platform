@@ -983,15 +983,16 @@ export default function TutorSession() {
                       {block.status === "published" ? "Unpublish" : "Publish"}
                     </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {typeof block.config.libraryKind === "string" ? (
+                  <div className="text-sm text-muted-foreground">
+                    {typeof block.config.libraryKind === "string" ||
+                    block.config.format === "ielts_speaking" ? (
                       <CurriculumBlockView block={block} />
                     ) : block.kind === "heading" ? (
                       String(block.config.text ?? "")
                     ) : (
                       JSON.stringify(block.config)
                     )}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
