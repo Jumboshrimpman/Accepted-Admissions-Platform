@@ -149,6 +149,7 @@ import {
   rollbackBookingAfterCalendarFailure,
   sessionScheduleChangeError,
 } from "../lib/booking-service";
+import { queueStudentBookingConfirmation } from "../lib/booking-student-email";
 import { loadBillingHistory, resolveBillingHistoryAccess } from "../lib/billing-history";
 import { remainingCreditHoursForProducts, summarizeCreditHours } from "../lib/credit-hours";
 import {
@@ -9068,6 +9069,11 @@ async function respondWithPrepaidBooking(
           await ensureMichelleSophiaLamasSatPrepSlidesSafe(session.id);
         }
       }
+      queueStudentBookingConfirmation({
+        sessionId: session.id,
+        paymentId: holdPaymentId ?? null,
+        meetUrl: bookingMeetUrl,
+      });
       const onBooked = (req as AuthedRequest & {
         onPrepaidBooked?: (sessionId: string) => Promise<void>;
       }).onPrepaidBooked;
@@ -9319,6 +9325,7 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
           .where(eq(sessionsTable.id, live.id))
           .limit(1);
         if (existing) {
+          queueStudentBookingConfirmation({ sessionId: existing.id, paymentId });
           res.status(201).json(await bookingSessionShape(existing));
           return;
         }
@@ -9385,7 +9392,11 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
       .where(eq(paymentsTable.id, paymentId))
       .limit(1);
     if (!payment || payment.status !== "paid" || !payment.clientUserId) return;
-    if (await liveBookedSessionForPayment(payment.auditMetadata)) return;
+    const alreadyBooked = await liveBookedSessionForPayment(payment.auditMetadata);
+    if (alreadyBooked) {
+      queueStudentBookingConfirmation({ sessionId: alreadyBooked.id, paymentId });
+      return;
+    }
     const intent = bookingIntentFromMetadata(payment.auditMetadata);
     if (!intent) return;
     const [user] = await db

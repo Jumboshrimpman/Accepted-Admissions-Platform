@@ -626,6 +626,22 @@ export const paymentsTable = pgTable(
   ],
 );
 
+/** One student confirmation email per booked session. Claimed before send so webhook retries cannot double-send. There is no backfill of past bookings. */
+export const studentBookingConfirmationSendsTable = pgTable(
+  "student_booking_confirmation_sends",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessionsTable.id, { onDelete: "cascade" }),
+    paymentId: uuid("payment_id").references(() => paymentsTable.id, { onDelete: "set null" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_booking_confirmation_sends_session_idx").on(table.sessionId),
+  ],
+);
+
 /**
  * A direct-checkout hold for one tutor slot. Active rows block other clients.
  * Released rows stay for audit and drop out of the partial unique index.

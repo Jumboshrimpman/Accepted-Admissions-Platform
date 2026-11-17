@@ -42,3 +42,12 @@ Do **not** set `RESEND_API_KEY` (or Clerk/Stripe secrets) on the Vercel frontend
 ## Local / preview
 
 Copy `.env.example`. Without `RESEND_API_KEY`, guidance submits still return `201` and store the row. Tests use a mock transport and never claim `sent` unless that transport is injected.
+
+
+## Student booking confirmation
+
+When a student booking is paid or confirmed, the API also sends a student-facing confirmation from `Accepted Admissions <noreply@acceptedadmissions.org>` to the student's account email. The admin alert to `admin@acceptedadmissions.org` is unchanged.
+
+The student email is queued on the booking confirmation path only (and on a webhook retry for that same payment/session). A unique `student_booking_confirmation_sends` row is claimed before the send, so a Stripe webhook retry cannot double-send. Failed sends release the claim so a later retry can try again. Deploying this change does not backfill or email past bookings.
+
+Stripe Checkout PaymentIntents created by the app set `payment_intent_data.receipt_email` to the customer's email so Stripe can send a receipt on future successful payments. Existing charges are not updated, and no Stripe account-wide receipt setting is changed.
