@@ -32,6 +32,7 @@ import {
 } from "@/components/session-tutor-materials";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue, questionReportSummary, useQuestionReports } from "./question-reports-queue";
+import { AsyncMathVideosPanel } from "@/components/async-math-videos-panel";
 import { ClientIntakeAdmin, clientIntakeSummary, submittedIntakeCount, useClientIntakes } from "@/components/client-intake-admin";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -367,6 +368,8 @@ export default function AdminDashboard() {
           />
         </div>
       </CollapsedAdminSection>
+
+      <AsyncMathVideosPanel mode="admin" />
 
       <CollapsedAdminSection
         testId="card-client-intake"

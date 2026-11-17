@@ -194,6 +194,7 @@ import {
   handleEssayCheckoutRequest,
   mountEssayRequestRoutes,
 } from "../lib/essay-request-http";
+import { mountAsyncMathVideoRoutes } from "../lib/async-math-video-http";
 import {
   BOOKING_CHECKOUT_PAYMENT_PENDING,
   BOOKING_CHECKOUT_SLOT_TAKEN,
@@ -18203,5 +18204,9 @@ mountEssayRequestRoutes(
   ensureRole(["tutor", "administrator"]),
   assertDirectCheckoutSlotOpen,
 );
+
+// Async SAT Math video explanations. Hidden unless ASYNC_MATH_VIDEOS_ENABLED
+// is set AND the student has an enabled enrollment.
+mountAsyncMathVideoRoutes(router);
 
 export default router;

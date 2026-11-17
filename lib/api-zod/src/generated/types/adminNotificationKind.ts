@@ -20,4 +20,5 @@ export const AdminNotificationKind = {
   calendar_reconnect_booking_refused: 'calendar_reconnect_booking_refused',
   prework_not_startable: 'prework_not_startable',
   question_report: 'question_report',
+  math_video_request: 'math_video_request',
 } as const;

@@ -38,6 +38,7 @@ import {
   viewerMayDownloadSessionPdfs,
 } from "@/components/session-tutor-materials";
 import { EssayRequestsPanel } from "@/components/essay-editing-panel";
+import { AsyncMathVideosPanel } from "@/components/async-math-videos-panel";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
@@ -233,6 +234,7 @@ export function TutorDashboardView({
       )}
 
       {readOnly ? null : <EssayRequestsPanel mode="tutor" />}
+      {readOnly ? null : <AsyncMathVideosPanel mode="tutor" />}
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7">

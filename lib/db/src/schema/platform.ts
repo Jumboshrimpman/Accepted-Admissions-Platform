@@ -1277,6 +1277,106 @@ export const sharedMeetOverlapResolutionsTable = pgTable(
   ],
 );
 
+/**
+ * Async SAT Math video explanations. Off unless the student has an enabled
+ * enrollment AND ASYNC_MATH_VIDEOS_ENABLED is set on the server.
+ */
+export const mathVideoEnrollmentsTable = pgTable("math_video_enrollments", {
+  clientUserId: uuid("client_user_id")
+    .primaryKey()
+    .references(() => usersTable.id),
+  tutorProfileId: uuid("tutor_profile_id")
+    .notNull()
+    .references(() => tutorProfilesTable.id),
+  enabled: boolean("enabled").notNull().default(false),
+  /** Submissions close at this instant. Delivered videos stay visible. */
+  offerEndsAt: timestamp("offer_ends_at", { withTimezone: true }).notNull(),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type MathVideoRequestItem = { text: string };
+
+export const mathVideoRequestsTable = pgTable(
+  "math_video_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    tutorProfileId: uuid("tutor_profile_id")
+      .notNull()
+      .references(() => tutorProfilesTable.id),
+    /** draft | submitted | delivered | cancelled */
+    status: text("status").notNull().default("draft"),
+    items: jsonb("items").$type<MathVideoRequestItem[]>().notNull().default([]),
+    questionCount: integer("question_count").notNull().default(0),
+    driveFolderId: text("drive_folder_id"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    youtubeVideoId: text("youtube_video_id"),
+    youtubeUrl: text("youtube_url"),
+    followUpAssignmentId: uuid("follow_up_assignment_id").references(() => assignmentsTable.id),
+    tutorNote: text("tutor_note"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("math_video_requests_client_created_idx").on(table.clientUserId, table.createdAt),
+    index("math_video_requests_tutor_status_idx").on(table.tutorProfileId, table.status),
+  ],
+);
+
+/** Question photos/PDFs. Bytes live in Google Drive, never in Postgres or on disk. */
+export const mathVideoRequestFilesTable = pgTable(
+  "math_video_request_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requestId: uuid("request_id")
+      .notNull()
+      .references(() => mathVideoRequestsTable.id),
+    itemIndex: integer("item_index").notNull(),
+    driveFileId: text("drive_file_id").notNull(),
+    driveWebViewLink: text("drive_web_view_link"),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("math_video_request_files_request_idx").on(table.requestId, table.itemIndex),
+    uniqueIndex("math_video_request_files_drive_file_idx").on(table.driveFileId),
+  ],
+);
+
+/** 1 credit = 1 question. Balance is the sum of delta. */
+export const mathVideoCreditEntriesTable = pgTable(
+  "math_video_credit_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    delta: integer("delta").notNull(),
+    /** grant | adjustment | debit | refund */
+    kind: text("kind").notNull(),
+    requestId: uuid("request_id").references(() => mathVideoRequestsTable.id),
+    note: text("note"),
+    createdByUserId: uuid("created_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("math_video_credit_entries_client_idx").on(table.clientUserId, table.createdAt),
+    uniqueIndex("math_video_credit_entries_request_kind_idx")
+      .on(table.requestId, table.kind)
+      .where(sql`${table.requestId} IS NOT NULL`),
+  ],
+);
+
 export const insertCurriculumBlockSchema =
   createInsertSchema(curriculumBlocksTable).omit({
     id: true,

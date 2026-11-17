@@ -582,6 +582,13 @@
       "when": 1792885000000,
       "tag": "0089_user_dedicated_meet_url",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792886000000,
+      "tag": "0090_async_math_video_requests",
+      "breakpoints": true
     }
   ]
 }

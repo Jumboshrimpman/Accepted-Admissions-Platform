@@ -71,6 +71,7 @@ import { isLiveListedSession } from "@/lib/quiz-content";
 import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 import { adminCurriculumHref } from "@/lib/admin-curriculum-location";
 import { ClientIntakeAction } from "@/components/client-intake-modal";
+import { AsyncMathVideosPanel } from "@/components/async-math-videos-panel";
 
 function StudentQuizResolutionButton({
   assignmentId,
@@ -999,6 +1000,8 @@ export function ClientDashboardView({
           ) : null}
         </CardContent>
       </Card>
+
+      {!adminPreview && dashboard.user.role === "student" ? <AsyncMathVideosPanel mode="student" /> : null}
 
       {adminPreview && previewFinancials && shouldShowSatPaymentReceipts(dashboard.credits) ? (
         <div data-testid="portal-payment-receipts">
