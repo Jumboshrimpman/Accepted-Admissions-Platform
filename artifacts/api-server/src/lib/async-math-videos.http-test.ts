@@ -185,7 +185,7 @@ test("async SAT Math video requests: flag, enrollment, credits, Drive uploads, 4
     });
     assert.equal(enrolled.status, 200, JSON.stringify(enrolled.body));
     assert.equal(enrolled.body.enabled, false);
-    assert.equal(enrolled.body.offerEndsAt, "2026-12-06T05:00:00.000Z");
+    assert.equal("offerEndsAt" in enrolled.body, false, "no end date");
     assert.deepEqual((await student.json("/api/math-videos")).body, { enabled: false }, "hidden until enabled");
 
     const granted = await admin.json("/api/math-videos/credits", "POST", { clientUserId: fixture.student.id, credits: 15, note: "Paid" });
@@ -194,17 +194,12 @@ test("async SAT Math video requests: flag, enrollment, credits, Drive uploads, 4
     assert.equal((await admin.json("/api/math-videos/credits", "POST", { clientUserId: fixture.student.id, credits: 0 })).status, 400);
     assert.equal((await admin.json("/api/math-videos/credits", "POST", { clientUserId: fixture.student.id, credits: -16 })).status, 400);
 
-    // Pretend the offer is still open regardless of today's date.
-    await admin.json("/api/math-videos/enrollments", "PUT", {
-      clientUserId: fixture.student.id,
-      enabled: true,
-      offerEndsAt: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(),
-    });
+    await admin.json("/api/math-videos/enrollments", "PUT", { clientUserId: fixture.student.id, enabled: true });
 
     let overview = await student.json("/api/math-videos");
     assert.equal(overview.body.enabled, true);
     assert.equal(overview.body.credits, 15);
-    assert.equal(overview.body.offer.open, true);
+    assert.equal("offer" in overview.body, false, "submissions stay open with no end date");
     assert.equal(overview.body.rules.minQuestions, 3);
     assert.equal(overview.body.rules.maxQuestions, 10);
     assert.equal(overview.body.uploadsConfigured, false);
@@ -332,9 +327,9 @@ test("async SAT Math video requests: flag, enrollment, credits, Drive uploads, 4
     );
     const options = await tutor.json(`/api/math-videos/requests/${requestId}/quiz-options`);
     assert.deepEqual(options.body.quizzes.map((row: { id: string }) => row.id), [quiz!.id]);
+    // Video first; the quiz is attached after delivery.
     const saved = await tutor.json(`/api/math-videos/requests/${requestId}/delivery`, "PUT", {
       youtubeUrl: "https://youtu.be/dQw4w9WgXcQ?si=xyz",
-      followUpAssignmentId: quiz!.id,
       tutorNote: "Watch Q2 twice.",
     });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
@@ -346,19 +341,38 @@ test("async SAT Math video requests: flag, enrollment, credits, Drive uploads, 4
     assert.equal(mine.video, null);
     assert.equal(mine.followUpQuiz, null);
 
-    const unpublished = await tutor.json(`/api/math-videos/requests/${requestId}/deliver`, "POST");
-    assert.equal(unpublished.status, 400);
-    assert.match(unpublished.body.error, /Publish/);
-    await db.update(assignmentsTable).set({ status: "published" }).where(eq(assignmentsTable.id, quiz!.id));
     const delivered = await tutor.json(`/api/math-videos/requests/${requestId}/deliver`, "POST");
     assert.equal(delivered.status, 200, JSON.stringify(delivered.body));
     assert.equal(delivered.body.status, "delivered");
 
+    // Student sees the video now, with no quiz button yet.
     mine = (await student.json("/api/math-videos")).body.requests[0];
     assert.equal(mine.status, "delivered");
     assert.equal(mine.video.embedUrl.startsWith("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"), true);
-    assert.equal(mine.followUpQuiz.href, `/portal/assignments/${quiz!.id}`);
+    assert.equal(mine.followUpQuiz, null);
     assert.equal(mine.tutorNote, "Watch Q2 twice.");
+
+    // Attaching the quiz after delivery: still not shown while it is a draft.
+    const attached = await tutor.json(`/api/math-videos/requests/${requestId}/delivery`, "PUT", { followUpAssignmentId: quiz!.id });
+    assert.equal(attached.status, 200, JSON.stringify(attached.body));
+    assert.equal(attached.body.status, "delivered");
+    mine = (await student.json("/api/math-videos")).body.requests[0];
+    assert.equal(mine.followUpQuiz, null, "draft quiz stays hidden");
+    await db.update(assignmentsTable).set({ status: "published" }).where(eq(assignmentsTable.id, quiz!.id));
+    mine = (await student.json("/api/math-videos")).body.requests[0];
+    assert.equal(mine.followUpQuiz.href, `/portal/assignments/${quiz!.id}`);
+
+    // The quiz can be changed or cleared later, but a delivered request keeps its video.
+    assert.equal(
+      (await tutor.json(`/api/math-videos/requests/${requestId}/delivery`, "PUT", { youtubeUrl: "" })).status,
+      400,
+      "delivered request keeps its video",
+    );
+    const cleared = await tutor.json(`/api/math-videos/requests/${requestId}/delivery`, "PUT", { followUpAssignmentId: null });
+    assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+    assert.equal((await student.json("/api/math-videos")).body.requests[0].followUpQuiz, null);
+    await tutor.json(`/api/math-videos/requests/${requestId}/delivery`, "PUT", { followUpAssignmentId: quiz!.id });
+    assert.equal((await student.json("/api/math-videos")).body.requests[0].followUpQuiz.href, `/portal/assignments/${quiz!.id}`);
     assert.equal((await admin.json(`/api/math-videos/requests/${requestId}/cancel`, "POST")).status, 409);
 
     // ---- A second request cancelled by admin is refunded exactly once.
@@ -386,19 +400,15 @@ test("async SAT Math video requests: flag, enrollment, credits, Drive uploads, 4
     assert.equal(short.status, 402);
     assert.match(short.body.error, /needs 3 question credits and you have 2/);
 
-    // ---- Offer closed: no new drafts or submissions, history stays visible.
-    await db
-      .update(mathVideoEnrollmentsTable)
-      .set({ offerEndsAt: new Date(Date.now() - 1000) })
-      .where(eq(mathVideoEnrollmentsTable.clientUserId, fixture.student.id));
+    // ---- No end date: after topping up, the student can still submit.
     await admin.json("/api/math-videos/credits", "POST", { clientUserId: fixture.student.id, credits: 5 });
-    const late = await student.json(`/api/math-videos/requests/${third.body.id}/submit`, "POST", {
+    const later = await student.json(`/api/math-videos/requests/${third.body.id}/submit`, "POST", {
       items: [{ text: "a" }, { text: "b" }, { text: "c" }],
     });
-    assert.equal(late.status, 409);
-    assert.equal(late.body.code, "OFFER_CLOSED");
+    assert.equal(later.status, 200, JSON.stringify(later.body));
+    assert.equal(later.body.credits, 4, "unused credits stay on the balance");
     overview = await student.json("/api/math-videos");
-    assert.equal(overview.body.offer.open, false);
+    assert.equal(overview.body.credits, 4);
     assert.equal(overview.body.requests.some((row: { id: string }) => row.id === requestId), true);
 
     // ---- Hiding the student hides everything again.

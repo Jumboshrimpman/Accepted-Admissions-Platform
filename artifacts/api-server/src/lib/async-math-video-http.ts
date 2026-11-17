@@ -12,7 +12,6 @@ import {
   MATH_VIDEO_TURNAROUND_HOURS,
   MATH_VIDEO_TUTOR_NOTE_MAX,
   normalizeItems,
-  offerIsOpen,
   parseGrantAmount,
   parseYouTubeUrl,
   requestFolderName,
@@ -195,7 +194,6 @@ async function overview(req: Authed, res: Response): Promise<void> {
       audience: "student",
       rules,
       uploadsConfigured,
-      offer: { open: offerIsOpen(enrollment, now), endsAt: enrollment!.offerEndsAt.toISOString() },
       credits: await balanceFor(user.id),
       draft: views.find((view) => view.status === "draft") ?? null,
       requests: views.filter((view) => view.status !== "draft"),
@@ -235,9 +233,6 @@ async function startDraft(req: Authed, res: Response): Promise<void> {
   denyAliasWrite(req);
   const enrollment = await enrollmentFor(user.id);
   if (!studentMayView(true, enrollment)) throw new MathVideoError(404, "NOT_FOUND", "Not found");
-  if (!offerIsOpen(enrollment, new Date())) {
-    throw new MathVideoError(409, "OFFER_CLOSED", "Video requests are closed. The offer ran until Dec 5.");
-  }
   const draft = await openDraft(user.id, enrollment!.tutorProfileId);
   const [view] = await requestViews([draft], "student", new Date());
   res.status(201).json(view);
@@ -412,7 +407,6 @@ async function updateDelivery(req: Authed, res: Response): Promise<void> {
   }
   if (body.followUpAssignmentId !== undefined) {
     if (body.followUpAssignmentId === null || body.followUpAssignmentId === "") {
-      if (request.status === "delivered") throw new MathVideoError(400, "QUIZ_REQUIRED", "A delivered request needs its quiz.");
       patch.followUpAssignmentId = null;
     } else {
       const assignmentId = String(body.followUpAssignmentId);
@@ -437,11 +431,6 @@ async function deliver(req: Authed, res: Response): Promise<void> {
   denyAliasWrite(req);
   const decision = deliveryDecision(request);
   if (!decision.ok) throw new MathVideoError(decision.status, "DELIVERY", decision.error);
-  const assignment = await assignmentForStudent(request.followUpAssignmentId!, request.clientUserId);
-  if (!assignment) throw new MathVideoError(400, "QUIZ", "Choose a quiz assigned to this student.");
-  if (assignment.status !== "published") {
-    throw new MathVideoError(400, "QUIZ_UNPUBLISHED", "Publish the follow-up quiz first so the student can open it.");
-  }
   const updated = await markDelivered(request.id, new Date());
   if (!updated) throw new MathVideoError(409, "DELIVERY", "This request is already delivered.");
   const [view] = await requestViews([updated], user.role === "administrator" ? "admin" : "tutor", new Date());
@@ -481,23 +470,16 @@ async function setEnrollment(req: Authed, res: Response): Promise<void> {
   const tutorProfileId: string | null =
     requestedTutor ?? existing?.tutorProfileId ?? (await defaultMathVideoTutorProfileId());
   if (!tutorProfileId) throw new MathVideoError(400, "TUTOR", "Choose the tutor who records the videos.");
-  let offerEndsAt: Date | null = null;
-  if (typeof body.offerEndsAt === "string" && body.offerEndsAt) {
-    offerEndsAt = new Date(body.offerEndsAt);
-    if (Number.isNaN(offerEndsAt.getTime())) throw new MathVideoError(400, "OFFER_END", "Enter a valid end time.");
-  }
   const row = await upsertEnrollment({
     clientUserId: student.id,
     tutorProfileId,
     enabled: body.enabled === true,
-    offerEndsAt,
     adminUserId: user.id,
   });
   res.json({
     clientUserId: row.clientUserId,
     tutorProfileId: row.tutorProfileId,
     enabled: row.enabled,
-    offerEndsAt: row.offerEndsAt.toISOString(),
   });
 }
 

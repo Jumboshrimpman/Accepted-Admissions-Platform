@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS "math_video_enrollments" (
   "client_user_id" uuid PRIMARY KEY NOT NULL,
   "tutor_profile_id" uuid NOT NULL,
   "enabled" boolean DEFAULT false NOT NULL,
-  "offer_ends_at" timestamp with time zone NOT NULL,
   "created_by_user_id" uuid,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL

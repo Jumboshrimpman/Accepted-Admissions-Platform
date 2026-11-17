@@ -10,10 +10,8 @@ import {
   deliveryDecision,
   dueAtForSubmission,
   isOverdue,
-  MATH_VIDEO_DEFAULT_OFFER_ENDS_AT,
   MATH_VIDEO_FILE_MAX_BYTES,
   normalizeItems,
-  offerIsOpen,
   parseGrantAmount,
   parseYouTubeUrl,
   requestFolderName,
@@ -84,16 +82,12 @@ test("feature flag is off unless explicitly enabled", () => {
   assert.equal(asyncMathVideosFlagEnabled({ ASYNC_MATH_VIDEOS_ENABLED: " TRUE " }), true);
 });
 
-test("student visibility needs the flag AND an enabled enrollment; the offer closes after Dec 5 ET", () => {
-  const enrollment = { enabled: true, offerEndsAt: MATH_VIDEO_DEFAULT_OFFER_ENDS_AT };
+test("student visibility needs the flag AND an enabled enrollment; there is no end date", () => {
+  const enrollment = { enabled: true };
   assert.equal(studentMayView(false, enrollment), false);
   assert.equal(studentMayView(true, null), false);
   assert.equal(studentMayView(true, { ...enrollment, enabled: false }), false);
   assert.equal(studentMayView(true, enrollment), true);
-  assert.equal(MATH_VIDEO_DEFAULT_OFFER_ENDS_AT.toISOString(), "2026-12-06T05:00:00.000Z");
-  assert.equal(offerIsOpen(enrollment, new Date("2026-12-05T23:59:00-05:00")), true);
-  assert.equal(offerIsOpen(enrollment, new Date("2026-12-06T00:00:00-05:00")), false);
-  assert.equal(offerIsOpen({ ...enrollment, enabled: false }, new Date("2026-11-20T00:00:00Z")), false);
 });
 
 test("48-hour due time and overdue flag", () => {
@@ -124,37 +118,33 @@ test("items: trims notes, caps at 10 questions and note length", () => {
   assert.equal(normalizeItems([{ text: "x".repeat(2001) }]).ok, false);
 });
 
-test("submission: 3–10 questions, each with a note or photo, one credit each, offer open", () => {
+test("submission: 3–10 questions, each with a note or photo, one credit each", () => {
   const three = [{ text: "a" }, { text: "" }, { text: "c" }];
-  assert.deepEqual(checkSubmission({ items: three, fileItemIndexes: [1], balance: 15, offerOpen: true }), {
+  assert.deepEqual(checkSubmission({ items: three, fileItemIndexes: [1], balance: 15 }), {
     ok: true,
     questionCount: 3,
   });
-  const two = checkSubmission({ items: three.slice(0, 2), fileItemIndexes: [1], balance: 15, offerOpen: true });
+  const two = checkSubmission({ items: three.slice(0, 2), fileItemIndexes: [1], balance: 15 });
   assert.equal(two.ok, false);
   if (!two.ok) assert.equal(two.code, "QUESTION_COUNT");
   const eleven = checkSubmission({
     items: Array.from({ length: 11 }, () => ({ text: "x" })),
     fileItemIndexes: [],
     balance: 50,
-    offerOpen: true,
   });
   assert.equal(eleven.ok, false);
-  const empty = checkSubmission({ items: three, fileItemIndexes: [], balance: 15, offerOpen: true });
+  const empty = checkSubmission({ items: three, fileItemIndexes: [], balance: 15 });
   assert.equal(empty.ok, false);
   if (!empty.ok) assert.match(empty.error, /Question 2/);
-  const orphan = checkSubmission({ items: three, fileItemIndexes: [1, 5], balance: 15, offerOpen: true });
+  const orphan = checkSubmission({ items: three, fileItemIndexes: [1, 5], balance: 15 });
   assert.equal(orphan.ok, false);
   if (!orphan.ok) assert.equal(orphan.code, "ORPHAN_FILE");
-  const broke = checkSubmission({ items: three, fileItemIndexes: [1], balance: 2, offerOpen: true });
+  const broke = checkSubmission({ items: three, fileItemIndexes: [1], balance: 2 });
   assert.equal(broke.ok, false);
   if (!broke.ok) {
     assert.equal(broke.status, 402);
     assert.match(broke.error, /needs 3 question credits and you have 2/);
   }
-  const closed = checkSubmission({ items: three, fileItemIndexes: [1], balance: 15, offerOpen: false });
-  assert.equal(closed.ok, false);
-  if (!closed.ok) assert.equal(closed.code, "OFFER_CLOSED");
 });
 
 test("uploads: images and PDFs up to 15 MB with a declared size", () => {
@@ -180,10 +170,10 @@ test("uploads: images and PDFs up to 15 MB with a declared size", () => {
   assert.equal(safeUploadFilename("   ", "image/png"), "question.png");
 });
 
-test("delivery needs a submitted request with a video and a quiz", () => {
+test("delivery needs a submitted request with a video; the quiz can come later", () => {
   assert.equal(deliveryDecision({ status: "submitted", youtubeVideoId: ID, followUpAssignmentId: "a" }).ok, true);
   assert.equal(deliveryDecision({ status: "submitted", youtubeVideoId: null, followUpAssignmentId: "a" }).ok, false);
-  assert.equal(deliveryDecision({ status: "submitted", youtubeVideoId: ID, followUpAssignmentId: null }).ok, false);
+  assert.equal(deliveryDecision({ status: "submitted", youtubeVideoId: ID, followUpAssignmentId: null }).ok, true);
   assert.equal(deliveryDecision({ status: "delivered", youtubeVideoId: ID, followUpAssignmentId: "a" }).ok, false);
   assert.equal(deliveryDecision({ status: "draft", youtubeVideoId: ID, followUpAssignmentId: "a" }).ok, false);
 });
@@ -321,6 +311,7 @@ test("migration 0090 is additive and journaled", () => {
   const statements = sql.replace(/ON (DELETE|UPDATE) no action/g, "").replace(/^--.*$/gm, "");
   assert.doesNotMatch(statements, /\bDROP\b|\bTRUNCATE\b|\bDELETE\b|\bUPDATE\b|ALTER TABLE "(users|sessions|assignments|payments|credit_ledger)"/i);
   assert.doesNotMatch(statements, /INSERT INTO/i, "no student is enrolled by the migration");
+  assert.doesNotMatch(statements, /offer_ends_at/, "no end date on the offer");
   const journal = JSON.parse(readFileSync(new URL("../../../../lib/db/drizzle/meta/_journal.json", import.meta.url), "utf8"));
   assert.ok(journal.entries.some((entry: { tag: string }) => entry.tag === "0090_async_math_video_requests"));
 });

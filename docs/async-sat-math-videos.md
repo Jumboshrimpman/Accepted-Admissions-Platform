@@ -1,9 +1,11 @@
 # Asynchronous SAT Math video explanations
 
-Draft feature for Michelle Makarem with Xavier Morales ("until Dec 5").
+Draft feature for Michelle Makarem with Xavier Morales. There is no end date:
+requests stay open as long as the student is enabled and has credits.
 Students send 3–10 SAT Math questions per request. Within 48 hours the tutor
-posts an unlisted YouTube video and a follow-up practice quiz in the portal.
-1 question credit = 1 question.
+posts an unlisted YouTube video in the portal; the follow-up practice quiz can
+go in with it or be attached later. 1 question credit = 1 question. Unused
+credits never expire and are not refunded; the balance stays visible.
 
 ## It is off by default
 
@@ -37,11 +39,15 @@ Hiding a student again hides the panel and blocks their file links.
   into separate questions. Submit charges one credit per question and sets
   `due_at = submitted_at + 48h`. Delivered requests show the video (thumbnail,
   plays inline from `youtube-nocookie.com` after a click), an **Open on
-  YouTube** link, the tutor's note, and a button to the follow-up quiz.
+  YouTube** link, the tutor's note, and a button to the follow-up quiz once
+  one is attached and published (until then: "quiz will appear here soon").
 - **Tutor** (tutor dashboard): queue sorted by due time with a countdown /
   overdue badge, question photos, an unlisted-YouTube link field with live
-  preview, a picker for quizzes assigned to that student (build and publish it
-  in the normal quiz builder first), optional note, **Mark delivered**.
+  preview, a picker for quizzes assigned to that student (built in the normal
+  quiz builder), optional note, **Mark delivered**. Only the video is required
+  to deliver. The quiz can be attached, changed, or cleared after delivery
+  (delivered requests without one show a "Quiz to add" badge); a draft quiz
+  stays hidden from the student until it is published.
 - **Admin** (admin dashboard): everything the tutor sees plus enrollment,
   credit grants/adjustments, Drive links, and **Cancel and refund credits**.
   Each submission adds an admin notification (`math_video_request`). No email

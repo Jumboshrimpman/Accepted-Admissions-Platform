@@ -75,11 +75,9 @@ export function submitReadiness(args: {
   credits: number;
   minQuestions: number;
   maxQuestions: number;
-  offerOpen: boolean;
   uploading: boolean;
 }): { ready: boolean; count: number; reason: string | null } {
   const count = args.items.length;
-  if (!args.offerOpen) return { ready: false, count, reason: "Video requests closed after Dec 5." };
   if (args.uploading) return { ready: false, count, reason: "Wait for the photos to finish uploading." };
   if (count < args.minQuestions) {
     return { ready: false, count, reason: `Add at least ${args.minQuestions} questions (you have ${count}).` };

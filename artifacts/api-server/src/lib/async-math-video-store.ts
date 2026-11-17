@@ -16,8 +16,6 @@ import {
   creditBalance,
   dueAtForSubmission,
   isOverdue,
-  MATH_VIDEO_DEFAULT_OFFER_ENDS_AT,
-  offerIsOpen,
   youtubeEmbedUrl,
   youtubeThumbnailUrl,
   type DraftItem,
@@ -240,7 +238,6 @@ export async function submitDraft(args: {
     if (request.status !== "draft") {
       throw new MathVideoError(409, "ALREADY_SUBMITTED", "This request was already submitted.");
     }
-    const enrollment = await enrollmentFor(args.clientUserId, tx);
     const files = await tx
       .select({ itemIndex: mathVideoRequestFilesTable.itemIndex })
       .from(mathVideoRequestFilesTable)
@@ -250,7 +247,6 @@ export async function submitDraft(args: {
       items: args.items,
       fileItemIndexes: files.map((file) => file.itemIndex),
       balance,
-      offerOpen: offerIsOpen(enrollment, args.now),
     });
     if (!check.ok) throw new MathVideoError(check.status, check.code, check.error);
     const dueAt = dueAtForSubmission(args.now);
@@ -429,7 +425,6 @@ export async function upsertEnrollment(args: {
   clientUserId: string;
   tutorProfileId: string;
   enabled: boolean;
-  offerEndsAt: Date | null;
   adminUserId: string;
 }): Promise<MathVideoEnrollmentRow> {
   const now = new Date();
@@ -439,7 +434,6 @@ export async function upsertEnrollment(args: {
       clientUserId: args.clientUserId,
       tutorProfileId: args.tutorProfileId,
       enabled: args.enabled,
-      offerEndsAt: args.offerEndsAt ?? MATH_VIDEO_DEFAULT_OFFER_ENDS_AT,
       createdByUserId: args.adminUserId,
     })
     .onConflictDoUpdate({
@@ -447,7 +441,6 @@ export async function upsertEnrollment(args: {
       set: {
         tutorProfileId: args.tutorProfileId,
         enabled: args.enabled,
-        ...(args.offerEndsAt ? { offerEndsAt: args.offerEndsAt } : {}),
         updatedAt: now,
       },
     })
@@ -577,7 +570,6 @@ export async function enrollmentsForAdmin() {
       clientUserId: mathVideoEnrollmentsTable.clientUserId,
       tutorProfileId: mathVideoEnrollmentsTable.tutorProfileId,
       enabled: mathVideoEnrollmentsTable.enabled,
-      offerEndsAt: mathVideoEnrollmentsTable.offerEndsAt,
       clientName: usersTable.displayName,
       clientEmail: usersTable.email,
       tutorName: tutorProfilesTable.name,
@@ -588,7 +580,6 @@ export async function enrollmentsForAdmin() {
   return Promise.all(
     rows.map(async (row) => ({
       ...row,
-      offerEndsAt: row.offerEndsAt.toISOString(),
       credits: await balanceFor(row.clientUserId),
     })),
   );

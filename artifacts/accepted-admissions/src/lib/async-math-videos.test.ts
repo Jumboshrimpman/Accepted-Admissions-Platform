@@ -45,7 +45,7 @@ test("bulk photos fill empty questions first, then add questions up to 10", () =
 });
 
 test("submit readiness mirrors the server rules", () => {
-  const base = { credits: 15, minQuestions: 3, maxQuestions: 10, offerOpen: true, uploading: false };
+  const base = { credits: 15, minQuestions: 3, maxQuestions: 10, uploading: false };
   const three = [
     { text: "a", fileCount: 0 },
     { text: "", fileCount: 2 },
@@ -56,7 +56,6 @@ test("submit readiness mirrors the server rules", () => {
   assert.match(submitReadiness({ ...base, items: [...three, { text: " ", fileCount: 0 }] }).reason ?? "", /Question 4/);
   assert.match(submitReadiness({ ...base, items: three, credits: 2 }).reason ?? "", /uses 3 credits and you have 2/);
   assert.match(submitReadiness({ ...base, items: three, uploading: true }).reason ?? "", /finish uploading/);
-  assert.match(submitReadiness({ ...base, items: three, offerOpen: false }).reason ?? "", /Dec 5/);
 });
 
 test("due label counts down and flags overdue", () => {

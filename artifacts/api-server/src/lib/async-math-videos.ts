@@ -18,12 +18,6 @@ export const MATH_VIDEO_MAX_GRANT = 100;
 /** Phone photos are usually 2–8 MB. HEIC and PDFs fit too. */
 export const MATH_VIDEO_FILE_MAX_BYTES = 15 * 1024 * 1024;
 
-/**
- * "Until Dec 5": submissions close at the end of Dec 5, 2026 in New York
- * (Dec 6 00:00 EST = 05:00 UTC). Exclusive bound.
- */
-export const MATH_VIDEO_DEFAULT_OFFER_ENDS_AT = new Date("2026-12-06T05:00:00.000Z");
-
 export const MATH_VIDEO_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -44,19 +38,11 @@ export function asyncMathVideosFlagEnabled(
   return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
 }
 
-export type EnrollmentLike = {
-  enabled: boolean;
-  offerEndsAt: Date;
-} | null | undefined;
+export type EnrollmentLike = { enabled: boolean } | null | undefined;
 
-/** The student can see the panel (history stays visible after the offer ends). */
+/** The student can see the panel and send requests. There is no end date. */
 export function studentMayView(flag: boolean, enrollment: EnrollmentLike): boolean {
   return flag && Boolean(enrollment?.enabled);
-}
-
-export function offerIsOpen(enrollment: EnrollmentLike, now: Date): boolean {
-  if (!enrollment?.enabled) return false;
-  return now.getTime() < enrollment.offerEndsAt.getTime();
 }
 
 export function dueAtForSubmission(submittedAt: Date): Date {
@@ -103,22 +89,13 @@ export type SubmitCheck =
 
 /**
  * Every question needs a note or at least one photo. 3–10 questions, one
- * credit each, and the offer must still be open.
+ * credit each. Unused credits never expire.
  */
 export function checkSubmission(args: {
   items: readonly DraftItem[];
   fileItemIndexes: readonly number[];
   balance: number;
-  offerOpen: boolean;
 }): SubmitCheck {
-  if (!args.offerOpen) {
-    return {
-      ok: false,
-      status: 409,
-      code: "OFFER_CLOSED",
-      error: "Video requests are closed. The offer ran until Dec 5.",
-    };
-  }
   const count = args.items.length;
   if (count < MATH_VIDEO_MIN_QUESTIONS || count > MATH_VIDEO_MAX_QUESTIONS) {
     return {
@@ -284,14 +261,12 @@ export function youtubeThumbnailUrl(videoId: string): string {
 export function deliveryDecision(args: {
   status: string;
   youtubeVideoId: string | null;
-  followUpAssignmentId: string | null;
+  followUpAssignmentId?: string | null;
 }): { ok: true } | { ok: false; status: number; error: string } {
   if (args.status === "delivered") return { ok: false, status: 409, error: "This request is already delivered." };
   if (args.status !== "submitted") return { ok: false, status: 409, error: "Only submitted requests can be delivered." };
   if (!args.youtubeVideoId) return { ok: false, status: 400, error: "Add the YouTube video link first." };
-  if (!args.followUpAssignmentId) {
-    return { ok: false, status: 400, error: "Link the follow-up practice quiz first." };
-  }
+  // The follow-up quiz can be attached later, before or after delivery.
   return { ok: true };
 }
 

@@ -1289,8 +1289,6 @@ export const mathVideoEnrollmentsTable = pgTable("math_video_enrollments", {
     .notNull()
     .references(() => tutorProfilesTable.id),
   enabled: boolean("enabled").notNull().default(false),
-  /** Submissions close at this instant. Delivered videos stay visible. */
-  offerEndsAt: timestamp("offer_ends_at", { withTimezone: true }).notNull(),
   createdByUserId: uuid("created_by_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

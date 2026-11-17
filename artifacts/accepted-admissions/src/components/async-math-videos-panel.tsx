@@ -57,7 +57,6 @@ type Enrollment = {
   clientEmail: string;
   tutorName: string;
   enabled: boolean;
-  offerEndsAt: string;
   credits: number;
 };
 type Overview =
@@ -67,7 +66,6 @@ type Overview =
       audience: "student";
       rules: Rules;
       uploadsConfigured: boolean;
-      offer: { open: boolean; endsAt: string };
       credits: number;
       draft: RequestView | null;
       requests: RequestView[];
@@ -249,14 +247,12 @@ function DraftComposer({
   draft,
   rules,
   credits,
-  offerOpen,
   uploadsConfigured,
   onChanged,
 }: {
   draft: RequestView;
   rules: Rules;
   credits: number;
-  offerOpen: boolean;
   uploadsConfigured: boolean;
   onChanged: () => void;
 }) {
@@ -282,7 +278,6 @@ function DraftComposer({
     credits,
     minQuestions: rules.minQuestions,
     maxQuestions: rules.maxQuestions,
-    offerOpen,
     uploading: uploading.some((entry) => !entry.error),
   });
 
@@ -567,6 +562,10 @@ function StudentRequest({ request }: { request: RequestView }) {
         >
           Start follow-up quiz: {request.followUpQuiz.title}
         </a>
+      ) : request.status === "delivered" ? (
+        <p className="text-sm text-muted-foreground" data-testid={`math-video-quiz-pending-${request.id}`}>
+          Your follow-up practice quiz will appear here soon.
+        </p>
       ) : null}
       {request.tutorNote ? <p className="whitespace-pre-wrap rounded-lg bg-muted p-3">{request.tutorNote}</p> : null}
       <details>
@@ -675,13 +674,14 @@ function DeliveryForm({ request, admin, onChanged }: { request: RequestView; adm
           {(quizzes ?? []).map((quiz) => (
             <option key={quiz.id} value={quiz.id}>
               {quiz.title}
-              {quiz.status === "published" ? "" : " (draft — publish before delivering)"}
+              {quiz.status === "published" ? "" : " (draft — the student sees it once published)"}
             </option>
           ))}
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        Build the quiz in the usual quiz builder for this student and publish it, then{" "}
+        Optional at delivery: you can send the video first and attach the quiz later. Build the quiz in the usual quiz
+        builder for this student and publish it, then{" "}
         <button type="button" className="underline" onClick={loadQuizzes}>
           refresh this list
         </button>
@@ -696,7 +696,7 @@ function DeliveryForm({ request, admin, onChanged }: { request: RequestView; adm
           Save
         </Button>
         {request.status === "submitted" ? (
-          <Button type="button" size="sm" disabled={busy || !previewId || !quizId} onClick={() => void deliver()} data-testid={`math-video-deliver-${request.id}`}>
+          <Button type="button" size="sm" disabled={busy || !previewId} onClick={() => void deliver()} data-testid={`math-video-deliver-${request.id}`}>
             Mark delivered
           </Button>
         ) : null}
@@ -733,6 +733,11 @@ function QueueRequest({ request, admin, onChanged }: { request: RequestView; adm
           <Badge variant={request.status === "delivered" ? "default" : "secondary"}>
             {request.status === "submitted" ? "To record" : request.status === "delivered" ? "Delivered" : "Cancelled"}
           </Badge>
+          {request.status === "delivered" && !request.followUpQuiz ? (
+            <Badge variant="outline" data-testid={`math-video-quiz-missing-${request.id}`}>
+              Quiz to add
+            </Badge>
+          ) : null}
         </span>
       </summary>
       <div className="mt-3 space-y-3">
@@ -781,7 +786,7 @@ function AdminEnrollments({ enrollments, rules, onChanged }: { enrollments: Enro
           <div className="min-w-48 flex-1">
             <p className="font-medium">{row.clientName}</p>
             <p className="text-muted-foreground">
-              {row.clientEmail} · {row.tutorName} · closes {when(row.offerEndsAt)}
+              {row.clientEmail} · {row.tutorName}
             </p>
           </div>
           <Badge variant={row.enabled ? "default" : "outline"}>{row.enabled ? "Visible to student" : "Hidden"}</Badge>
@@ -885,8 +890,7 @@ export function AsyncMathVideosPanel({ mode }: { mode: "student" | "tutor" | "ad
         <CardHeader>
           <CardTitle>SAT Math Video Explanations</CardTitle>
           <CardDescription>
-            Asynchronous, until {new Date(data.offer.endsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
-            ·{" "}
+            Asynchronous ·{" "}
             <span className="font-medium text-foreground" data-testid="math-video-credits">
               {data.credits} question credit{data.credits === 1 ? "" : "s"} left
             </span>
@@ -905,11 +909,10 @@ export function AsyncMathVideosPanel({ mode }: { mode: "student" | "tutor" | "ad
               draft={data.draft}
               rules={data.rules}
               credits={data.credits}
-              offerOpen={data.offer.open}
               uploadsConfigured={data.uploadsConfigured}
               onChanged={load}
             />
-          ) : data.offer.open ? (
+          ) : (
             <div className="flex flex-wrap items-center gap-3">
               <Button type="button" disabled={starting || data.credits < data.rules.minQuestions} onClick={() => void start()} data-testid="math-video-start">
                 Start a video request
@@ -920,8 +923,6 @@ export function AsyncMathVideosPanel({ mode }: { mode: "student" | "tutor" | "ad
                 </p>
               ) : null}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Video requests closed after Dec 5. Your videos and quizzes stay here.</p>
           )}
           {data.requests.map((request) => (
             <StudentRequest key={request.id} request={request} />
@@ -943,8 +944,8 @@ export function AsyncMathVideosPanel({ mode }: { mode: "student" | "tutor" | "ad
       <CardHeader>
         <CardTitle>SAT Math video requests{openCount ? ` (${openCount} to record)` : ""}</CardTitle>
         <CardDescription>
-          Each request is due {data.rules.turnaroundHours} hours after it is sent. Add the unlisted YouTube link and a published
-          follow-up quiz, then mark it delivered.
+          Each request is due {data.rules.turnaroundHours} hours after it is sent. Add the unlisted YouTube link and mark it delivered.
+          The follow-up quiz can go in at the same time or later.
           {admin && !data.uploadsConfigured ? " Google Drive is not connected, so students can only type their questions." : ""}
         </CardDescription>
       </CardHeader>

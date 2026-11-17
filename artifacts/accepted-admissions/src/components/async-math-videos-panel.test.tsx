@@ -23,6 +23,23 @@ const video = {
   thumbnailUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
 };
 
+const deliveredRequest = {
+  id: "r1",
+  status: "delivered",
+  items: [{ index: 0, text: "Q18", files: [] }],
+  orphanFiles: [],
+  questionCount: 3,
+  createdAt: "2026-11-18T12:00:00Z",
+  submittedAt: "2026-11-18T12:00:00Z",
+  dueAt: "2026-11-20T12:00:00Z",
+  overdue: false,
+  deliveredAt: "2026-11-19T12:00:00Z",
+  tutorName: "Xavier Morales",
+  video,
+  followUpQuiz: null,
+  tutorNote: null,
+};
+
 describe("AsyncMathVideosPanel", () => {
   test("renders nothing while the feature is off", async () => {
     respond({ enabled: false });
@@ -37,7 +54,6 @@ describe("AsyncMathVideosPanel", () => {
       audience: "student",
       rules,
       uploadsConfigured: true,
-      offer: { open: true, endsAt: "2026-12-06T05:00:00.000Z" },
       credits: 12,
       draft: null,
       requests: [
@@ -69,6 +85,39 @@ describe("AsyncMathVideosPanel", () => {
     expect(screen.getByTestId("math-video-open-dQw4w9WgXcQ").getAttribute("href")).toBe(video.url);
     expect(screen.getByTestId("math-video-quiz-r1").getAttribute("href")).toBe("/portal/assignments/a1");
     expect(screen.getByTestId("math-video-start")).toBeTruthy();
+  });
+
+  test("delivered without a quiz: student sees the video now and a pending note instead of the quiz button", async () => {
+    respond({
+      enabled: true,
+      audience: "student",
+      rules,
+      uploadsConfigured: true,
+      credits: 4,
+      draft: null,
+      requests: [{ ...deliveredRequest, followUpQuiz: null }],
+    });
+    render(<AsyncMathVideosPanel mode="student" />);
+    expect(await screen.findByTestId("math-video-open-dQw4w9WgXcQ")).toBeTruthy();
+    expect(screen.queryByTestId("math-video-quiz-r1")).toBeNull();
+    expect(screen.getByTestId("math-video-quiz-pending-r1")).toBeTruthy();
+    expect(screen.getByTestId("math-video-credits").textContent).toContain("4 question credits left");
+    expect(screen.queryByText(/Dec 5|until/i)).toBeNull();
+  });
+
+  test("tutor can mark a request delivered with only the video", async () => {
+    respond({
+      enabled: true,
+      audience: "tutor",
+      rules,
+      requests: [{ ...deliveredRequest, status: "submitted", deliveredAt: null, video: null, followUpQuiz: null }],
+    });
+    render(<AsyncMathVideosPanel mode="tutor" />);
+    const deliverButton = (await screen.findByTestId("math-video-deliver-r1")) as HTMLButtonElement;
+    expect(deliverButton.disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("math-video-youtube-r1"), { target: { value: "https://youtu.be/dQw4w9WgXcQ" } });
+    expect(deliverButton.disabled).toBe(false);
+    expect((screen.getByTestId("math-video-quiz-select-r1") as HTMLSelectElement).value).toBe("");
   });
 });
 
