@@ -399,6 +399,7 @@ async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bank
       practiceTestNumber: item.practiceTestNumber ?? null,
       examFamily: row.examFamily,
       sourceKind: row.sourceKind,
+      domain: row.domain,
       linkedQuestionId: row.linkedQuestionId,
       prompt: row.prompt,
       stimulus: row.stimulus,

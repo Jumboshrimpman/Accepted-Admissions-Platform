@@ -132,7 +132,106 @@ export type HardSatCandidate = {
   practiceTestNumber: number | null;
   examFamily?: string | null;
   sourceKind?: string | null;
+  /** Optional: used only to rank Michelle's picks toward her weak skills. */
+  domain?: string | null;
+  prompt?: string | null;
 };
+
+/**
+ * SAT pools take SAT and PSAT items only. IELTS (or any other family) never
+ * enters an SAT set. A missing family is a legacy SAT row.
+ */
+export function isSatExamFamily(examFamily: string | null | undefined): boolean {
+  const family = (examFamily ?? "").trim().toLowerCase();
+  return family === "" || family === "sat" || family === "psat";
+}
+
+/** IELTS material by family, subject, or source key. Only Taito may receive it. */
+export function isIeltsContent(item: {
+  examFamily?: string | null;
+  subject?: string | null;
+  sourceKey?: string | null;
+}): boolean {
+  if ((item.examFamily ?? "").trim().toLowerCase() === "ielts") return true;
+  if (/ielts/i.test(item.subject ?? "")) return true;
+  return /^ielts/i.test(item.sourceKey ?? "");
+}
+
+export type MichelleSatSkill =
+  | "words-in-context"
+  | "command-of-evidence-quantitative"
+  | "command-of-evidence-textual"
+  | "transitions"
+  | "rhetorical-synthesis"
+  | "standard-english-conventions"
+  | "other-rw"
+  | "problem-solving-data-analysis"
+  | "advanced-math"
+  | "geometry-trigonometry"
+  | "algebra"
+  | "other-math";
+
+/**
+ * Skill from the SAT's fixed question stems (official extracts carry no
+ * domain tag) or the stored domain on original items.
+ */
+export function michelleSatSkill(item: {
+  section?: string | null;
+  domain?: string | null;
+  prompt?: string | null;
+}): MichelleSatSkill {
+  const domain = (item.domain ?? "").trim().toLowerCase();
+  if (satSection(item.section) === "math") {
+    if (domain.startsWith("problem-solving")) return "problem-solving-data-analysis";
+    if (domain.startsWith("advanced math")) return "advanced-math";
+    if (domain.startsWith("geometry")) return "geometry-trigonometry";
+    if (domain === "algebra") return "algebra";
+    return "other-math";
+  }
+  const text = (item.prompt ?? "").replace(/\s+/g, " ").toLowerCase();
+  if (text.includes("most logical and precise word or phrase")) return "words-in-context";
+  if (/uses data from the (table|graph|chart)|data from the (table|graph|chart) to/.test(text)) {
+    return "command-of-evidence-quantitative";
+  }
+  if (/would most directly (support|weaken|undermine)|which quotation|most effectively illustrates the claim/.test(text)) {
+    return "command-of-evidence-textual";
+  }
+  if (text.includes("most logical transition")) return "transitions";
+  if (text.includes("has taken the following notes")) return "rhetorical-synthesis";
+  if (text.includes("conventions of standard english")) return "standard-english-conventions";
+  if (domain === "expression of ideas") return "rhetorical-synthesis";
+  if (domain === "standard english conventions") return "standard-english-conventions";
+  return "other-rw";
+}
+
+/**
+ * Michelle's PSAT (Oct 2026) and her tutors' asks: RW leans on words in
+ * context and command of evidence, then transitions and rhetorical synthesis,
+ * with conventions last. Math leans on problem-solving and data analysis,
+ * then advanced math and geometry, with algebra last. Lower ranks first.
+ */
+const MICHELLE_SKILL_RANK: Record<MichelleSatSkill, number> = {
+  "words-in-context": 0,
+  "command-of-evidence-quantitative": 0,
+  "command-of-evidence-textual": 0,
+  transitions: 1,
+  "rhetorical-synthesis": 1,
+  "other-rw": 2,
+  "standard-english-conventions": 3,
+  "problem-solving-data-analysis": 0,
+  "advanced-math": 1,
+  "geometry-trigonometry": 1,
+  "other-math": 2,
+  algebra: 3,
+};
+
+export function michelleSkillRank(item: {
+  section?: string | null;
+  domain?: string | null;
+  prompt?: string | null;
+}): number {
+  return MICHELLE_SKILL_RANK[michelleSatSkill(item)];
+}
 
 export type RenderableHardSatInput = HardSatCandidate & {
   examFamily?: string | null;
@@ -407,6 +506,7 @@ export function hardSatSectionQuotas(
  * stem, choices, or math still do not render after notation repair.
  */
 export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacing | null {
+  if (!isSatExamFamily(item.examFamily) || isIeltsContent(item)) return null;
   const originalHard = isOriginalHardSatItem(item);
   if (!isOfficialModule2BankItem(item)) return null;
   if (isDeveloperSeededSatItem(item)) return null;
@@ -802,6 +902,7 @@ function hardSatPoolEligible(
   originalDateKey: string | null | undefined,
   includeMichelleOriginalHard?: boolean,
 ): boolean {
+  if (!isSatExamFamily(item.examFamily) || isIeltsContent(item)) return false;
   const original = isOriginalHardSatItem(item);
   if (originalDateKey) {
     return (
@@ -955,6 +1056,8 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
   const restricted = restrictToSections(unique, options.sections);
   const sectionOrder = (left: T, right: T) => {
     if (options.includeMichelleOriginalHard) {
+      const rankDelta = michelleSkillRank(left) - michelleSkillRank(right);
+      if (rankDelta !== 0) return rankDelta;
       const leftOriginal = isOriginalHardSatItem(left);
       const rightOriginal = isOriginalHardSatItem(right);
       if (leftOriginal !== rightOriginal) return leftOriginal ? 1 : -1;
