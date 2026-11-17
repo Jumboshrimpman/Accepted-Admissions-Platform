@@ -14,6 +14,8 @@ import {
 } from "@workspace/db";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { formData, stripeRequest, type StripeRequestError } from "./stripe-client.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { checkoutPaymentIntentReceiptFields } from "./checkout-receipt-fields.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { tutorShareForRefund } from "./payment-allocation.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
@@ -549,10 +551,13 @@ export async function createCheckoutSession(args: {
       "metadata[product_id]": args.product.id,
       "metadata[client_user_id]": args.user.id,
       client_reference_id: args.paymentId,
-      "payment_intent_data[metadata][payment_id]": args.paymentId,
-      "payment_intent_data[metadata][invoice_id]": args.invoiceId,
-      "payment_intent_data[metadata][product_id]": args.product.id,
-      "payment_intent_data[metadata][client_user_id]": args.user.id,
+      ...checkoutPaymentIntentReceiptFields({
+        paymentId: args.paymentId,
+        invoiceId: args.invoiceId,
+        productId: args.product.id,
+        clientUserId: args.user.id,
+        receiptEmail: args.user.email,
+      }),
     }),
   });
   const id = recordString(session, "id");
