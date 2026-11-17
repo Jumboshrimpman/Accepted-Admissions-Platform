@@ -1,0 +1,433 @@
+[
+ {
+  "part": 1,
+  "mp3": "taito-2026-12-04-part1.mp3",
+  "seconds": 253.2,
+  "voices": [
+   "en_GB-alba-medium",
+   "en_GB-jenny_dioco-medium",
+   "en_US-ryan-high"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 1. You will hear a man phoning an adult education college to enrol on an evening course. First, you have some time to look at questions 1 to 7."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 1 to 7."
+   ],
+   [
+    "P1_RECEP",
+    "Riverside Adult Learning, Morag speaking."
+   ],
+   [
+    "P1_CALLER",
+    "Hi, good morning. I'd like to sign up for the furniture restoration course, the level two one, starting in January."
+   ],
+   [
+    "P1_RECEP",
+    "Of course. I can do that over the phone. Can I take your name first?"
+   ],
+   [
+    "P1_CALLER",
+    "Sure. It's Greg Ellison."
+   ],
+   [
+    "P1_RECEP",
+    "Thanks, Mr Ellison. And your address?"
+   ],
+   [
+    "P1_CALLER",
+    "Flat two, forty-one Pennington Road, in Kelsall."
+   ],
+   [
+    "P1_RECEP",
+    "Could you spell the name of the road for me?"
+   ],
+   [
+    "P1_CALLER",
+    "Sure. P; E; double N; I; N; G; T; O; N."
+   ],
+   [
+    "P1_RECEP",
+    "P; E; double N; I; N; G; T; O; N. Pennington Road. And the postcode?"
+   ],
+   [
+    "P1_CALLER",
+    "K; L; four; nine; T; D."
+   ],
+   [
+    "P1_RECEP",
+    "K; L; four; nine; T; D. Lovely. Now, level two assumes some previous experience. Have you done any courses before?"
+   ],
+   [
+    "P1_CALLER",
+    "Yes. Back home in Ohio my wife and I took a woodturning class together, but honestly, she did most of the turning. The one I completed properly, with a certificate, was in upholstery. I did that here, last spring."
+   ],
+   [
+    "P1_RECEP",
+    "Upholstery's perfect. That counts. Now, the course runs on three evenings. Monday is already full, I'm afraid."
+   ],
+   [
+    "P1_CALLER",
+    "OK. I was going to ask for Thursday, but I've just remembered I've got band practice on Thursdays. So Wednesday, please."
+   ],
+   [
+    "P1_RECEP",
+    "Wednesday it is. The full fee is two hundred and forty pounds, but you live in the borough, so you get fifteen per cent off. That brings it down to two hundred and four."
+   ],
+   [
+    "P1_CALLER",
+    "Great. And do I need to bring anything?"
+   ],
+   [
+    "P1_RECEP",
+    "For the first session, you bring an old piece of furniture to work on. People often turn up with a dining chair, but honestly, that's too big for the benches. The tutor asks for a stool, or something about that size."
+   ],
+   [
+    "P1_CALLER",
+    "I've got an old stool in the garage that would be perfect."
+   ],
+   [
+    "P1_RECEP",
+    "There's also a materials fee of eighteen pounds, payable on the first evening. That covers the sandpaper and the polish. Brushes and tools are provided by the college."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 8 to 10."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 8 to 10."
+   ],
+   [
+    "P1_CALLER",
+    "Is there parking at the college?"
+   ],
+   [
+    "P1_RECEP",
+    "Not on site, I'm afraid. The car park at the front belongs to the leisure centre, and they do fine people. You can park for free in the evenings behind the library, which is a two-minute walk."
+   ],
+   [
+    "P1_CALLER",
+    "Behind the library. Got it. And when exactly is the first class?"
+   ],
+   [
+    "P1_RECEP",
+    "It was going to be the sixth of January, but the tutor is away that week, so the course now starts a week later, on the thirteenth."
+   ],
+   [
+    "P1_CALLER",
+    "The thirteenth. And who's the tutor?"
+   ],
+   [
+    "P1_RECEP",
+    "That's Mrs Halloran. H; A; double L; O; R; A; N. She's been teaching here for twenty years. You'll like her."
+   ],
+   [
+    "P1_CALLER",
+    "Sounds great. Thanks so much."
+   ],
+   [
+    "N",
+    "That is the end of Part 1. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 2,
+  "mp3": "taito-2026-12-04-part2.mp3",
+  "seconds": 235.1,
+  "voices": [
+   "en_GB-jenny_dioco-medium",
+   "en_GB-northern_english_male-medium"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 2. You will hear a man giving an orientation talk to new volunteers at a restored Victorian pumping station. First, you have some time to look at questions 11 to 15."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 11 to 15."
+   ],
+   [
+    "P2_GUIDE",
+    "Morning, everyone, and thanks for coming. I'm Graham, and I look after the volunteer programme here at Sedgemoor Pumping Station. Before we go inside, I want to make sure you can find your way round, because the layout has changed quite a bit since we reopened. Have a look at the plan."
+   ],
+   [
+    "P2_GUIDE",
+    "When you come in through the main gate, you're in the courtyard. Visitors often look for the ticket desk in the middle of the courtyard, because there used to be a little kiosk there. That's gone. Tickets are now sold inside the old coal store, which is the building on your left as you come in."
+   ],
+   [
+    "P2_GUIDE",
+    "Opposite the coal store, on your right as you come in, are the former stables. Those used to be the gift shop, but they've now been turned into the children's activity room."
+   ],
+   [
+    "P2_GUIDE",
+    "So where did the gift shop go? It's moved into the old workshop. That's the building on the far right at the back, beyond the stables and next to the engine house."
+   ],
+   [
+    "P2_GUIDE",
+    "Now, the engine house itself, the big building in the centre. You go in through the door in the middle of the south wall. The lift is immediately on your right as you enter, in the south-east corner. Some visitors look for it in the boiler house, because there's an old sign there saying lift shaft. That's the old coal hoist, not a lift for people, and it's been sealed off."
+   ],
+   [
+    "P2_GUIDE",
+    "There's a staircase in the south-west corner of the engine house, but that's for staff only. The stairs up to the viewing gallery are against the north wall, straight ahead of you as you come through the door, behind the two big beam engines."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 16 to 20."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 16 to 20."
+   ],
+   [
+    "P2_GUIDE",
+    "Right. You'll each be joining one of our volunteer teams, so let me explain what each one does, because the names can be a little misleading."
+   ],
+   [
+    "P2_GUIDE",
+    "You'd think the engine team would be the people who run our steam days. In fact the engines are fired up by contracted engineers, for insurance reasons. The engine team's job is to stand at the barriers and make sure nobody, especially children, gets too close to the moving parts."
+   ],
+   [
+    "P2_GUIDE",
+    "The heritage guides do give some public tours at weekends, but during term time their main priority is the school groups that visit every weekday. Meeting and looking after them is the core of the job."
+   ],
+   [
+    "P2_GUIDE",
+    "The garden group look after the flower beds by the gate. They're not there just for decoration. They were replanted two years ago specifically to attract bees and butterflies, and keeping them that way is the group's main focus."
+   ],
+   [
+    "P2_GUIDE",
+    "The archive volunteers. Most people assume they spend their time sorting the engineering drawings, and for years they did, but that job's finished now. These days they're interviewing men and women who worked here before the station closed in nineteen eighty-six, and recording their memories before it's too late."
+   ],
+   [
+    "P2_GUIDE",
+    "And finally, the events crew. As I said, the engines themselves are fired by the contractors, but everything else about the steam days, the timetables, the queues, the signage, all of that is organised by the events crew. It's a busy team."
+   ],
+   [
+    "N",
+    "That is the end of Part 2. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 3,
+  "mp3": "taito-2026-12-04-part3.mp3",
+  "seconds": 281.1,
+  "voices": [
+   "en_GB-alan-medium",
+   "en_GB-cori-high",
+   "en_GB-jenny_dioco-medium",
+   "en_GB-southern_english_female-low"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 3. You will hear two business students, Leah and Tom, discussing a case study with their tutor. First, you have some time to look at questions 21 to 26."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 21 to 26."
+   ],
+   [
+    "P3_TUTOR",
+    "So, your case study is the Lanternfall board game campaign. Remind me why you picked a crowdfunding failure rather than a success."
+   ],
+   [
+    "P3_TOM",
+    "Most of the module readings are success stories, and we felt that..."
+   ],
+   [
+    "P3_LEAH",
+    "Tom felt. I wanted a success, originally."
+   ],
+   [
+    "P3_TOM",
+    "Fair enough. But the point is, with a success, everyone gives the credit to the product. With a failure, you can see which decisions actually mattered."
+   ],
+   [
+    "P3_LEAH",
+    "And the founders published a really honest account of what went wrong afterwards, which is quite rare. That's what convinced me in the end."
+   ],
+   [
+    "P3_TUTOR",
+    "What was the target?"
+   ],
+   [
+    "P3_TOM",
+    "Ninety thousand pounds. They raised about fifty-one."
+   ],
+   [
+    "P3_TUTOR",
+    "And the main reason, in your view?"
+   ],
+   [
+    "P3_LEAH",
+    "Most commentators blamed the price. The basic pledge was sixty-five pounds, which is a lot for a board game. But when we went through the backers' comments, price came up surprisingly rarely. What came up again and again was shipping. The campaign page didn't say what delivery would cost outside the UK until the final week."
+   ],
+   [
+    "P3_TOM",
+    "And over forty per cent of the page visits came from the US."
+   ],
+   [
+    "P3_TUTOR",
+    "How are you measuring that, though? People who leave comments aren't a representative sample."
+   ],
+   [
+    "P3_TOM",
+    "We know. So we've coded every comment by theme, but we're also comparing the daily pledge graph with the date the shipping table went up."
+   ],
+   [
+    "P3_LEAH",
+    "There's a clear drop in new pledges right after it was posted, and cancellations jumped."
+   ],
+   [
+    "P3_TUTOR",
+    "That's far stronger evidence than the comments on their own. I'd lead with that."
+   ],
+   [
+    "P3_TUTOR",
+    "What about the video? Campaign videos often get the blame."
+   ],
+   [
+    "P3_LEAH",
+    "We expected it to be a weakness, actually, because it's quite long. But the figures in the founders' account show that people watched it right to the end at a much higher rate than average."
+   ],
+   [
+    "P3_TOM",
+    "So we're going to say the video wasn't a factor."
+   ],
+   [
+    "P3_TUTOR",
+    "I'd soften that to: there's no evidence it was a factor. Now, for a comparison, don't choose the record-breaking campaign of that year. That's a different universe. And I know the same founders relaunched later and succeeded, but they changed too many things at once to isolate anything. Find a campaign priced at roughly the same level that published its shipping costs on day one."
+   ],
+   [
+    "P3_TOM",
+    "What about the word limit? Leah thinks we'll struggle to fill it."
+   ],
+   [
+    "P3_LEAH",
+    "I do."
+   ],
+   [
+    "P3_TOM",
+    "I think it's the opposite. With the coding scheme to explain, the methods section alone could take up half the words."
+   ],
+   [
+    "P3_TUTOR",
+    "Then keep the background short. Markers know what crowdfunding is."
+   ],
+   [
+    "N",
+    "Before you hear the rest, you have some time to look at questions 27 to 30."
+   ],
+   [
+    "N",
+    "Now listen and answer questions 27 to 30."
+   ],
+   [
+    "P3_TUTOR",
+    "Let's sort out the structure. After the introduction, what comes first?"
+   ],
+   [
+    "P3_LEAH",
+    "We thought we'd present the pledge graph first, because it's the most striking thing we've got."
+   ],
+   [
+    "P3_TUTOR",
+    "It is striking, but readers won't trust your reading of the comments unless they understand how you classified them. So explain the coding scheme first, and then show the graph, with the key dates marked on it."
+   ],
+   [
+    "P3_TOM",
+    "And then the comparison campaign."
+   ],
+   [
+    "P3_TUTOR",
+    "Yes. We'd also talked about you interviewing the founders."
+   ],
+   [
+    "P3_LEAH",
+    "They said no, unfortunately."
+   ],
+   [
+    "P3_TUTOR",
+    "That's a shame. But don't try to replace it with a survey of backers. You'd only hear from the ones who are still angry. And finish with recommendations for future creators. That's what the module marking criteria reward."
+   ],
+   [
+    "N",
+    "That is the end of Part 3. You now have some time to check your answers."
+   ]
+  ]
+ },
+ {
+  "part": 4,
+  "mp3": "taito-2026-12-04-part4.mp3",
+  "seconds": 227.2,
+  "voices": [
+   "en_GB-jenny_dioco-medium",
+   "en_US-ryan-high"
+  ],
+  "script": [
+   [
+    "N",
+    "Part 4. You will hear a lecture about desert locusts. First, you have some time to look at questions 31 to 40."
+   ],
+   [
+    "N",
+    "Now listen carefully and answer questions 31 to 40."
+   ],
+   [
+    "P4_LECT",
+    "Good morning. Today's topic is the desert locust, which, for its size, may be the most destructive animal on the planet. A large swarm can eat as much food in a single day as several million people."
+   ],
+   [
+    "P4_LECT",
+    "Biologically, a locust is simply a grasshopper with an unusual ability. It can exist in two very different forms, or phases. In the solitary phase, it behaves like any other grasshopper. It avoids others of its kind and is fairly harmless. In the gregarious phase, it seeks out other locusts, and that's when swarms form."
+   ],
+   [
+    "P4_LECT",
+    "For a long time it was assumed that the switch between phases was triggered by hunger. It isn't. The trigger is crowding, and specifically, physical contact. Experiments in which researchers tickled locusts with fine brushes showed that repeated touching of the hind legs is enough, on its own, to start the change."
+   ],
+   [
+    "P4_LECT",
+    "And the change is astonishingly fast. Within just a few hours, a crowded locust's behaviour shifts. It stops avoiding others and becomes attracted to them. The physical changes take longer, sometimes a whole generation."
+   ],
+   [
+    "P4_LECT",
+    "What happens inside the insect? The key seems to be a chemical in the nervous system called serotonin, the same substance that's involved in mood in humans. In crowded locusts, serotonin levels rise sharply, and if you block it, the change doesn't happen."
+   ],
+   [
+    "P4_LECT",
+    "The physical changes are just as striking. Solitary young locusts are green, which helps them blend in with plants. Gregarious young locusts are black and yellow, a warning pattern, possibly because they eat toxic plants and are unpleasant to predators."
+   ],
+   [
+    "P4_LECT",
+    "So what causes an outbreak? Paradoxically, it usually starts with good conditions. Unusually heavy rain in the desert produces a flush of vegetation, and locust numbers grow. Then, as the land dries out, the insects are forced together into the shrinking green patches, and the crowding triggers the switch."
+   ],
+   [
+    "P4_LECT",
+    "Once airborne, swarms don't really navigate. They move mainly with the wind, which can carry them a hundred kilometres or more in a day, and which explains why they so often turn up in places with no warning."
+   ],
+   [
+    "P4_LECT",
+    "Control currently depends heavily on chemical pesticides, sprayed onto groups of young locusts before they can fly. There is a biological alternative, which uses a fungus that infects locusts but doesn't harm other insects. Its main drawback is that it's slow. It can take a week or more to kill, while chemicals work within hours."
+   ],
+   [
+    "P4_LECT",
+    "Prevention, of course, is better than cure. Field teams monitor known breeding areas, and they're increasingly guided by satellite data on soil moisture, which shows where conditions are right for eggs to hatch."
+   ],
+   [
+    "P4_LECT",
+    "But I'll end with a sobering point. The biggest obstacle to early control is not a lack of technology. It's access. In several key breeding areas, conflict means survey teams simply can't get there, and by the time a swarm is spotted, it's already too late to stop it cheaply."
+   ],
+   [
+    "N",
+    "That is the end of Part 4. You now have some time to check your answers."
+   ]
+  ]
+ }
+]

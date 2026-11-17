@@ -500,18 +500,39 @@ export function isIeltsStyleQuizSubject(input: {
 }
 
 /** Original English/IELTS items: complete A–D and a letter key. Skip SAT OCR smash gates. */
+/**
+ * IELTS Listening completion / labelling / matching items: the student types a short answer
+ * (word, number or letter). Keys may list accepted variants separated by ";".
+ */
+export function isIeltsListeningWrittenItem(input: {
+  subject?: string | null;
+  domain?: string | null;
+  questionType?: string | null;
+}): boolean {
+  const type = (input.questionType ?? "").trim().toLowerCase();
+  if (type !== "spr") return false;
+  const haystack = `${input.subject ?? ""} ${input.domain ?? ""}`.toLowerCase();
+  return haystack.includes("ielts") && haystack.includes("listening");
+}
+
 export function isStudentUsableEnglishQuizItem(input: {
   prompt?: string | null;
   stimulus?: string | null;
   choices?: DiagnosticQualityInput["choices"];
   questionType?: string | null;
   correctAnswer?: string | null;
+  subject?: string | null;
+  domain?: string | null;
 }): boolean {
   if ((input.questionType ?? "").trim() === "writing_task") return false;
   const prompt = input.prompt?.trim() ?? "";
   if (prompt.length < 12) return false;
   if (looksExtractionMarkerBleed(prompt) || looksExtractionMarkerBleed(input.stimulus)) {
     return false;
+  }
+  if (isIeltsListeningWrittenItem(input)) {
+    const key = (input.correctAnswer ?? "").split(";").map((part) => part.trim()).filter(Boolean);
+    return prompt.length >= 40 && key.length > 0 && (input.choices ?? []).length === 0;
   }
   const choices = input.choices ?? [];
   const labels = new Set<string>();
