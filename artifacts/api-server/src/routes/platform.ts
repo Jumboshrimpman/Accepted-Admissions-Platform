@@ -778,6 +778,7 @@ import {
 } from "../lib/submission-alerts";
 import { sendTransactionalEmail, verifiedFromAddress } from "../lib/transactional-email";
 import { runPreworkReminders } from "../lib/prework-reminder-run";
+import { runSophiaSessionReminders } from "../lib/session-reminder-run";
 import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
@@ -7766,6 +7767,27 @@ router.post("/internal/prework-reminders/run", async (req, res): Promise<void> =
   } catch (error) {
     req.log?.error({ err: error }, "prework reminder run failed");
     res.status(500).json({ error: "Pre-work reminders could not be sent" });
+  }
+});
+
+router.post("/internal/session-reminders/run", async (req, res): Promise<void> => {
+  if (!preworkReminderAuthorized(req.header("authorization"))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  try {
+    const result = await runSophiaSessionReminders({ now: new Date() });
+    res.json({
+      ok: true,
+      considered: result.considered,
+      sent: result.sent,
+      alreadySent: result.alreadySent,
+      skipped: result.skipped,
+      failed: result.failed,
+    });
+  } catch (error) {
+    req.log?.error({ err: error }, "session reminder run failed");
+    res.status(500).json({ error: "Session reminders could not be sent" });
   }
 });
 

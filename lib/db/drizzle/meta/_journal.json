@@ -589,6 +589,13 @@
       "when": 1792886000000,
       "tag": "0090_student_booking_confirmation_sends",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792887000000,
+      "tag": "0091_student_session_reminder_sends",
+      "breakpoints": true
     }
   ]
 }

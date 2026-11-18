@@ -642,6 +642,22 @@ export const studentBookingConfirmationSendsTable = pgTable(
   ],
 );
 
+/** One 1-day and one 1-hour session reminder per session. Sophia Sleiman only. Claimed before send. */
+export const studentSessionReminderSendsTable = pgTable(
+  "student_session_reminder_sends",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessionsTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_session_reminder_sends_session_kind_idx").on(table.sessionId, table.kind),
+  ],
+);
+
 /**
  * A direct-checkout hold for one tutor slot. Active rows block other clients.
  * Released rows stay for audit and drop out of the partial unique index.
