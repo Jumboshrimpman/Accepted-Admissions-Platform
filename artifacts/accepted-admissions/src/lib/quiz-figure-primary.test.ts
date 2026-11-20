@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { splitQuizRichText } from "./quiz-rich-text.ts";
 import {
   displayAnswerLabel,
   figurePrimaryChoices,
@@ -7,7 +8,9 @@ import {
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
   isStudentAnswerableQuizQuestion,
+  embeddedQuizTable,
   hasRecoveredQuizTable,
+  hasUsableQuizTableData,
   isStudentReadableChoiceText,
   letterMcqChoices,
   looksBrokenMathOcr,
@@ -509,7 +512,8 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
       ],
       questionType: "mcq",
     }),
-    false,
+    true,
+    "complete A–D graph items stay visible even when the figure is missing",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -523,8 +527,8 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
       ],
       questionType: "mcq",
     }),
-    false,
-    "a generic graph PNG is not enough without figure-primary / recovered data",
+    true,
+    "complete A–D items stay visible with a generic graph PNG",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -779,7 +783,8 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
       choices: letters(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
       questionType: "mcq",
     }),
-    false,
+    true,
+    "complete A–D table-cite items stay visible when values are not recovered from a PNG",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -874,8 +879,8 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
       ]),
       questionType: "mcq",
     }),
-    false,
-    "served Q14 with leftover headers + Corn/yes/15.1 stimulus is unanswerable",
+    true,
+    "complete A–D Command of Evidence items stay visible even when headers are smashed",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -911,8 +916,8 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
       ]),
       questionType: "mcq",
     }),
-    false,
-    "RW Q14 table/chart cite without recovered values is unanswerable even with a PNG",
+    true,
+    "complete A–D items stay visible when a table cite cannot be parsed",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -923,8 +928,8 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
       choices: letters(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
       questionType: "mcq",
     }),
-    false,
-    "Q68 table cite without values is unanswerable even as figure-primary",
+    true,
+    "complete A–D items stay visible when a figure-primary table cite has no recovered values",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -979,4 +984,127 @@ test("Michelle geometry figures stay on the page when the stem cites the figure"
   assert.equal(shouldHideMismatchedQuizFigures(question), false);
   assert.equal(isFigurePrimaryQuestion(question), true);
   assert.equal(shouldShowQuizChoices(question), true);
+});
+
+test("Sophia's hidden Command of Evidence prose tables parse, stay visible, and render as tables", () => {
+  const letters = (texts: string[]) =>
+    texts.map((text, index) => ({
+      id: "abcd"[index]!,
+      label: "ABCD"[index]!,
+      text,
+    }));
+  const items = [
+    {
+      id: "09ddf035-c2e8-4c2e-8f20-f72db7bdaebe",
+      prompt: "Which choice most effectively uses data from the table to support the researcher's claim?",
+      stimulus: [
+        "Reported Trust in Local News (% of respondents)",
+        "",
+        "Age group 2014 2019 2024",
+        "18–29 41 33 34",
+        "30–49 52 44 39",
+        "50–64 61 58 51",
+        "65+ 68 66 64",
+        "",
+        "A media researcher argues that the decline in trust in local news between 2014 and 2024 was not driven solely by younger audiences; in fact, she claims, the steepest decline in the most recent five-year period occurred among middle-aged respondents.",
+      ].join("\n"),
+      headers: ["Age group", "2014", "2019", "2024"],
+      rows: [
+        ["18–29", "41", "33", "34"],
+        ["30–49", "52", "44", "39"],
+        ["50–64", "61", "58", "51"],
+        ["65+", "68", "66", "64"],
+      ],
+    },
+    {
+      id: "05cc3e20-e7b3-45ab-a3d3-09171907b5c3",
+      prompt: "Which choice most effectively uses data from the table to support the researcher's claim?",
+      stimulus: [
+        "Participants Who Correctly Recalled a Word List (%)",
+        "",
+        "Study condition Tested after 1 hour Tested after 1 week",
+        "Reread list 72 28",
+        "Self-quiz 65 57",
+        "Summarized 70 39",
+        "",
+        "Cognitive psychologists distinguish between strategies that feel effective in the short term and those that actually support durable memory. In one study, a researcher claimed that self-quizzing is the latter kind of strategy: it may not yield the best immediate recall, but it yields by far the best long-term retention.",
+      ].join("\n"),
+      headers: ["Study condition", "Tested after 1 hour", "Tested after 1 week"],
+      rows: [
+        ["Reread list", "72", "28"],
+        ["Self-quiz", "65", "57"],
+        ["Summarized", "70", "39"],
+      ],
+    },
+    {
+      id: "07201a67-c3ab-427d-9e99-0535455a556a",
+      prompt: "Which choice most effectively uses data from the table to support the soil scientist's argument?",
+      stimulus: [
+        "Tomato Yield (kg per plant) Under Different Watering Schedules",
+        "",
+        "Schedule Sandy soil Clay soil",
+        "Daily, light 3.8 2.1",
+        "Every 3 days, moderate 3.1 3.6",
+        "Weekly, deep 2.0 3.9",
+        "",
+        "Horticulturists often recommend infrequent deep watering to encourage deep root growth. A soil scientist argues that this advice does not apply to all soils: in fast-draining sandy soil, the recommended schedule produced the lowest yield of the three tested, while in clay soil it produced the highest.",
+      ].join("\n"),
+      headers: ["Schedule", "Sandy soil", "Clay soil"],
+      rows: [
+        ["Daily, light", "3.8", "2.1"],
+        ["Every 3 days, moderate", "3.1", "3.6"],
+        ["Weekly, deep", "2.0", "3.9"],
+      ],
+    },
+  ];
+  const choices = letters([
+    "First choice.",
+    "Second choice.",
+    "Third choice.",
+    "Fourth choice.",
+  ]);
+  for (const item of items) {
+    const haystack = `${item.prompt}\n${item.stimulus}`;
+    assert.equal(hasUsableQuizTableData(haystack), true, item.id);
+    assert.equal(hasRecoveredQuizTable(item.stimulus), true, item.id);
+    const table = embeddedQuizTable(item.stimulus);
+    assert.ok(table, item.id);
+    assert.deepEqual(table?.headers, item.headers, item.id);
+    assert.deepEqual(table?.rows, item.rows, item.id);
+    assert.equal(
+      isStudentAnswerableQuizQuestion({
+        prompt: item.prompt,
+        stimulus: item.stimulus,
+        choices,
+        questionType: "mcq",
+      }),
+      true,
+      item.id,
+    );
+    const rendered = splitQuizRichText(item.stimulus).find((part) => part.type === "table");
+    assert.ok(rendered && rendered.type === "table", item.id);
+    if (rendered && rendered.type === "table") {
+      assert.deepEqual(rendered.headers, item.headers, item.id);
+      assert.deepEqual(rendered.rows, item.rows, item.id);
+    }
+  }
+});
+
+test("a complete A–D question that cites an unparsed table is still shown", () => {
+  const letters = (texts: string[]) =>
+    texts.map((text, index) => ({
+      id: "abcd"[index]!,
+      label: "ABCD"[index]!,
+      text,
+    }));
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "Which choice most effectively uses data from the table to complete the statement?",
+      stimulus: "The researcher recorded several measurements, but the grid could not be recovered.",
+      choices: letters(["A claim.", "B claim.", "C claim.", "D claim."]),
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(hasUsableQuizTableData("The researcher recorded several measurements, but the grid could not be recovered."), false);
 });

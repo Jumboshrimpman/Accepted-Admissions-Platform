@@ -23,6 +23,16 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,7 +66,10 @@ import {
   answeredQuestionCount,
   allowsInSessionPerQuestionFeedback,
   canSubmitStudentAttempt,
+  formatUnansweredQuestionList,
   isAnsweredValue,
+  questionNavAriaLabel,
+  unansweredQuestionNumbers,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
   inactiveAttemptSaveRecovery,
@@ -655,6 +668,59 @@ function AnswerChoices({
   return null;
 }
 
+function UnansweredSubmitConfirm({
+  open,
+  numbers,
+  onOpenChange,
+  onGoToQuestion,
+  onConfirm,
+}: {
+  open: boolean;
+  numbers: number[];
+  onOpenChange: (open: boolean) => void;
+  onGoToQuestion: (index: number) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent data-testid="unanswered-submit-confirm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unanswered questions</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have not answered {formatUnansweredQuestionList(numbers)}. Submit anyway, or go back and finish them first.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="flex flex-wrap gap-2">
+          {numbers.map((number) => (
+            <Button
+              key={number}
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid={`go-to-unanswered-${number}`}
+              onClick={() => onGoToQuestion(number - 1)}
+            >
+              Go to question {number}
+            </Button>
+          ))}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="cancel-unanswered-submit">Go back</AlertDialogCancel>
+          <AlertDialogAction
+            data-testid="confirm-submit-unanswered"
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+          >
+            Submit anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export default function PortalAssignment() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const search = useSearch();
@@ -735,6 +801,7 @@ export default function PortalAssignment() {
   >({});
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [unansweredSubmitOpen, setUnansweredSubmitOpen] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<"incorrect" | "bug" | "other">("bug");
@@ -1199,6 +1266,25 @@ export default function PortalAssignment() {
     persistQuestionIndex(next);
   };
 
+  const unansweredNumbers = unansweredQuestionNumbers(questions, localResponses);
+  const requestSubmit = () => {
+    if (!attemptId || expirySubmitted.current) return;
+    const guard = canSubmitStudentAttempt({
+      viewer,
+      answeredCount: answeredQuestionCount(localResponses),
+      pending: submitAttempt.isPending,
+    });
+    if (!guard.ok) {
+      if (guard.reason === "empty") setSubmitError(EMPTY_SUBMIT_MESSAGE);
+      return;
+    }
+    if (unansweredNumbers.length > 0) {
+      setUnansweredSubmitOpen(true);
+      return;
+    }
+    submit();
+  };
+
   const refreshSavedQuizLists = () => {
     if (assignmentId) {
       queryClient.invalidateQueries({ queryKey: getGetAssignmentQueryKey(assignmentId) });
@@ -1478,10 +1564,12 @@ export default function PortalAssignment() {
                 key={item.id}
                 size="sm"
                 variant={index === currentQuestionIndex ? "default" : "outline"}
+                data-testid={`question-nav-${item.id}`}
+                aria-label={questionNavAriaLabel({ index, answered: recorded, checked })}
                 onClick={() => goToQuestion(index)}
               >
                 {index + 1}
-                {checked ? " · checked" : recorded ? " · recorded" : ""}
+                {checked ? " · checked" : recorded ? " · recorded" : " · unanswered"}
               </Button>
             );
           })}
@@ -1588,7 +1676,7 @@ export default function PortalAssignment() {
           </Button>
           <Button
             variant="outline"
-            onClick={submit}
+            onClick={requestSubmit}
             disabled={!submitGuard.ok}
             data-testid="finish-practice"
           >
@@ -1606,6 +1694,19 @@ export default function PortalAssignment() {
             Next problem <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
+        <UnansweredSubmitConfirm
+          open={unansweredSubmitOpen}
+          numbers={unansweredNumbers}
+          onOpenChange={setUnansweredSubmitOpen}
+          onGoToQuestion={(index) => {
+            setUnansweredSubmitOpen(false);
+            goToQuestion(index);
+          }}
+          onConfirm={() => {
+            setUnansweredSubmitOpen(false);
+            submit();
+          }}
+        />
       </div>
     );
   }
@@ -1755,6 +1856,7 @@ export default function PortalAssignment() {
       <div className="flex flex-wrap gap-2" data-testid="question-review-nav">
         {questions.map((item, index) => {
           const savedForLater = Boolean(localResponses[item.id]?.flagged);
+          const answered = Boolean(localResponses[item.id]?.finalAnswer?.trim());
           return (
             <Button
               key={item.id}
@@ -1763,15 +1865,12 @@ export default function PortalAssignment() {
               variant={index === currentQuestionIndex ? "default" : "outline"}
               data-testid={`question-nav-${item.id}`}
               aria-pressed={savedForLater}
-              aria-label={
-                savedForLater
-                  ? `Question ${index + 1}, saved for later`
-                  : `Question ${index + 1}`
-              }
+              aria-label={questionNavAriaLabel({ index, answered, savedForLater })}
               onClick={() => goToQuestion(index)}
             >
               {index + 1}
               {savedForLater ? <BookmarkPlus className="h-3 w-3" aria-hidden /> : null}
+              {!answered ? <CircleAlert className="h-3 w-3" aria-hidden /> : null}
             </Button>
           );
         })}
@@ -1884,7 +1983,7 @@ export default function PortalAssignment() {
               type="button"
               size="lg"
               className="rounded-full bg-accent text-white hover:bg-accent/90"
-              onClick={submit}
+              onClick={requestSubmit}
               disabled={!submitGuard.ok}
               data-testid="submit-in-session-homework"
             >
@@ -1906,7 +2005,7 @@ export default function PortalAssignment() {
               type="button"
               size="lg"
               className="rounded-full bg-accent text-white hover:bg-accent/90"
-              onClick={submit}
+              onClick={requestSubmit}
               disabled={!submitGuard.ok}
             >
               {submitAttempt.isPending ? "Submitting…" : viewer ? "Viewer mode" : "Submit assignment"}{" "}
@@ -1915,6 +2014,19 @@ export default function PortalAssignment() {
           )}
         </div>
       </div>
+      <UnansweredSubmitConfirm
+        open={unansweredSubmitOpen}
+        numbers={unansweredNumbers}
+        onOpenChange={setUnansweredSubmitOpen}
+        onGoToQuestion={(index) => {
+            setUnansweredSubmitOpen(false);
+            goToQuestion(index);
+          }}
+        onConfirm={() => {
+          setUnansweredSubmitOpen(false);
+          submit();
+        }}
+      />
     </div>
   );
 }

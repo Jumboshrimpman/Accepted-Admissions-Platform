@@ -37,6 +37,37 @@ export function canSubmitStudentAttempt(input: {
   return { ok: true, reason: "ok" };
 }
 
+/** 1-based numbers of visible questions that have no saved final answer. */
+export function unansweredQuestionNumbers(
+  questions: readonly { id: string }[],
+  responses: Record<string, { finalAnswer?: string | null } | undefined>,
+): number[] {
+  return questions.flatMap((question, index) =>
+    isAnsweredValue(responses[question.id]?.finalAnswer) ? [] : [index + 1],
+  );
+}
+
+export function formatUnansweredQuestionList(numbers: readonly number[]): string {
+  if (numbers.length === 0) return "";
+  if (numbers.length === 1) return `question ${numbers[0]}`;
+  if (numbers.length === 2) return `questions ${numbers[0]} and ${numbers[1]}`;
+  return `questions ${numbers.slice(0, -1).join(", ")}, and ${numbers[numbers.length - 1]}`;
+}
+
+export function questionNavAriaLabel(input: {
+  index: number;
+  answered: boolean;
+  savedForLater?: boolean;
+  checked?: boolean;
+}): string {
+  const parts = [`Question ${input.index + 1}`];
+  if (input.checked) parts.push("checked");
+  else if (input.answered) parts.push("answered");
+  else parts.push("unanswered");
+  if (input.savedForLater) parts.push("saved for later");
+  return parts.join(", ");
+}
+
 export function shouldAutoSubmitOnExpiry(answeredCount: number): boolean {
   return answeredCount > 0;
 }
