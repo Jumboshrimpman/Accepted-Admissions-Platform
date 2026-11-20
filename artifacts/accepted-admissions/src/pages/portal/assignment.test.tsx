@@ -225,13 +225,13 @@ describe("student attempt UI", () => {
     mocks.deadline = null;
     mocks.linkedSession = {
       id: "session-1",
-      dateTime: "2026-10-16T12:00:00.000Z",
+      dateTime: "2026-12-18T12:00:00.000Z",
       timezone: "America/New_York",
       durationMinutes: 60,
     };
     render(<PortalAssignment />);
     expect(screen.getByTestId("prework-deadline-asg-1").textContent).toBe(
-      "Due before your session: Friday, October 16, 2026 at 9:00 PM JST",
+      "Due before your session: Friday, December 18, 2026 at 9:00 PM JST",
     );
     expect(screen.getByRole("button", { name: "Start quiz" })).toBeTruthy();
   });
@@ -245,6 +245,25 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
     expect(submitMutate).not.toHaveBeenCalled();
     expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);
+  });
+
+  test("the review nav flags unanswered questions and confirm lets the student go back or submit", () => {
+    mocks.attempt.responses = [
+      { questionId: "q1", prediction: null, predictionLocked: false, finalAnswer: "a", flagged: false },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("question-nav-q1").getAttribute("aria-label")).toMatch(/answered/i);
+    expect(screen.getByTestId("question-nav-q2").getAttribute("aria-label")).toMatch(/unanswered/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("unanswered-submit-confirm").textContent).toMatch(/question 2/i);
+    fireEvent.click(screen.getByTestId("go-to-unanswered-2"));
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
+    fireEvent.click(screen.getByTestId("confirm-submit-unanswered"));
+    expect(submitMutate).toHaveBeenCalled();
   });
 
   test("diagnostic results show an estimated SAT range and do not claim official adaptive scoring", () => {
@@ -394,6 +413,9 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("partial-submit-in-session").textContent).toMatch(/at most 15 questions/i);
     expect(screen.getByTestId("submit-in-session-homework")).toBeTruthy();
     fireEvent.click(screen.getByTestId("submit-in-session-homework"));
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("unanswered-submit-confirm").textContent).toMatch(/question 2/i);
+    fireEvent.click(screen.getByTestId("confirm-submit-unanswered"));
     expect(submitMutate).toHaveBeenCalled();
   });
 
@@ -471,6 +493,9 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("question-feedback").textContent).toMatch(/However signals contrast/);
     expect(screen.queryByTestId("check-answer")).toBeNull();
     fireEvent.click(screen.getByTestId("submit-in-session-homework"));
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("unanswered-submit-confirm").textContent).toMatch(/question 2/i);
+    fireEvent.click(screen.getByTestId("confirm-submit-unanswered"));
     expect(submitMutate).toHaveBeenCalled();
   });
 
@@ -1859,7 +1884,7 @@ describe("student attempt UI", () => {
     expect(screen.getByText("Which word is most precise?")).toBeTruthy();
     expect(submitMutate).not.toHaveBeenCalled();
     expect(setLocation).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Question 1, saved for later/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Question 1, answered, saved for later/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByTestId("save-for-later").textContent).toMatch(/Saved for later/i);
     expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
@@ -2056,6 +2081,7 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     fireEvent.click(screen.getByRole("button", { name: /^Next$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
+    fireEvent.click(screen.getByTestId("confirm-submit-unanswered"));
     const onError = submitMutate.mock.calls.at(-1)?.[1]?.onError as
       | ((error: { data: { error: string } }) => void)
       | undefined;

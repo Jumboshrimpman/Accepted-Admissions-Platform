@@ -758,9 +758,131 @@ function plausibleQuizDataTable(headers: string[], rows: string[][]): boolean {
 }
 
 /**
+ * SAT Reading & Writing prose tables: a header line, then 2+ rows whose
+ * trailing cells are numbers (e.g. "Age group 2014 2019 2024" / "18–29 41 33 34").
+ * Multi-word row labels and column headers stay intact.
+ */
+const STACKED_PROSE_NUMBER = /^-?\d+(?:\.\d+)?$/;
+
+function stackedProseTrailingNumbers(
+  line: string,
+  count: number,
+): { label: string; values: string[] } | null {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length <= count) return null;
+  const values = tokens.slice(-count);
+  if (!values.every((cell) => STACKED_PROSE_NUMBER.test(cell))) return null;
+  const label = tokens.slice(0, -count).join(" ").trim();
+  if (!label || STACKED_PROSE_NUMBER.test(label)) return null;
+  return { label, values };
+}
+
+function scoreStackedProseHeaders(stub: string, columns: string[]): number {
+  const firsts = columns.map((header) => header.split(/\s+/)[0]?.toLowerCase() ?? "");
+  const lasts = columns.map((header) => header.split(/\s+/).at(-1)?.toLowerCase() ?? "");
+  let score = 0;
+  if (new Set(firsts).size === 1) score += 3;
+  if (new Set(lasts).size === 1) score += 3;
+  score += Math.max(0, 4 - stub.split(/\s+/).length);
+  return score;
+}
+
+function splitStackedProseHeaderLine(line: string, columnCount: number): string[] | null {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < columnCount + 1) return null;
+  const numeric = stackedProseTrailingNumbers(line, columnCount);
+  if (numeric) return [numeric.label, ...numeric.values];
+  let best: { headers: string[]; score: number } | null = null;
+  for (let stubWords = 1; stubWords <= tokens.length - columnCount; stubWords += 1) {
+    const rest = tokens.length - stubWords;
+    if (rest % columnCount !== 0) continue;
+    const wordsPerHeader = rest / columnCount;
+    if (wordsPerHeader < 1 || wordsPerHeader > 6) continue;
+    const stub = tokens.slice(0, stubWords).join(" ");
+    if (!stub || STACKED_PROSE_NUMBER.test(stub)) continue;
+    const columns: string[] = [];
+    for (let index = 0; index < columnCount; index += 1) {
+      const start = stubWords + index * wordsPerHeader;
+      columns.push(tokens.slice(start, start + wordsPerHeader).join(" "));
+    }
+    const score = scoreStackedProseHeaders(stub, columns);
+    if (!best || score > best.score) best = { headers: [stub, ...columns], score };
+  }
+  return best?.headers ?? null;
+}
+
+function isStackedProseYearCell(cell: string): boolean {
+  return /^(?:19|20)\d{2}$/.test(cell);
+}
+
+function isStackedProseYearValueRow(values: string[]): boolean {
+  return values.length >= 2 && values.every(isStackedProseYearCell);
+}
+
+function scoreStackedProseTable(headerLine: string, headers: string[], rows: string[][]): number {
+  let score = rows.length + headers.length;
+  if (stackedProseTrailingNumbers(headerLine, headers.length - 1)) score += 10;
+  const columns = headers.slice(1);
+  if (new Set(columns.map((header) => header.split(/\s+/)[0]?.toLowerCase() ?? "")).size === 1) score += 5;
+  if (new Set(columns.map((header) => header.split(/\s+/).at(-1)?.toLowerCase() ?? "")).size === 1) score += 5;
+  const stubTail = headers[0]?.split(/\s+/).at(-1) ?? "";
+  if (isStackedProseYearCell(stubTail)) score -= 8;
+  score -= rows.filter((row) => isStackedProseYearValueRow(row.slice(1))).length * 20;
+  return score;
+}
+
+function stackedProseQuizTable(text: string | null | undefined): EmbeddedQuizTable | null {
+  const lines = (text ?? "").split("\n");
+  let best: { start: number; end: number; headers: string[]; rows: string[][]; score: number } | null = null;
+  for (let columnCount = 2; columnCount <= 6; columnCount += 1) {
+    let index = 0;
+    while (index < lines.length) {
+      const parsed = stackedProseTrailingNumbers(lines[index] ?? "", columnCount);
+      if (!parsed || isStackedProseYearValueRow(parsed.values)) {
+        index += 1;
+        continue;
+      }
+      const rows = [[parsed.label, ...parsed.values]];
+      let end = index + 1;
+      while (end < lines.length) {
+        const next = stackedProseTrailingNumbers(lines[end] ?? "", columnCount);
+        if (!next) break;
+        rows.push([next.label, ...next.values]);
+        end += 1;
+      }
+      if (rows.length >= 2) {
+        let headerIndex = -1;
+        for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+          if ((lines[cursor] ?? "").trim()) {
+            headerIndex = cursor;
+            break;
+          }
+        }
+        const headerLine = headerIndex >= 0 ? (lines[headerIndex] ?? "").trim() : "";
+        const headers = headerLine ? splitStackedProseHeaderLine(headerLine, columnCount) : null;
+        if (headers) {
+          const score = scoreStackedProseTable(headerLine, headers, rows);
+          if (!best || score > best.score) {
+            best = { start: headerIndex, end, headers, rows, score };
+          }
+        }
+      }
+      index = Math.max(end, index + 1);
+    }
+  }
+  if (!best) return null;
+  if (!plausibleQuizDataTable(best.headers, best.rows)) return null;
+  const before = lines.slice(0, best.start).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const after = lines.slice(best.end).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { headers: best.headers, rows: best.rows, before, after, aligned: true };
+}
+
+/**
  * Longest aligned or space-separated data table inside a stem.
  * Space-separated cells stay strict (`x`, `f(x)`, numbers). Tab-aligned
  * cells may be expressions such as `p − 6` or labels such as `Number of pets`.
+ * Stacked SAT prose tables (header plus numeric rows, single spaces) are
+ * recovered when the strict tokenizer would split multi-word labels.
  */
 export function embeddedQuizTable(text: string | null | undefined): EmbeddedQuizTable | null {
   const lines = (text ?? "").split("\n");
@@ -788,11 +910,11 @@ export function embeddedQuizTable(text: string | null | undefined): EmbeddedQuiz
     }
     index = Math.max(end, index + 1);
   }
-  if (!best) return null;
+  if (!best) return stackedProseQuizTable(text);
   const block = lines.slice(best.start, best.end).map((line) => quizTableTokens(line).cells);
   const headers = block[0] ?? [];
   const rows = block.slice(1);
-  if (!plausibleQuizDataTable(headers, rows)) return null;
+  if (!plausibleQuizDataTable(headers, rows)) return stackedProseQuizTable(text);
   const before = lines.slice(0, best.start).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   const after = lines.slice(best.end).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   return { headers, rows, before, after, aligned: best.rich };
@@ -802,9 +924,13 @@ export function embeddedQuizTable(text: string | null | undefined): EmbeddedQuiz
 export function hasRecoveredQuizTable(text: string | null | undefined): boolean {
   const table = embeddedQuizTable(text);
   if (!table) return false;
+  const numericRows = table.rows.filter(
+    (row) => row.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length >= 1,
+  );
+  if (numericRows.length === 0) return false;
   const mathHeader = table.headers.some((header) => /^(?:x|y|f\(x\)|g\(x\)|h\(x\))$/i.test(header));
-  const numeric = table.rows.some((row) => row.some((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)));
-  return numeric && (mathHeader || table.aligned);
+  if (mathHeader || table.aligned) return true;
+  return numericRows.filter((row) => row.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length >= 2).length >= 2;
 }
 
 function hasInlineNamedTableValues(text: string | null | undefined): boolean {
@@ -812,12 +938,11 @@ function hasInlineNamedTableValues(text: string | null | undefined): boolean {
   return pairs.length >= 2;
 }
 
-function hasUsableQuizTableData(text: string | null | undefined): boolean {
+export function hasUsableQuizTableData(text: string | null | undefined): boolean {
+  if (hasRecoveredQuizTable(text)) return true;
   if (looksSmashedChartHeaders(text)) return false;
-  if (looksIsolatedIGlyphs(text) || looksPipeBackslashOcr(text)) {
-    return hasRecoveredQuizTable(text);
-  }
-  return hasRecoveredQuizTable(text) || hasInlineNamedTableValues(text);
+  if (looksIsolatedIGlyphs(text) || looksPipeBackslashOcr(text)) return false;
+  return hasInlineNamedTableValues(text);
 }
 
 /** Hide mangled OCR when a crop is on screen — never stack both. */
@@ -938,31 +1063,6 @@ export function isStudentAnswerableQuizQuestion(
     if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
     if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
   }
-  const stem = `${question.prompt ?? ""}\n${stimulusText}`;
-  const tableHaystack = `${question.prompt ?? ""}\n${stimulusText}`;
-  if (stemCitesDataTable(stem) && !hasUsableQuizTableData(tableHaystack)) {
-    return false;
-  }
-  if (stemCitesMathDataTable(stem) && !hasUsableQuizTableData(tableHaystack)) {
-    return false;
-  }
-  const mathVisualCite =
-    stemCitesVisual(stem) &&
-    (stemCitesMathDataTable(stem) ||
-      /\b(?:xy[- ]plane|vertex of the graph|scatterplot|dot plot|histogram|in the (?:figure|triangle|graph)|the triangle shown|the graph shown)\b/i.test(
-        stem,
-      ));
-  if (mathVisualCite && !hasUsableQuizTableData(tableHaystack) && question.presentation !== "figure_primary") {
-    return false;
-  }
-  if (
-    stemCitesVisual(stem) &&
-    !hasQuizFigure(question) &&
-    !hasRecoveredQuizTable(tableHaystack) &&
-    !hasUsableQuizTableData(tableHaystack)
-  ) {
-    return false;
-  }
   const raw = isFigurePrimaryQuestion(question)
     ? figurePrimaryChoices(question)
     : (question.choices ?? []).map((choice) => ({
@@ -970,6 +1070,8 @@ export function isStudentAnswerableQuizQuestion(
         text: formatStudentChoiceText(choice.text),
       }));
   const choices = raw.filter((choice) => isStudentReadableChoiceText(choice.text));
+  // Complete A–D items stay visible even when a cited table or figure cannot be
+  // parsed. The stem still renders, including any raw table text.
   return shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices);
 }
 

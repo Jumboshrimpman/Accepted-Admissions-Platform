@@ -3,6 +3,9 @@ import test from "node:test";
 import {
   answeredQuestionCount,
   canSubmitStudentAttempt,
+  formatUnansweredQuestionList,
+  questionNavAriaLabel,
+  unansweredQuestionNumbers,
   allowsInSessionPerQuestionFeedback,
   allowsPartialInSessionSubmit,
   isCollaborativeSessionPractice,
@@ -325,3 +328,22 @@ test("timer expiry with zero answers does not show a finished result", () => {
   assert.equal(studentSeesFinishedResult({ status: "active", hasResult: false }), false);
   assert.equal(studentSeesFinishedResult({ status: "expired", hasResult: true }), true);
 });
+
+test("unanswered question numbers and labels are listed for the submit confirm", () => {
+  const questions = [{ id: "q1" }, { id: "q2" }, { id: "q3" }];
+  assert.deepEqual(
+    unansweredQuestionNumbers(questions, { q1: { finalAnswer: "a" }, q2: { finalAnswer: "  " } }),
+    [2, 3],
+  );
+  assert.equal(formatUnansweredQuestionList([]), "");
+  assert.equal(formatUnansweredQuestionList([5]), "question 5");
+  assert.equal(formatUnansweredQuestionList([5, 14]), "questions 5 and 14");
+  assert.equal(formatUnansweredQuestionList([5, 14, 25]), "questions 5, 14, and 25");
+  assert.equal(questionNavAriaLabel({ index: 4, answered: false }), "Question 5, unanswered");
+  assert.equal(questionNavAriaLabel({ index: 0, answered: true, checked: true }), "Question 1, checked");
+  assert.equal(
+    questionNavAriaLabel({ index: 33, answered: true, savedForLater: true }),
+    "Question 34, answered, saved for later",
+  );
+});
+
