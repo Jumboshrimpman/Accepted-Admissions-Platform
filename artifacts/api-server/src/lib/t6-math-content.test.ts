@@ -9,7 +9,9 @@ import {
   T6_MATH_TIME_LIMIT_MINUTES,
   t6DueAt,
   pickT6Session,
+  questionMatchesT6Draft,
   sessionMatchesT6Date,
+  t6LinkedQuestionsMatchPlan,
 } from "./t6-math-content.ts";
 import {
   isStudentAnswerableQuizQuestion,
@@ -119,6 +121,26 @@ test("a math session on the date is preferred, and the seed stays off the scramb
   const english = { dateTime: date, subject: "SAT Reading & Writing", title: "Reading" };
   const math = { dateTime: new Date("2026-11-22T20:00:00.000Z"), subject: "SAT Math", title: "Math" };
   assert.equal(pickT6Session([english, math]), math);
+  const sophiaMorning = {
+    dateTime: new Date("2026-11-22T14:00:00.000Z"),
+    subject: "SAT",
+    title: "Michelle’s SAT Session with Sophia",
+    tutorEmail: "sophia.e.lamas@gmail.com",
+    tutorName: "Sophia Lamas",
+  };
+  const xavierNoon = {
+    dateTime: new Date("2026-11-22T17:00:00.000Z"),
+    subject: "SAT",
+    title: "Michelle’s SAT Session with Xavier",
+    tutorEmail: "xavier.rmz6@gmail.com",
+    tutorName: "Xavier Morales",
+  };
+  assert.equal(pickT6Session([sophiaMorning, xavierNoon]), xavierNoon);
+  assert.equal(pickT6Session([xavierNoon, sophiaMorning]), xavierNoon);
+  assert.equal(pickT6Session([sophiaMorning]), null);
+  const sophiaLabeledMath = { ...sophiaMorning, subject: "SAT Math", title: "Math with Sophia" };
+  assert.equal(pickT6Session([sophiaLabeledMath, xavierNoon]), xavierNoon);
+  assert.equal(pickT6Session([sophiaLabeledMath]), null);
   assert.equal(sessionMatchesT6Date({ dateTime: date, timezone: "America/New_York" }, "2026-11-22"), true);
   const source = readFileSync(new URL("./t6-math-content.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /from ["'][^"']*sat-practice-test-6/);
@@ -135,4 +157,44 @@ test("a math session on the date is preferred, and the seed stays off the scramb
   assert.equal(/DROP\s+TABLE/i.test(sql), false);
   const journal = readFileSync(new URL("../../../../lib/db/drizzle/meta/_journal.json", import.meta.url), "utf8");
   assert.match(journal, /"tag": "0092_quiz_reference_review_eliminate"/);
+});
+
+
+test("module 1 question 10 is the silo replacement, and a content-matching live set is left unchanged", () => {
+  const plan = T6_MATH_MODULE_PLANS[0]!;
+  const silo = plan.questions[9]!;
+  assert.equal(silo.key, "t6-math-m1-q10");
+  assert.match(silo.prompt, /silo holds 6,300 pounds of grain/);
+  assert.equal(silo.correctAnswer, "c");
+  assert.equal(silo.questionType, "multiple_choice");
+  assert.deepEqual(
+    silo.choices.map((choice) => choice.text),
+    ["18", "24", "30", "36"],
+  );
+  assert.doesNotMatch(silo.prompt, /shaved ice|paper cups/);
+  const marine = plan.questions[8]!;
+  assert.match(marine.prompt, /marine mammals/);
+
+  const links = plan.questions.map((draft, index) => ({
+    id: index === 9 ? "44637b51-dae2-43af-8e15-bdf78a01d0ba" : `official-${draft.key}`,
+    prompt: draft.prompt,
+    stimulus: draft.stimulus,
+    // Production stored the silo choices as id/text/label; official items use id/label/text.
+    choices:
+      index === 9
+        ? draft.choices.map((choice) => ({ id: choice.id, text: choice.text, label: choice.label }))
+        : draft.choices.map((choice) => ({ ...choice })),
+    correctAnswer: draft.correctAnswer,
+    explanation: draft.explanation,
+    questionType: draft.questionType,
+  }));
+  assert.equal(t6LinkedQuestionsMatchPlan(links, plan), true);
+  assert.equal(questionMatchesT6Draft(links[9]!, silo), true);
+  assert.equal(
+    t6LinkedQuestionsMatchPlan(
+      links.map((link, index) => (index === 9 ? { ...link, prompt: "changed" } : link)),
+      plan,
+    ),
+    false,
+  );
 });

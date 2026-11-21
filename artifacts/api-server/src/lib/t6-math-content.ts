@@ -2,12 +2,14 @@ import module1File from "./data/t6-math/module1.json" with { type: "json" };
 import module2File from "./data/t6-math/module2.json" with { type: "json" };
 import { enrichStimulusWithFigures } from "./sat-bank-figures.ts";
 import { stemCitesVisual } from "./sat-bank-figure-primary.ts";
+import { SOPHIA_LAMAS_TUTOR_EMAIL, SOPHIA_LAMAS_TUTOR_NAME } from "./admin-calendar-fallback.ts";
 import {
   EUNICE_TUTOR_EMAIL,
   NIKA_TUTOR_EMAIL,
   sessionLocalDateKey,
   TAITO_STUDENT_EMAIL,
 } from "./session-schedule.ts";
+import { CANONICAL_XAVIER_EMAIL, CANONICAL_XAVIER_NAME } from "./xavier-identity.ts";
 
 /**
  * Michelle's two College Board SAT Practice Test 6 math modules.
@@ -37,6 +39,37 @@ export function normalizeT6Email(email: string | null | undefined): string {
 
 export function isT6ForbiddenClient(email: string | null | undefined): boolean {
   return FORBIDDEN_CLIENT_EMAILS.has(normalizeT6Email(email));
+}
+
+export type T6SessionPickInput = {
+  dateTime: Date;
+  subject?: string | null;
+  title?: string | null;
+  tutorEmail?: string | null;
+  tutorName?: string | null;
+};
+
+export function isT6XavierTutor(session: {
+  tutorEmail?: string | null;
+  tutorName?: string | null;
+}): boolean {
+  if (normalizeT6Email(session.tutorEmail) === normalizeT6Email(CANONICAL_XAVIER_EMAIL)) return true;
+  return session.tutorName?.trim().toLowerCase() === CANONICAL_XAVIER_NAME.toLowerCase();
+}
+
+export function isT6SophiaLamasTutor(session: {
+  tutorEmail?: string | null;
+  tutorName?: string | null;
+}): boolean {
+  if (normalizeT6Email(session.tutorEmail) === normalizeT6Email(SOPHIA_LAMAS_TUTOR_EMAIL)) return true;
+  return session.tutorName?.trim().toLowerCase() === SOPHIA_LAMAS_TUTOR_NAME.toLowerCase();
+}
+
+export function looksLikeT6MathSession(session: {
+  subject?: string | null;
+  title?: string | null;
+}): boolean {
+  return /math/i.test(session.subject ?? "") || /math/i.test(session.title ?? "");
 }
 
 type T6Choice = { id: string; label: string; text: string; image?: string };
@@ -207,14 +240,69 @@ export function sessionMatchesT6Date(
   return session.dateTime.toISOString().slice(0, 10) === dateKey;
 }
 
-export function pickT6Session<T extends { dateTime: Date; subject?: string | null; title?: string | null }>(
-  sessions: readonly T[],
-): T | null {
+export function pickT6Session<T extends T6SessionPickInput>(sessions: readonly T[]): T | null {
   if (sessions.length === 0) return null;
-  const math = sessions.filter(
-    (session) => /math/i.test(session.subject ?? "") || /math/i.test(session.title ?? ""),
-  );
-  const pool = math.length > 0 ? math : [...sessions];
+  // Never attach these math modules to a Sophia Lamas English hour.
+  const eligible = sessions.filter((session) => !isT6SophiaLamasTutor(session));
+  if (eligible.length === 0) return null;
+  const xavier = eligible.filter((session) => isT6XavierTutor(session));
+  const math = eligible.filter((session) => looksLikeT6MathSession(session));
+  const pool = xavier.length > 0 ? xavier : math.length > 0 ? math : eligible;
   return [...pool].sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())[0] ?? null;
+}
+
+function canonicalT6Choices(choices: unknown): string {
+  if (!Array.isArray(choices)) return "[]";
+  return JSON.stringify(
+    choices.map((choice) => {
+      const row = choice && typeof choice === "object" ? (choice as Record<string, unknown>) : {};
+      const image = typeof row.image === "string" && row.image.trim() ? row.image : undefined;
+      return {
+        id: String(row.id ?? "").trim().toLowerCase(),
+        label: String(row.label ?? "").trim().toUpperCase(),
+        text: String(row.text ?? ""),
+        ...(image ? { image } : {}),
+      };
+    }),
+  );
+}
+
+export function questionMatchesT6Draft(
+  row: {
+    prompt: string;
+    stimulus: string | null;
+    choices: unknown;
+    correctAnswer: string;
+    explanation: string;
+    questionType: string;
+  },
+  draft: T6QuestionDraft,
+): boolean {
+  return (
+    row.prompt === draft.prompt &&
+    (row.stimulus ?? null) === draft.stimulus &&
+    row.correctAnswer === draft.correctAnswer &&
+    row.explanation === draft.explanation &&
+    row.questionType === draft.questionType &&
+    canonicalT6Choices(row.choices) === canonicalT6Choices(draft.choices)
+  );
+}
+
+/** True when the live quiz already has one question per plan slot with the same content. */
+export function t6LinkedQuestionsMatchPlan(
+  links: readonly {
+    prompt: string;
+    stimulus: string | null;
+    choices: unknown;
+    correctAnswer: string;
+    explanation: string;
+    questionType: string;
+  }[],
+  plan: T6ModulePlan,
+): boolean {
+  return (
+    links.length === plan.questions.length &&
+    links.every((link, index) => questionMatchesT6Draft(link, plan.questions[index]!))
+  );
 }
 

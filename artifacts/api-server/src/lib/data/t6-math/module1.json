@@ -318,41 +318,40 @@
    "fullQuestionImage": "/workspace/t6-math/figures/m1-q9-full.png"
   },
   {
-   "questionNumber": 10,
-   "questionType": "mcq",
-   "stimulus": null,
-   "prompt": "A manager is responsible for ordering supplies for a shaved ice shop. The shop’s inventory starts with 4,500 paper cups, and the manager estimates that 70 of these paper cups are used each day. Based on this estimate, in how many days will the supply of paper cups reach 1,700?",
-   "choices": [
-    {
-     "id": "a",
-     "label": "A",
-     "text": "20"
+      "questionNumber": 10,
+      "questionType": "mcq",
+      "stimulus": null,
+      "prompt": "A first silo holds 6,300 pounds of grain immediately after harvest, and 90 pounds are removed each day. A second silo starts empty and is filled at a constant rate of 40 pounds per day. After how many days will the first silo contain exactly three times as much grain as the second silo?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "A",
+          "text": "18"
+        },
+        {
+          "id": "b",
+          "label": "B",
+          "text": "24"
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "text": "30"
+        },
+        {
+          "id": "d",
+          "label": "D",
+          "text": "36"
+        }
+      ],
+      "correctAnswer": "C",
+      "acceptedAnswers": [
+        "C"
+      ],
+      "explanation": "Let t be the number of days. Then 6,300 − 90t = 3(40t). So 6,300 = 210t, and t = 30. After 30 days, the first silo has 6,300 − 2,700 = 3,600 pounds and the second has 1,200 pounds, and 3,600 is three times 1,200.",
+      "figures": [],
+      "id": "aa-original-m1-silo"
     },
-    {
-     "id": "b",
-     "label": "B",
-     "text": "40"
-    },
-    {
-     "id": "c",
-     "label": "C",
-     "text": "60"
-    },
-    {
-     "id": "d",
-     "label": "D",
-     "text": "80"
-    }
-   ],
-   "correctAnswer": "B",
-   "acceptedAnswers": [
-    "B"
-   ],
-   "explanation": "4,500 − 70d = 1,700 → 70d = 2,800 → d = 40.",
-   "figures": [],
-   "id": "sat-pt6-math-m1-q10",
-   "fullQuestionImage": "/workspace/t6-math/figures/m1-q10-full.png"
-  },
   {
    "questionNumber": 11,
    "questionType": "mcq",
