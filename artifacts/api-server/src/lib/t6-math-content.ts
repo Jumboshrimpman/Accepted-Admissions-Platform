@@ -41,6 +41,11 @@ export function isT6ForbiddenClient(email: string | null | undefined): boolean {
   return FORBIDDEN_CLIENT_EMAILS.has(normalizeT6Email(email));
 }
 
+export function isT6MathModuleTitle(title?: string | null): boolean {
+  const normalized = title?.trim() ?? "";
+  return T6_MATH_MODULE_PLANS.some((plan) => plan.title === normalized);
+}
+
 export type T6SessionPickInput = {
   dateTime: Date;
   subject?: string | null;

@@ -8,6 +8,7 @@ import {
   T6_MATH_MODULE_PLANS,
   T6_MATH_TIME_LIMIT_MINUTES,
   t6DueAt,
+  isT6MathModuleTitle,
   pickT6Session,
   questionMatchesT6Draft,
   sessionMatchesT6Date,
@@ -197,4 +198,12 @@ test("module 1 question 10 is the silo replacement, and a content-matching live 
     ),
     false,
   );
+});
+
+test("hard SAT pre-work classification can recognize official T6 module titles", () => {
+  assert.equal(isT6MathModuleTitle(T6_MATH_MODULE_PLANS[0]!.title), true);
+  assert.equal(isT6MathModuleTitle(T6_MATH_MODULE_PLANS[1]!.title), true);
+  assert.equal(isT6MathModuleTitle("Nov 22 Pre-work SAT Math (Hard) — Michelle x Xavier"), false);
+  assert.equal(isT6MathModuleTitle("SAT pre-work (30–50 questions)"), false);
+  assert.equal(isT6MathModuleTitle(null), false);
 });
