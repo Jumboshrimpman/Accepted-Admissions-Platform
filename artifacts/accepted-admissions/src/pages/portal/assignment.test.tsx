@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   deliveryPhase: "before_session" as "before_session" | "during_session",
   title: "Practice quiz",
   softTimeLimit: false,
+  timeLimitMinutes: 60,
+  referenceSheet: null as string | null,
+  instructionsFootnote: null as string | null,
+  markForReview: false,
+  eliminateChoices: false,
   questions: [
     {
       id: "q1",
@@ -117,8 +122,12 @@ vi.mock("@workspace/api-client-react", () => ({
           deadline: mocks.deadline,
           latestAttemptStatus: mocks.latestAttemptStatus,
           questionCount: mocks.questions.length,
-          timeLimitMinutes: 60,
+          timeLimitMinutes: mocks.timeLimitMinutes,
           softTimeLimit: mocks.softTimeLimit,
+          referenceSheet: mocks.referenceSheet,
+          instructionsFootnote: mocks.instructionsFootnote,
+          markForReview: mocks.markForReview,
+          eliminateChoices: mocks.eliminateChoices,
           latestAttemptId: mocks.latestAttemptId,
           questions: mocks.questions,
         },
@@ -2142,5 +2151,60 @@ describe("student attempt UI", () => {
     mocks.search = "resume=1";
     render(<PortalAssignment />);
     expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
+  });
+
+  test("opt-in SAT tools stay off the score until submit", () => {
+    mocks.latestAttemptId = null;
+    mocks.timeLimitMinutes = 50;
+    mocks.referenceSheet = "sat_math";
+    mocks.instructionsFootnote = "T6 · 6VSL02";
+    mocks.markForReview = true;
+    mocks.eliminateChoices = true;
+    mocks.questions = [
+      {
+        id: "q-graph",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "multiple_choice",
+        presentation: "text" as const,
+        curated: true,
+        prompt: "The scatterplot shows the relationship between x and y. Which graph fits?",
+        stimulus: "![Scatterplot](/media/sat-bank/t6-math-full-length/m1-q2-stem.png)",
+        choices: [
+          { id: "a", label: "A", text: "Graph A increases in a straight line", image: "/media/sat-bank/t6-math-full-length/m1-q2-choice-a.png" },
+          { id: "b", label: "B", text: "Graph B decreases in a straight line", image: "/media/sat-bank/t6-math-full-length/m1-q2-choice-b.png" },
+          { id: "c", label: "C", text: "Graph C is a curve under the points", image: "/media/sat-bank/t6-math-full-length/m1-q2-choice-c.png" },
+          { id: "d", label: "D", text: "Graph D is a curve through the points", image: "/media/sat-bank/t6-math-full-length/m1-q2-choice-d.png" },
+        ],
+        skill: "SAT Math",
+        difficulty: "medium" as const,
+        predictionFirst: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByText(/50 min/)).toBeTruthy();
+    expect(screen.getByTestId("quiz-instructions-footnote").textContent).toBe("T6 · 6VSL02");
+    expect(screen.queryByText(/correct answer/i)).toBeNull();
+    fireEvent.click(screen.getByTestId("quiz-reference"));
+    expect(screen.getByAltText("SAT math reference sheet")).toBeTruthy();
+    cleanup();
+
+    mocks.latestAttemptId = "attempt-1";
+    mocks.attempt.status = "active";
+    mocks.attempt.remainingSeconds = 3000;
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-timer").textContent).toMatch(/50:00/);
+    expect(screen.getByTestId("quiz-instructions-footnote").textContent).toBe("T6 · 6VSL02");
+    expect(screen.getByRole("button", { name: "Mark for review" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Check answer" })).toBeNull();
+    expect(screen.getByTestId("choice-image-d")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("eliminate-choice-a"));
+    expect(screen.getAllByTestId("quiz-answer-choice")[0]?.getAttribute("data-eliminated")).toBe("true");
+    expect(saveMutate).toHaveBeenCalled();
+    const saved = saveMutate.mock.calls.at(-1)?.[0] as { data: { eliminatedChoiceIds?: string[]; finalAnswer?: string } };
+    expect(saved.data.eliminatedChoiceIds).toEqual(["a"]);
+    fireEvent.click(screen.getByRole("button", { name: "Mark for review" }));
+    expect(screen.getByTestId("marked-for-review-summary").textContent).toMatch(/1/);
+    expect(screen.queryByText(/Graph D is the answer/)).toBeNull();
   });
 });

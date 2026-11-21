@@ -27,4 +27,5 @@ export interface AttemptResultItem {
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
   presentation?: AttemptResultItemPresentation;
+  curated?: boolean;
 }

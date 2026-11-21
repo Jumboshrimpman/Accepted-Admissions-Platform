@@ -24,4 +24,5 @@ export interface AssignmentQuestion {
   correctAnswer?: string;
   explanation?: string;
   presentation?: AssignmentQuestionPresentation;
+  curated?: boolean;
 }

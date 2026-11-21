@@ -1,0 +1,907 @@
+{
+ "test": "SAT Practice Test #6 (College Board, digital SAT paper/linear format)",
+ "testShortLabel": "T6",
+ "testCodes": {
+  "formCode": "6VSL02",
+  "bookCode": "WX4P0010"
+ },
+ "sourcePdf": "/workspace/sat-practice-test-6-math.pdf",
+ "answerKeySource": "College Board sat-practice-test-6-answers-digital.pdf (local copy /workspace/sat-curriculum-sources/from-mac/full-length-sat-paper-practice-test_-bundle-6/), every answer independently re-solved",
+ "referenceSheet": "/workspace/t6-math/figures/reference-sheet.png",
+ "timeLimitMinutes": 50,
+ "student": {
+  "name": "Michelle Makarem",
+  "email": "makaremmichelle7@gmail.com",
+  "clerkUserId": "user_3JCRGfBj8dgWSjO1r2zeKovFVE7"
+ },
+ "sprEntryRules": "Accept any listed form; fractions or decimals. Positive answers up to 5 characters, negative up to 6. Ignore commas.",
+ "module": 1,
+ "sessionDate": "2026-11-22",
+ "title": "Math Full-Length Practice: Module 1 (Session Nov 22, 2026)",
+ "instructions": "SAT Math, Module 1 of 2: full-length practice section for Michelle’s session on Sunday, Nov 22, 2026. 27 questions, 50 minutes. A calculator is allowed on every question; the SAT reference sheet is available throughout. Mark questions for review and cross out answer choices as you work. Answers and your score appear only after you submit the whole module. Student-produced responses: enter a number, fraction, or decimal (no symbols).",
+ "inconspicuousNote": "T6 · 6VSL02",
+ "questions": [
+  {
+   "questionNumber": 1,
+   "questionType": "mcq",
+   "stimulus": "(p + 3) + 8 = 10",
+   "prompt": "What value of p is the solution to the given equation?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "−1"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "5"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "15"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "21"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Subtract 8: p + 3 = 2, so p = −1.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q1",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q1-full.png"
+  },
+  {
+   "questionNumber": 2,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The scatterplot shows the relationship between two variables, x and y. Which of the following graphs shows the most appropriate model for the data?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "Graph A: a straight increasing line from about (0, 0) to (7, 5,000), with most data points below it",
+     "image": "/workspace/t6-math/figures/m1-q2-choice-a.png"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "Graph B: a straight decreasing line from (0, 5,000) to (7, 0)",
+     "image": "/workspace/t6-math/figures/m1-q2-choice-b.png"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "Graph C: an increasing curve starting near y = 1,000 at x = 0, with nearly all data points below the curve",
+     "image": "/workspace/t6-math/figures/m1-q2-choice-c.png"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "Graph D: an increasing curve starting near (0, 0) that passes through the data, with points both above and below it",
+     "image": "/workspace/t6-math/figures/m1-q2-choice-d.png"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "The data increase along a curve, so the best model is an increasing curve with points both above and below it: only D.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q2-stem.png",
+     "alt": "Scatterplot: x from 0 to 7, y from 0 to 5,000; points rise slowly then sharply (about 4,700 at x ≈ 6.5)"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q2",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q2-full.png"
+  },
+  {
+   "questionNumber": 3,
+   "questionType": "mcq",
+   "stimulus": "k² − 53 = 91",
+   "prompt": "What is the positive solution to the given equation?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "144"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "72"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "38"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "12"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "k² = 144, so the positive solution is k = 12.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q3",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q3-full.png"
+  },
+  {
+   "questionNumber": 4,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "During a portion of a flight, a small airplane’s cruising speed varied between 150 miles per hour and 170 miles per hour. Which inequality best represents this situation, where s is the cruising speed, in miles per hour, during this portion of the flight?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "s ≤ 20"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "s ≤ 150"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "s ≤ 170"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "150 ≤ s ≤ 170"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "Speed is at least 150 and at most 170: 150 ≤ s ≤ 170.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q4",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q4-full.png"
+  },
+  {
+   "questionNumber": 5,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "An object was launched upward from a platform. The graph shown models the height above ground, y, in meters, of the object x seconds after it was launched. For which of the following intervals of time was the height of the object increasing for the entire interval?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "From x = 0 to x = 2"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "From x = 0 to x = 4"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "From x = 2 to x = 3"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "From x = 3 to x = 4"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "The graph rises from (0, 10) to its maximum at (2, 28), then falls. It increases for the whole interval only from x = 0 to x = 2.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q5-graph.png",
+     "alt": "Graph of height above ground (meters) vs time (seconds): starts at 10 m at x = 0, peaks near 28 m at x = 2, reaches 0 at about x = 4.4"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q5",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q5-full.png"
+  },
+  {
+   "questionNumber": 6,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "How many yards are equivalent to 1,116 inches? (1 yard = 36 inches)",
+   "choices": [],
+   "correctAnswer": "31",
+   "acceptedAnswers": [
+    "31"
+   ],
+   "explanation": "1,116 ÷ 36 = 31.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q6",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q6-full.png"
+  },
+  {
+   "questionNumber": 7,
+   "questionType": "spr",
+   "stimulus": "f(x) = 14 + 4x",
+   "prompt": "The function f represents the total cost, in dollars, of attending an arcade when x games are played. How many games can be played for a total cost of $58?",
+   "choices": [],
+   "correctAnswer": "11",
+   "acceptedAnswers": [
+    "11"
+   ],
+   "explanation": "14 + 4x = 58, so 4x = 44 and x = 11.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q7",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q7-full.png"
+  },
+  {
+   "questionNumber": 8,
+   "questionType": "mcq",
+   "stimulus": "f(x) = x + b",
+   "prompt": "For the linear function f, b is a constant. When x = 0, f(x) = 30. What is the value of b?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "−30"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "−1/30"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "1/30"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "30"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "f(0) = 0 + b = 30, so b = 30.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q8",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q8-full.png"
+  },
+  {
+   "questionNumber": 9,
+   "questionType": "mcq",
+   "stimulus": "P(t) = 1,800(1.02)^t",
+   "prompt": "The function P gives the estimated number of marine mammals in a certain area, where t is the number of years since a study began. What is the best interpretation of P(0) = 1,800 in this context?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "The estimated number of marine mammals in the area was 102 when the study began."
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "The estimated number of marine mammals in the area was 1,800 when the study began."
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "The estimated number of marine mammals in the area increased by 102 each year during the study."
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "The estimated number of marine mammals in the area increased by 1,800 each year during the study."
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "t = 0 is when the study began, and P(0) = 1,800 is the estimated number then.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q9",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q9-full.png"
+  },
+  {
+   "questionNumber": 10,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "A manager is responsible for ordering supplies for a shaved ice shop. The shop’s inventory starts with 4,500 paper cups, and the manager estimates that 70 of these paper cups are used each day. Based on this estimate, in how many days will the supply of paper cups reach 1,700?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "20"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "40"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "60"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "80"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "4,500 − 70d = 1,700 → 70d = 2,800 → d = 40.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q10",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q10-full.png"
+  },
+  {
+   "questionNumber": 11,
+   "questionType": "mcq",
+   "stimulus": "y > 4x + 8",
+   "prompt": "For which of the following tables are all the values of x and their corresponding values of y solutions to the given inequality?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "x: 2, 4, 6 → y: 19, 30, 41",
+     "image": "/workspace/t6-math/figures/m1-q11-choice-a.png"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "x: 2, 4, 6 → y: 8, 16, 24",
+     "image": "/workspace/t6-math/figures/m1-q11-choice-b.png"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "x: 2, 4, 6 → y: 13, 18, 23",
+     "image": "/workspace/t6-math/figures/m1-q11-choice-c.png"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "x: 2, 4, 6 → y: 13, 21, 29",
+     "image": "/workspace/t6-math/figures/m1-q11-choice-d.png"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "4x + 8 equals 16, 24, 32 at x = 2, 4, 6. Only table A has every y greater: 19 > 16, 30 > 24, 41 > 32.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q11",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q11-full.png"
+  },
+  {
+   "questionNumber": 12,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "Which expression is equivalent to (x² + 11)² + (x − 5)(x + 5)?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "x⁴ + 23x² − 14"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "x⁴ + 23x² + 96"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "x⁴ + 12x² + 121"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "x⁴ + x² + 146"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "(x⁴ + 22x² + 121) + (x² − 25) = x⁴ + 23x² + 96.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q12",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q12-full.png"
+  },
+  {
+   "questionNumber": 13,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "The function h is defined by h(x) = 8/(5x + 6). What is the value of h(2)?",
+   "choices": [],
+   "correctAnswer": "1/2",
+   "acceptedAnswers": [
+    "1/2",
+    ".5",
+    "0.5"
+   ],
+   "explanation": "h(2) = 8/(10 + 6) = 8/16 = 1/2.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q13",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q13-full.png"
+  },
+  {
+   "questionNumber": 14,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "The figure shows the lengths, in inches, of two sides of a right triangle. What is the area of the triangle, in square inches?",
+   "choices": [],
+   "correctAnswer": "15/2",
+   "acceptedAnswers": [
+    "15/2",
+    "7.5"
+   ],
+   "explanation": "Legs are 3 and 5, so area = (1/2)(3)(5) = 15/2 = 7.5.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q14-triangle.png",
+     "alt": "Right triangle with vertical leg 3 and horizontal leg 5; right angle at bottom left. Note: Figure not drawn to scale."
+    }
+   ],
+   "id": "sat-pt6-math-m1-q14",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q14-full.png"
+  },
+  {
+   "questionNumber": 15,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The graph models the number of active projects a company was working on x months after the end of November 2012, where 0 ≤ x ≤ 6. According to the model, what is the predicted number of active projects the company was working on at the end of November 2012?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "0"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "5"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "8"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "9"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "The end of November 2012 is x = 0; the graph’s y-intercept is 5.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q15-graph.png",
+     "alt": "Curve starting at (0, 5), rising to about 9 near x = 4, ending near 8 at x = 6"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q15",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q15-full.png"
+  },
+  {
+   "questionNumber": 16,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The relationship between two variables, x and y, is linear. For every increase in the value of x by 1, the value of y increases by 8. When the value of x is 2, the value of y is 18. Which equation represents this relationship?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "y = 2x + 18"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "y = 2x + 8"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "y = 8x + 2"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "y = 3x + 26"
+    }
+   ],
+   "correctAnswer": "C",
+   "acceptedAnswers": [
+    "C"
+   ],
+   "explanation": "Slope 8: y = 8x + b, and 18 = 16 + b gives b = 2.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q16",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q16-full.png"
+  },
+  {
+   "questionNumber": 17,
+   "questionType": "mcq",
+   "stimulus": "P = N(19 − C)",
+   "prompt": "The given equation relates the positive numbers P, N, and C. Which equation correctly expresses C in terms of P and N?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "C = (19 + P)/N"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "C = (19 − P)/N"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "C = 19 + P/N"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "C = 19 − P/N"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "P/N = 19 − C, so C = 19 − P/N.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q17",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q17-full.png"
+  },
+  {
+   "questionNumber": 18,
+   "questionType": "mcq",
+   "stimulus": "w² + 12w − 40 = 0",
+   "prompt": "Which of the following is a solution to the given equation?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "6 − 2√19"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "2√19"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "√19"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "−6 + 2√19"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "w = (−12 ± √(144 + 160))/2 = −6 ± √76 = −6 ± 2√19.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q18",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q18-full.png"
+  },
+  {
+   "questionNumber": 19,
+   "questionType": "mcq",
+   "stimulus": "Number of employees | Number of restaurants\n2 to 7 | 2\n8 to 13 | 4\n14 to 19 | 2\n20 to 25 | 7\n26 to 31 | 2",
+   "prompt": "The table shown summarizes the number of employees at each of the 17 restaurants in a town. Which of the following could be the median number of employees for the restaurants in this town?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "2"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "9"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "15"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "21"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "The median is the 9th value. 2 + 4 + 2 = 8 restaurants have up to 19 employees, so the 9th falls in 20 to 25: 21.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q19-table.png",
+     "alt": "Frequency table of employees per restaurant"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q19",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q19-full.png"
+  },
+  {
+   "questionNumber": 20,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "What is the y-coordinate of the y-intercept of the graph of 3x/7 = −5y/9 + 21 in the xy-plane?",
+   "choices": [],
+   "correctAnswer": "189/5",
+   "acceptedAnswers": [
+    "189/5",
+    "37.8"
+   ],
+   "explanation": "Set x = 0: 0 = −5y/9 + 21 → 5y = 189 → y = 189/5 = 37.8.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q20",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q20-full.png"
+  },
+  {
+   "questionNumber": 21,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "The graph of y = 2x² + bx + c is shown, where b and c are constants. What is the value of bc?",
+   "choices": [],
+   "correctAnswer": "-24",
+   "acceptedAnswers": [
+    "-24"
+   ],
+   "explanation": "The graph passes through (0, −6), so c = −6. It also passes through (−2, −6), so the axis is x = −1 = −b/4, giving b = 4. bc = −24.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q21-graph.png",
+     "alt": "Upward parabola with vertex (−1, −8), passing through (−2, −6) and (0, −6)"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q21",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q21-full.png"
+  },
+  {
+   "questionNumber": 22,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "In 2008, Zinah earned 14% more than in 2007, and in 2009 Zinah earned 4% more than in 2008. If Zinah earned y times as much in 2009 as in 2007, what is the value of y?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "0.5600"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "1.0056"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "1.1800"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "1.1856"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "y = 1.14 × 1.04 = 1.1856.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q22",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q22-full.png"
+  },
+  {
+   "questionNumber": 23,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "Circle A (shown) is defined by the equation (x + 2)² + y² = 9. Circle B (not shown) is the result of shifting circle A down 6 units and increasing the radius so that the radius of circle B is 2 times the radius of circle A. Which equation defines circle B?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "(x + 2)² + (y + 6)² = (4)(9)"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "2(x + 2)² + 2(y + 6)² = 9"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "(x + 2)² + (y − 6)² = (4)(9)"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "2(x + 2)² + 2(y − 6)² = 9"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "New center (−2, −6), radius 6, so r² = 36 = (4)(9): (x + 2)² + (y + 6)² = (4)(9).",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q23-graph.png",
+     "alt": "Circle A centered at (−2, 0) with radius 3"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q23",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q23-full.png"
+  },
+  {
+   "questionNumber": 24,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "Right triangle ABC is shown. What is the value of tan A?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "√3/54"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "1/√3"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "√3"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "27√3"
+    }
+   ],
+   "correctAnswer": "C",
+   "acceptedAnswers": [
+    "C"
+   ],
+   "explanation": "Angle B = 30°, so angle A = 60° and tan 60° = √3.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q24-triangle.png",
+     "alt": "Right triangle ABC, right angle at C, hypotenuse AB = 54, angle B = 30°. Note: Figure not drawn to scale."
+    }
+   ],
+   "id": "sat-pt6-math-m1-q24",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q24-full.png"
+  },
+  {
+   "questionNumber": 25,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "At the time that an article was first featured on the home page of a news website, there were 40 comments on the article. An exponential model estimates that at the end of each hour after the article was first featured on the home page, the number of comments on the article had increased by 190% of the number of comments on the article at the end of the previous hour. Which of the following equations best represents this model, where C is the estimated number of comments on the article t hours after the article was first featured on the home page and t ≤ 4?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "C = 40(1.19)^t"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "C = 40(1.9)^t"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "C = 40(19)^t"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "C = 40(2.9)^t"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "An increase of 190% multiplies by 1 + 1.90 = 2.9 each hour.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q25",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q25-full.png"
+  },
+  {
+   "questionNumber": 26,
+   "questionType": "mcq",
+   "stimulus": "x | g(x)\n−27 | 3\n−9 | 0\n21 | 5",
+   "prompt": "The table shows three values of x and their corresponding values of g(x), where g(x) = f(x)/(x + 3) and f is a linear function. What is the y-intercept of the graph of y = f(x) in the xy-plane?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "(0, 36)"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "(0, 12)"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "(0, 4)"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "(0, −9)"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "f(x) = g(x)(x + 3): f(−27) = −72, f(−9) = 0, f(21) = 120. Slope = 120/30 = 4, so f(x) = 4(x + 9) and f(0) = 36.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m1-q26-table.png",
+     "alt": "Table of x and g(x)"
+    }
+   ],
+   "id": "sat-pt6-math-m1-q26",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q26-full.png"
+  },
+  {
+   "questionNumber": 27,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "In right triangle ABC, angle C is the right angle and BC = 162. Point D on side AB is connected by a line segment with point E on side AC such that line segment DE is parallel to side BC and CE = 2AE. What is the length of line segment DE?",
+   "choices": [],
+   "correctAnswer": "54",
+   "acceptedAnswers": [
+    "54"
+   ],
+   "explanation": "Triangle ADE ~ triangle ABC with AE/AC = 1/3, so DE = 162/3 = 54.",
+   "figures": [],
+   "id": "sat-pt6-math-m1-q27",
+   "fullQuestionImage": "/workspace/t6-math/figures/m1-q27-full.png"
+  }
+ ]
+}

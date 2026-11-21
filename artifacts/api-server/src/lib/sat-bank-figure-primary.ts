@@ -1,4 +1,18 @@
-export type FigurePrimaryChoice = { id: string; label: string; text: string };
+import { CURATED_FULL_LENGTH_TAG } from "./curated-full-length.ts";
+
+export type FigurePrimaryChoice = { id: string; label: string; text: string; image?: string };
+
+export function isCuratedFullLengthInput(input: { tags?: string[] | null }): boolean {
+  return (input.tags ?? []).includes(CURATED_FULL_LENGTH_TAG);
+}
+
+/** Same-origin media or https only. Anything else is dropped. */
+export function safeChoiceImage(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const src = value.trim();
+  if (src.startsWith("/media/") || /^https:\/\//i.test(src)) return src;
+  return undefined;
+}
 
 export type BankFigureLike = {
   url?: string;
@@ -12,7 +26,7 @@ export type BankFigureLike = {
 export type FigurePrimaryInput = {
   prompt?: string | null;
   stimulus?: string | null;
-  choices?: Array<{ id?: string; label?: string; text?: string }> | null;
+  choices?: Array<{ id?: string; label?: string; text?: string; image?: string }> | null;
   figures?: BankFigureLike[] | null;
   questionType?: string | null;
   correctAnswer?: string | null;
@@ -1353,7 +1367,7 @@ export function hasCompleteLetterChoiceText(
 }
 
 export function letterMcqChoices(
-  existing?: Array<{ id?: string; label?: string; text?: string }> | null,
+  existing?: Array<{ id?: string; label?: string; text?: string; image?: string }> | null,
 ): FigurePrimaryChoice[] {
   return LETTER_LABELS.map((label) => {
     const found = (existing ?? []).find((choice) => {
@@ -1362,10 +1376,12 @@ export function letterMcqChoices(
       return id === label.toLowerCase() || choiceLabel === label;
     });
     const text = formatStudentChoiceText(found?.text);
+    const image = safeChoiceImage(found?.image);
     return {
       id: found?.id?.trim().toLowerCase() || label.toLowerCase(),
       label,
       text: isStudentReadableChoiceText(text) ? text : "",
+      ...(image ? { image } : {}),
     };
   });
 }
@@ -1404,6 +1420,7 @@ export function isExplicitFigurePrimary(input: FigurePrimaryInput): boolean {
  * non-garbage A–D text. Empty, tilde/dash, or missing-stem items stay out.
  */
 export function shouldUseFigurePrimary(input: FigurePrimaryInput): boolean {
+  if (isCuratedFullLengthInput(input)) return false;
   const letter = isLetterAnswer(input.correctAnswer);
   const fullCrop = hasFullQuestionCrop(input);
   const completeChoices = hasCompleteLetterChoiceText(input.choices);
@@ -1496,17 +1513,42 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
   choices: FigurePrimaryChoice[] | undefined;
   questionType: string;
 } {
+  if (isCuratedFullLengthInput(input)) {
+    const choices = (input.choices ?? []).map((choice, index) => {
+      const image = safeChoiceImage(choice.image);
+      const text = formatStudentChoiceText(choice.text);
+      return {
+        id:
+          (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
+          String.fromCharCode(97 + index),
+        label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
+        text,
+        ...(image ? { image } : {}),
+      };
+    });
+    return {
+      presentation: "text",
+      prompt: stripSatBankFigureComments(input.prompt) || "Question prompt is unavailable.",
+      stimulus: input.stimulus ? stripSatBankFigureComments(input.stimulus) || null : null,
+      choices: choices.some((choice) => choice.text.trim()) ? choices : undefined,
+      questionType: input.questionType?.trim() || "multiple_choice",
+    };
+  }
   const figurePrimary = shouldUseFigurePrimary(input);
   const explicitSrc = readFigurePrimarySrc(input);
   const stimulus = explicitSrc
     ? `![Question region](${explicitSrc})`
     : stripSatBankFigureComments(input.stimulus);
-  const cleanedChoices = (input.choices ?? []).map((choice, index) => ({
-    id: (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
-      String.fromCharCode(97 + index),
-    label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
-    text: isStudentReadableChoiceText(choice.text) ? formatStudentChoiceText(choice.text) : "",
-  }));
+  const cleanedChoices = (input.choices ?? []).map((choice, index) => {
+    const image = safeChoiceImage(choice.image);
+    return {
+      id: (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
+        String.fromCharCode(97 + index),
+      label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
+      text: isStudentReadableChoiceText(choice.text) ? formatStudentChoiceText(choice.text) : "",
+      ...(image ? { image } : {}),
+    };
+  });
   const usableChoices = hasUsableChoiceText(cleanedChoices) ? cleanedChoices : undefined;
   if (!figurePrimary) {
     return {

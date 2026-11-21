@@ -1,5 +1,7 @@
 import {
   hasUsableChoiceText,
+  isCuratedFullLengthInput,
+  safeChoiceImage,
   studentFacingFigurePrimaryFields,
 } from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
@@ -178,7 +180,7 @@ export function studentSafeAssignmentInstructions(
 
 export function assignmentChoices(
   value: unknown,
-): Array<{ id: string; label: string; text: string }> | undefined {
+): Array<{ id: string; label: string; text: string; image?: string }> | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   const choices = value.flatMap((item, index) => {
     if (!item || typeof item !== "object") return [];
@@ -187,12 +189,18 @@ export function assignmentChoices(
     const id = String(rawId).trim() || String.fromCharCode(97 + index);
     const label = String(row.label ?? id).trim() || id.toUpperCase();
     const text = String(row.text ?? row.value ?? "");
-    return [{ id, label, text }];
+    const image = safeChoiceImage(row.image);
+    return [{ id, label, text, ...(image ? { image } : {}) }];
   });
   return choices.length > 0 ? choices : undefined;
 }
 
-export function assignmentQuestionShape(
+type AssignmentQuestionShapeOptions<Keys extends boolean | undefined = undefined> = {
+  includeKeys?: Keys;
+  repairStackedMath?: boolean | QuizMathRepairScope;
+};
+
+export function assignmentQuestionShape<Keys extends boolean | undefined = undefined>(
   question: {
     id: string;
     subject?: string | null;
@@ -209,17 +217,50 @@ export function assignmentQuestionShape(
     extractGaps?: Record<string, unknown> | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
-  options?: { includeKeys?: boolean; repairStackedMath?: boolean | QuizMathRepairScope },
-) {
-  question = repairKnownSatBankQuestion(question);
+  options?: AssignmentQuestionShapeOptions<Keys>,
+): Keys extends true
+  ? {
+      id: string;
+      position: number;
+      subject: string;
+      questionType: string;
+      prompt: string;
+      stimulus: string | null;
+      choices?: Array<{ id: string; label: string; text: string; image?: string }>;
+      skill: string;
+      difficulty: "foundational" | "medium" | "hard";
+      predictionFirst: boolean;
+      presentation: "text" | "figure_primary";
+      curated: boolean;
+      correctAnswer: string;
+      explanation: string;
+    }
+  : {
+      id: string;
+      position: number;
+      subject: string;
+      questionType: string;
+      prompt: string;
+      stimulus: string | null;
+      choices?: Array<{ id: string; label: string; text: string; image?: string }>;
+      skill: string;
+      difficulty: "foundational" | "medium" | "hard";
+      predictionFirst: boolean;
+      presentation: "text" | "figure_primary";
+      curated: boolean;
+    } {
+  const curated = isCuratedFullLengthInput(question);
+  if (!curated) question = repairKnownSatBankQuestion(question);
   const sourceKey = bankSourceKeyFromTags(question.tags);
   const repairMath = (text: string, field: StackedMathField) =>
-    repairMichelleQuizMathText(
-      text,
-      options?.repairStackedMath ?? false,
-      field,
-      field === "explanation" ? sourceKey : null,
-    );
+    curated
+      ? text
+      : repairMichelleQuizMathText(
+          text,
+          options?.repairStackedMath ?? false,
+          field,
+          field === "explanation" ? sourceKey : null,
+        );
   const existingChoices = assignmentChoices(question.choices);
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,
@@ -265,13 +306,14 @@ export function assignmentQuestionShape(
     difficulty: assignmentDifficulty(question.difficulty),
     predictionFirst: Boolean(assignmentQuestion.predictionFirst),
     presentation: facing.presentation,
+    curated,
   };
-  if (!options?.includeKeys) return shaped;
+  if (!options?.includeKeys) return shaped as never;
   return {
     ...shaped,
     correctAnswer: question.correctAnswer?.trim() || "",
     explanation: repairMath(question.explanation?.trim() || "", "explanation"),
-  };
+  } as never;
 }
 
 export function isFullLengthDiagnosticAssignment(input: {

@@ -14,4 +14,5 @@ export type AttemptProgressInputResponsesItem = {
      */
   finalAnswer?: string | null;
   flagged?: boolean;
+  eliminatedChoiceIds?: string[];
 };

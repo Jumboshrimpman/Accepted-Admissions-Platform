@@ -84,6 +84,7 @@ export function attemptResponseFeedbackShape(input: {
   predictionLocked: boolean;
   finalAnswer: string | null;
   flagged: boolean;
+  eliminatedChoiceIds?: string[];
   savedAt?: Date;
   feedback: {
     revealed: boolean;
@@ -98,6 +99,7 @@ export function attemptResponseFeedbackShape(input: {
     predictionLocked: input.predictionLocked,
     finalAnswer: input.finalAnswer,
     flagged: input.flagged,
+    eliminatedChoiceIds: input.eliminatedChoiceIds ?? [],
     savedAt: input.savedAt,
     revealed: input.feedback.revealed,
     correct: input.feedback.correct,

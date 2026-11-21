@@ -58,14 +58,34 @@ export function questionNavAriaLabel(input: {
   index: number;
   answered: boolean;
   savedForLater?: boolean;
+  markForReview?: boolean;
   checked?: boolean;
 }): string {
   const parts = [`Question ${input.index + 1}`];
   if (input.checked) parts.push("checked");
   else if (input.answered) parts.push("answered");
   else parts.push("unanswered");
-  if (input.savedForLater) parts.push("saved for later");
+  if (input.savedForLater) parts.push(input.markForReview ? "marked for review" : "saved for later");
   return parts.join(", ");
+}
+
+export const SAT_MATH_REFERENCE_SHEET_URL =
+  "/media/sat-bank/t6-math-full-length/reference-sheet.png";
+
+/** Opt-in reference image. `sat_math` is the SAT math sheet. Other values must be /media or https. */
+export function referenceSheetImageUrl(value: string | null | undefined): string | null {
+  const raw = value?.trim() ?? "";
+  if (!raw) return null;
+  if (raw === "sat_math") return SAT_MATH_REFERENCE_SHEET_URL;
+  if (raw.startsWith("/media/") || /^https:\/\//i.test(raw)) return raw;
+  return null;
+}
+
+export function markedQuestionNumbers(
+  questions: readonly { id: string }[],
+  responses: Record<string, { flagged?: boolean } | undefined>,
+): number[] {
+  return questions.flatMap((question, index) => (responses[question.id]?.flagged ? [index + 1] : []));
 }
 
 export function shouldAutoSubmitOnExpiry(answeredCount: number): boolean {
@@ -261,22 +281,28 @@ export type PauseResponseDraft = {
   questionId: string;
   finalAnswer: string | null;
   flagged: boolean;
+  eliminatedChoiceIds?: string[];
 };
 
 /** Answers to send with pause so hiding the quiz cannot drop a selection that has not autosaved yet. */
 export function quizResponsesForPause(
-  local: Record<string, { finalAnswer?: string | null; flagged?: boolean } | undefined>,
+  local: Record<
+    string,
+    { finalAnswer?: string | null; flagged?: boolean; eliminatedChoiceIds?: string[] } | undefined
+  >,
 ): PauseResponseDraft[] {
   const drafts: PauseResponseDraft[] = [];
   for (const [questionId, response] of Object.entries(local)) {
     if (!response) continue;
     const trimmed = response.finalAnswer?.trim() ?? "";
     const flagged = Boolean(response.flagged);
-    if (!trimmed && !flagged) continue;
+    const eliminatedChoiceIds = response.eliminatedChoiceIds ?? [];
+    if (!trimmed && !flagged && eliminatedChoiceIds.length === 0) continue;
     drafts.push({
       questionId,
       finalAnswer: trimmed || null,
       flagged,
+      ...(eliminatedChoiceIds.length > 0 ? { eliminatedChoiceIds } : {}),
     });
   }
   return drafts;

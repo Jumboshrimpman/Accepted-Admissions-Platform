@@ -10,4 +10,5 @@ export type AttemptResultItemChoicesItem = {
   id: string;
   label: string;
   text: string;
+  image?: string;
 };

@@ -1598,7 +1598,8 @@ export const CreateTutorSessionQuestionBody = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "correctAnswer": zod.string().optional(),
   "explanation": zod.string().optional()
@@ -1614,7 +1615,8 @@ export const CreateTutorSessionQuestionResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -1693,7 +1695,8 @@ export const GetSatBankCollectionResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string().nullish(),
   "domain": zod.string().nullish(),
@@ -1746,7 +1749,8 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string().nullish(),
   "domain": zod.string().nullish(),
@@ -3123,7 +3127,8 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -3148,7 +3153,8 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -3236,7 +3242,8 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -3261,7 +3268,8 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -3332,7 +3340,8 @@ export const UpdateAdaptiveRecommendationResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -3434,6 +3443,10 @@ export const GetAssignmentResponse = zod.object({
   "studentResolvedAt": zod.coerce.date().nullish()
 }).and(zod.object({
   "instructions": zod.string(),
+  "instructionsFootnote": zod.string().nullish(),
+  "referenceSheet": zod.string().nullish(),
+  "markForReview": zod.boolean().optional(),
+  "eliminateChoices": zod.boolean().optional(),
   "questions": zod.array(zod.object({
   "id": zod.string(),
   "position": zod.number(),
@@ -3444,14 +3457,16 @@ export const GetAssignmentResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
   "predictionFirst": zod.boolean(),
   "correctAnswer": zod.string().optional(),
   "explanation": zod.string().optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 }))
 }))
 
@@ -3483,6 +3498,7 @@ export const StartAttemptResponse = zod.object({
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
   "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -3531,9 +3547,11 @@ export const StartAttemptResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3607,6 +3625,7 @@ export const GetAttemptResponse = zod.object({
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
   "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -3655,9 +3674,11 @@ export const GetAttemptResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3752,9 +3773,11 @@ export const GetAttemptResultResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3831,9 +3854,11 @@ export const GetAttemptWrongAnswersResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 }))
 })
 
@@ -3892,9 +3917,11 @@ export const UpdateAttemptReviewResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3962,6 +3989,7 @@ export const SaveAttemptResponseBody = zod.object({
   "lockPrediction": zod.boolean().optional(),
   "finalAnswer": zod.string().max(saveAttemptResponseBodyFinalAnswerMax).nullish(),
   "flagged": zod.boolean().optional(),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "timeSpentSeconds": zod.number().min(saveAttemptResponseBodyTimeSpentSecondsMin).optional(),
   "checkAnswer": zod.boolean().optional().describe('Grade this item immediately. Only allowed for during_session practice. Timed pre-work and diagnostics stay hidden until final submit.\n'),
   "currentQuestionIndex": zod.number().min(saveAttemptResponseBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore on resume or refresh.')
@@ -3973,6 +4001,7 @@ export const SaveAttemptResponseResponse = zod.object({
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
   "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -4000,7 +4029,8 @@ export const PauseAttemptBody = zod.object({
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "finalAnswer": zod.string().max(pauseAttemptBodyResponsesItemFinalAnswerMax).nullish(),
-  "flagged": zod.boolean().optional()
+  "flagged": zod.boolean().optional(),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional()
 })).optional().describe('In-progress answers to store before the attempt is paused. Save for later sends these so a selection that has not autosaved yet is kept.\n')
 })
 
@@ -4024,6 +4054,7 @@ export const PauseAttemptResponse = zod.object({
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
   "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -4072,9 +4103,11 @@ export const PauseAttemptResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -4147,6 +4180,7 @@ export const ResumeAttemptResponse = zod.object({
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
   "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
+  "eliminatedChoiceIds": zod.array(zod.string()).optional(),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -4195,9 +4229,11 @@ export const ResumeAttemptResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -4353,9 +4389,11 @@ export const SubmitAttemptResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
-  "presentation": zod.enum(['text', 'figure_primary']).optional()
+  "presentation": zod.enum(['text', 'figure_primary']).optional(),
+  "curated": zod.boolean().optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -4588,7 +4626,8 @@ export const GeneratePracticeQuestionsResponseItem = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })),
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -4624,7 +4663,8 @@ export const ListQuestionBankResponseItem = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })),
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -4676,7 +4716,8 @@ export const UpdateQuestionBankItemBody = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "correctAnswer": zod.string().min(1).optional(),
   "explanation": zod.string().min(1).max(updateQuestionBankItemBodyExplanationMax).optional(),
@@ -4697,7 +4738,8 @@ export const UpdateQuestionBankItemResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })),
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -4741,7 +4783,8 @@ export const AttachQuestionToAssignmentResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })),
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -4775,7 +4818,8 @@ export const UpdateAssignmentQuestionBody = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "correctAnswer": zod.string().optional(),
   "explanation": zod.string().optional()
@@ -4791,7 +4835,8 @@ export const UpdateAssignmentQuestionResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
@@ -4906,7 +4951,8 @@ export const GetSessionLessonResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "studentAnswer": zod.string().nullish(),
   "correctAnswer": zod.string(),
@@ -4932,7 +4978,8 @@ export const GetSessionLessonResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "studentAnswer": zod.string().nullish(),
   "correctAnswer": zod.string().nullish(),
@@ -4966,7 +5013,8 @@ export const RequestSessionRetryResponse = zod.object({
   "choices": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "text": zod.string()
+  "text": zod.string(),
+  "image": zod.string().optional()
 })).optional(),
   "skill": zod.string(),
   "domain": zod.string().optional(),

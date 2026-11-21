@@ -759,6 +759,8 @@ import {
   liveDiagnosticAssignmentTitle,
 } from "../lib/sat-bank-diagnostic-quality";
 import { isXavierAuthoredFollowUpQuestion } from "../lib/xavier-follow-up-content";
+import { isCuratedFullLengthPracticeQuestion } from "../lib/curated-full-length";
+import { normalizeEliminatedChoiceIds } from "../lib/eliminated-choices";
 import { scoreAttemptItems } from "../lib/attempt-scoring";
 import {
   createQuestionReport,
@@ -3800,6 +3802,7 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
         predictionLocked: response.predictionLocked,
         finalAnswer: response.finalAnswer,
         flagged: response.flagged,
+        eliminatedChoiceIds: normalizeEliminatedChoiceIds(response.eliminatedChoiceIds),
         savedAt: response.savedAt,
         feedback: studentVisibleQuestionFeedback({
           deliveryPhase: record.deliveryPhase,
@@ -4178,7 +4181,8 @@ async function finalizeAttemptResult(
     const reported = reportedQuestionIds.has(item.question.id);
     const unusable = !(
       isStudentUsableServedQuestion(item.question) ||
-      isXavierAuthoredFollowUpQuestion(item.question)
+      isXavierAuthoredFollowUpQuestion(item.question) ||
+      isCuratedFullLengthPracticeQuestion(item.question)
     );
     scoredItems.push({ correct, flagged, reported, unusable });
     if (item.response) {
@@ -4204,12 +4208,14 @@ async function finalizeAttemptResult(
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
-    explanation: repairMichelleQuizMathText(
-      question.explanation,
-      repairStackedMath,
-      "explanation",
-      bankSourceKeyFromTags(question.tags),
-    ),
+    explanation: isCuratedFullLengthPracticeQuestion(question)
+      ? (question.explanation ?? "")
+      : repairMichelleQuizMathText(
+          question.explanation,
+          repairStackedMath,
+          "explanation",
+          bankSourceKeyFromTags(question.tags),
+        ),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -4223,6 +4229,7 @@ async function finalizeAttemptResult(
     stimulus: facing.stimulus,
     choices: facing.choices ?? question.choices,
     presentation: facing.presentation,
+    ...(facing.curated ? { curated: true } : {}),
     domain: question.domain,
     subject: question.subject,
     };
@@ -15896,7 +15903,8 @@ router.get(
               (question.reviewStatus === "reviewed" ||
                 question.reviewStatus === "approved") &&
               (isStudentUsableServedQuestion(question) ||
-                isXavierAuthoredFollowUpQuestion(question)),
+                isXavierAuthoredFollowUpQuestion(question) ||
+                isCuratedFullLengthPracticeQuestion(question)),
           )
         : joined;
     const [latestAttempt] = await db
@@ -15937,6 +15945,10 @@ router.get(
         instructions: studentFacing
           ? studentSafeAssignmentInstructions(assignment.instructions)
           : assignment.instructions,
+        instructionsFootnote: assignment.instructionsFootnote ?? null,
+        referenceSheet: assignment.referenceSheet ?? null,
+        markForReview: assignment.markForReview === true,
+        eliminateChoices: assignment.eliminateChoices === true,
         questions: visibleQuestions.map(({ assignmentQuestion, question }) =>
           assignmentQuestionShape(question, assignmentQuestion, {
             includeKeys:
@@ -16390,6 +16402,10 @@ router.put(
         existing?.predictionLocked || body.data.lockPrediction === true,
       finalAnswer: nextFinalAnswer,
       flagged: body.data.flagged ?? existing?.flagged ?? false,
+      eliminatedChoiceIds:
+        body.data.eliminatedChoiceIds === undefined
+          ? normalizeEliminatedChoiceIds(existing?.eliminatedChoiceIds)
+          : normalizeEliminatedChoiceIds(body.data.eliminatedChoiceIds),
       timeSpentSeconds:
         body.data.timeSpentSeconds ?? existing?.timeSpentSeconds ?? 0,
       correct: gradedCorrect,
@@ -16416,6 +16432,7 @@ router.put(
           predictionLocked: saved.predictionLocked,
           finalAnswer: saved.finalAnswer,
           flagged: saved.flagged,
+          eliminatedChoiceIds: normalizeEliminatedChoiceIds(saved.eliminatedChoiceIds),
           savedAt: saved.savedAt,
           feedback: studentVisibleQuestionFeedback({
             deliveryPhase: record.deliveryPhase,
@@ -16508,6 +16525,10 @@ router.post(
           predictionLocked: existing?.predictionLocked ?? false,
           finalAnswer: nextFinalAnswer,
           flagged: response.flagged ?? existing?.flagged ?? false,
+          eliminatedChoiceIds:
+            response.eliminatedChoiceIds === undefined
+              ? normalizeEliminatedChoiceIds(existing?.eliminatedChoiceIds)
+              : normalizeEliminatedChoiceIds(response.eliminatedChoiceIds),
           timeSpentSeconds: existing?.timeSpentSeconds ?? 0,
           correct: existing?.correct ?? null,
           savedAt: new Date(),
