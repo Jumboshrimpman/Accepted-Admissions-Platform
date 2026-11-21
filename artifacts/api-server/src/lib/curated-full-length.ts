@@ -27,6 +27,7 @@ export function isCuratedFullLengthPracticeQuestion(question: {
   return question.choices.every((choice) => {
     if (!choice || typeof choice !== "object") return false;
     const text = String((choice as { text?: unknown }).text ?? "").trim();
-    return text.length > 0;
+    const image = String((choice as { image?: unknown }).image ?? "").trim();
+    return text.length > 0 || image.startsWith("/media/") || /^https:\/\//i.test(image);
   });
 }

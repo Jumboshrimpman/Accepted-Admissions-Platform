@@ -2197,7 +2197,9 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("quiz-instructions-footnote").textContent).toBe("T6 · 6VSL02");
     expect(screen.getByRole("button", { name: "Mark for review" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Check answer" })).toBeNull();
-    expect(screen.getByTestId("choice-image-d")).toBeTruthy();
+    expect(screen.getByTestId("choice-image-d").getAttribute("alt")).toBe("Choice D");
+    expect(screen.queryByText(/Graph A increases/)).toBeNull();
+    expect(screen.queryByText(/curve through the points/)).toBeNull();
     fireEvent.click(screen.getByTestId("eliminate-choice-a"));
     expect(screen.getAllByTestId("quiz-answer-choice")[0]?.getAttribute("data-eliminated")).toBe("true");
     expect(saveMutate).toHaveBeenCalled();

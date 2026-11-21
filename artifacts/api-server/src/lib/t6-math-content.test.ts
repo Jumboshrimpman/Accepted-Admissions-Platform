@@ -97,8 +97,17 @@ test("every transcribed question stays answerable and graded, including the Q20 
 
   const q2 = T6_MATH_MODULE_PLANS[0]!.questions[1]!;
   const q11 = T6_MATH_MODULE_PLANS[0]!.questions[10]!;
-  assert.equal(q2.choices.every((choice) => choice.image?.includes("m1-q2-choice")), true);
-  assert.equal(q11.choices.every((choice) => choice.image?.includes("m1-q11-choice")), true);
+  assert.equal(q2.choices.every((choice) => choice.image?.includes("m1-q2-choice") && choice.text === ""), true);
+  assert.equal(q11.choices.every((choice) => choice.image?.includes("m1-q11-choice") && choice.text === ""), true);
+  const hint = /points rise slowly|most data points below|straight increasing line|peaks near|Curve starting at|vertex \(|line of best fit from about|crossing the y-axis at/;
+  for (const plan of T6_MATH_MODULE_PLANS) {
+    for (const draft of plan.questions) {
+      assert.doesNotMatch(`${draft.prompt}\n${draft.stimulus ?? ""}\n${draft.choices.map((choice) => choice.text).join("\n")}`, hint, draft.key);
+      for (const match of (draft.stimulus ?? "").matchAll(/!\[([^\]]*)\]/g)) {
+        assert.equal(match[1], "Figure", draft.key);
+      }
+    }
+  }
   assert.equal(
     existsSync(`${mediaRoot}/media/sat-bank/t6-math-full-length/reference-sheet.png`),
     true,

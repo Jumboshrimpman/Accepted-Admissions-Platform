@@ -1516,7 +1516,7 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
   if (isCuratedFullLengthInput(input)) {
     const choices = (input.choices ?? []).map((choice, index) => {
       const image = safeChoiceImage(choice.image);
-      const text = formatStudentChoiceText(choice.text);
+      const text = image ? "" : formatStudentChoiceText(choice.text);
       return {
         id:
           (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
@@ -1530,7 +1530,7 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
       presentation: "text",
       prompt: stripSatBankFigureComments(input.prompt) || "Question prompt is unavailable.",
       stimulus: input.stimulus ? stripSatBankFigureComments(input.stimulus) || null : null,
-      choices: choices.some((choice) => choice.text.trim()) ? choices : undefined,
+      choices: choices.some((choice) => choice.text.trim() || choice.image) ? choices : undefined,
       questionType: input.questionType?.trim() || "multiple_choice",
     };
   }

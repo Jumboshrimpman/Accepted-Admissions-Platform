@@ -114,7 +114,8 @@ function storedChoices(question: T6Question): T6ChoiceDraft[] {
     return {
       id: choice.id.trim().toLowerCase(),
       label: choice.label.trim().toUpperCase(),
-      text: choice.text,
+      // Image choices are pictures on the test. The transcribed caption is not shown.
+      text: image ? "" : choice.text,
       ...(image ? { image } : {}),
     };
   });
@@ -123,7 +124,8 @@ function storedChoices(question: T6Question): T6ChoiceDraft[] {
 function stimulusWithFigures(question: T6Question): string | null {
   const figures = (question.figures ?? []).map((figure) => ({
     url: mediaUrl(figure.path),
-    alt: figure.alt?.trim() || "Figure",
+    // The source alt restates the picture. Students see the figure, not that caption.
+    alt: "Figure",
   }));
   const enriched = enrichStimulusWithFigures(question.stimulus, figures);
   if (figures.length === 0) return enriched;

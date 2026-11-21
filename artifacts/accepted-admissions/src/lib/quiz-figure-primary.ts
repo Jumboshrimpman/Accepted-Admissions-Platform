@@ -997,12 +997,14 @@ export function shouldHideMismatchedQuizFigures(
   return true;
 }
 
-function hasCompleteWrittenLetterChoices(
+export function hasCompleteWrittenLetterChoices(
   choices: AssignmentQuestion["choices"],
 ): boolean {
   const labels = new Set<string>();
   for (const choice of choices ?? []) {
-    if (!(choice.text ?? "").trim()) continue;
+    const image = "image" in choice ? String(choice.image ?? "").trim() : "";
+    const hasImage = image.startsWith("/media/") || /^https:\/\//i.test(image);
+    if (!(choice.text ?? "").trim() && !hasImage) continue;
     const label = (choice.label ?? choice.id ?? "").toString().trim().toUpperCase();
     if (/^[A-D]$/.test(label)) labels.add(label);
   }

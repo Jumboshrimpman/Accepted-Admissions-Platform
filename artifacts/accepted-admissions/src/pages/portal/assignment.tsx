@@ -102,6 +102,7 @@ import {
   formatStudentStemText,
   figurePrimaryChoices,
   hasCompleteLetterChoiceText,
+  hasCompleteWrittenLetterChoices,
   isFigurePrimaryQuestion,
   isStudentAnswerableQuizQuestion,
   isStudentReadableChoiceText,
@@ -621,7 +622,10 @@ function AnswerChoices({
   const rawChoices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
   const choices = (rawChoices ?? [])
     .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
-    .filter((choice) => (curated ? Boolean(choice.text.trim()) : isStudentReadableChoiceText(choice.text)));
+    .filter((choice) => {
+      if (choiceImageSrc(choice.image)) return true;
+      return curated ? Boolean(choice.text.trim()) : isStudentReadableChoiceText(choice.text);
+    });
   if (isAuthoredGridInQuestion(question)) {
     const ieltsWritten = /\bielts\b/i.test(question.subject ?? "");
     return (
@@ -645,7 +649,10 @@ function AnswerChoices({
       </label>
     );
   }
-  if (shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices)) {
+  const showChoices = curated
+    ? hasCompleteWrittenLetterChoices(choices)
+    : shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices);
+  if (showChoices) {
     return (
       <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
@@ -692,13 +699,13 @@ function AnswerChoices({
                   ) : null}
                 </div>
                 <div className={`min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${eliminated ? "line-through" : ""}`}>
-                  {formatMath ? <QuizMathText text={choice.text} /> : choice.text}
+                  {image || !choice.text.trim() ? null : formatMath ? <QuizMathText text={choice.text} /> : choice.text}
                   {image ? (
                     <img
                       src={image}
-                      alt=""
+                      alt={`Choice ${choice.label}`}
                       data-testid={`choice-image-${choice.id}`}
-                      className={`mt-3 h-auto max-h-56 w-auto max-w-full rounded-md bg-white object-contain ${eliminated ? "opacity-40" : ""}`}
+                      className={`h-auto max-h-56 w-auto max-w-full rounded-md bg-white object-contain ${eliminated ? "opacity-40" : ""}`}
                     />
                   ) : null}
                 </div>
