@@ -32,6 +32,7 @@ import {
 } from "./oct30-hard-rw.ts";
 import { listLiveBeforeSessionHomework } from "./session-prework-live.ts";
 import { inferSessionPreworkKind } from "./session-prework-dedupe.ts";
+import { isT6MathModuleTitle } from "./t6-math-content.ts";
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   HARD_SAT_PREWORK_QUESTIONS,
@@ -533,7 +534,10 @@ async function assignedHardSetChecks(session: SessionRow): Promise<{
 }> {
   const hardKeys = await hardKeysForSession(session);
   const live = await listLiveBeforeSessionHomework(session.id);
-  const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  // Official T6 math modules are not interchangeable with the hard pre-work set.
+  const routine = live.filter(
+    (row) => inferSessionPreworkKind(row) === "routine" && !isT6MathModuleTitle(row.title),
+  );
   const officialForms = await officialSatFormByKey();
   const preworkSets: HardSatAssignedSetCheck[] = [];
   for (const row of routine) {
