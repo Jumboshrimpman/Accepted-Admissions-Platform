@@ -642,7 +642,9 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   const target = await inSessionTargetForSession(session);
   const hardKeys = await hardKeysForSession(session);
   const live = await listLiveBeforeSessionHomework(session.id);
-  const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  const routine = live.filter(
+    (row) => inferSessionPreworkKind(row) === "routine" && !isT6MathModuleTitle(row.title),
+  );
   const officialForms = await officialSatFormByKey();
   const preworkSets: HardSatAssignedSetCheck[] = [];
   let preworkCount = 0;
@@ -1021,7 +1023,9 @@ export async function ensureHardSatPrework(
   const target = await inSessionTargetForSession(session);
   const hardKeys = await hardKeysForSession(session);
   const live = await listLiveBeforeSessionHomework(session.id);
-  const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  const routine = live.filter(
+    (row) => inferSessionPreworkKind(row) === "routine" && !isT6MathModuleTitle(row.title),
+  );
   const classified = [];
   for (const row of routine) {
     classified.push({
