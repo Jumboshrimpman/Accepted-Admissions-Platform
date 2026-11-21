@@ -35,7 +35,8 @@ describe("PublicSiteShell", () => {
     expect(mainNavigation.textContent).toContain("SAT tutoring");
     expect(mainNavigation.textContent).toContain("Meet the team");
     expect(mainNavigation.textContent).toContain("Student stories");
-    expect(mainNavigation.textContent).toContain("Get guidance");
+    expect(mainNavigation.textContent).not.toContain("Get guidance");
+    expect(mainNavigation.querySelectorAll("a")).toHaveLength(3);
     expect(screen.getByTestId("link-header-guidance").getAttribute("href")).toBe("/client-request");
     expect(screen.getByTestId("button-header-sign-in").getAttribute("href")).toBe("/login");
     expect(screen.getByTestId("button-header-sign-in").textContent).toMatch(/^Sign in$/);
