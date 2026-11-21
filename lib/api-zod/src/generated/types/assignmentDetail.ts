@@ -10,5 +10,11 @@ import type { AssignmentSummary } from './assignmentSummary';
 
 export type AssignmentDetail = AssignmentSummary & {
   instructions: string;
+  /** @nullable */
+  instructionsFootnote?: string | null;
+  /** @nullable */
+  referenceSheet?: string | null;
+  markForReview?: boolean;
+  eliminateChoices?: boolean;
   questions: AssignmentQuestion[];
 };

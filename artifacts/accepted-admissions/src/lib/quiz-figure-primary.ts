@@ -950,8 +950,10 @@ export function shouldHideQuizOcrStem(
   question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus" | "choices" | "questionType"> & {
     figurePrimary?: boolean | null;
     figurePrimarySrc?: string | null;
+    curated?: boolean | null;
   },
 ): boolean {
+  if (question.curated === true) return false;
   const broken =
     looksBrokenMathOcr(question.prompt) ||
     looksCorruptStemOcr(question.prompt) ||
@@ -977,8 +979,10 @@ export function shouldHideMismatchedQuizFigures(
   question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus" | "choices" | "questionType"> & {
     figurePrimary?: boolean | null;
     figurePrimarySrc?: string | null;
+    curated?: boolean | null;
   },
 ): boolean {
+  if (question.curated === true) return false;
   if (!hasQuizFigure(question)) return false;
   const stem = `${question.prompt ?? ""}\n${(question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ")}`;
   const broken =
@@ -993,9 +997,26 @@ export function shouldHideMismatchedQuizFigures(
   return true;
 }
 
-export function shouldShowQuizChoices(
-  question: Pick<AssignmentQuestion, "prompt" | "choices" | "presentation">,
+export function hasCompleteWrittenLetterChoices(
+  choices: AssignmentQuestion["choices"],
 ): boolean {
+  const labels = new Set<string>();
+  for (const choice of choices ?? []) {
+    const image = "image" in choice ? String(choice.image ?? "").trim() : "";
+    const hasImage = image.startsWith("/media/") || /^https:\/\//i.test(image);
+    if (!(choice.text ?? "").trim() && !hasImage) continue;
+    const label = (choice.label ?? choice.id ?? "").toString().trim().toUpperCase();
+    if (/^[A-D]$/.test(label)) labels.add(label);
+  }
+  return labels.size >= 4;
+}
+
+export function shouldShowQuizChoices(
+  question: Pick<AssignmentQuestion, "prompt" | "choices" | "presentation"> & {
+    curated?: boolean | null;
+  },
+): boolean {
+  if (question.curated === true) return hasCompleteWrittenLetterChoices(question.choices);
   const figurePrimarySalvage = question.presentation === "figure_primary";
   if (
     !figurePrimarySalvage &&
@@ -1033,10 +1054,15 @@ export function hasCompleteLetterChoiceText(
  * so broken SAT-bank SPR extracts (no presentation) stay hidden.
  */
 export function isAuthoredGridInQuestion(
-  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
+  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType"> & {
+    curated?: boolean | null;
+  },
 ): boolean {
   const type = (question.questionType ?? "").trim().toLowerCase();
   if (type !== "spr" && type !== "student_produced_response" && type !== "free_response") return false;
+  if (question.curated === true) {
+    return (question.prompt?.trim().length ?? 0) >= 12 && !hasCompleteWrittenLetterChoices(question.choices);
+  }
   if (question.presentation !== "text") return false;
   if (hasCompleteLetterChoiceText(question.choices)) return false;
   const prompt = question.prompt?.trim() ?? "";
@@ -1051,9 +1077,12 @@ export function isAuthoredGridInQuestion(
 
 /** Student-facing items must be answerable A–D, or an authored grid-in. Never ship an unavailable-choice shell. */
 export function isStudentAnswerableQuizQuestion(
-  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
+  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType"> & {
+    curated?: boolean | null;
+  },
 ): boolean {
   if (isAuthoredGridInQuestion(question)) return true;
+  if (question.curated === true) return shouldShowQuizChoices(question);
   const figurePrimarySalvage =
     question.presentation === "figure_primary" &&
     hasQuizFigure(question) &&

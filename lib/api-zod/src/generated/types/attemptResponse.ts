@@ -15,6 +15,7 @@ export interface AttemptResponse {
   finalAnswer: string | null;
   /** Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored. */
   flagged: boolean;
+  eliminatedChoiceIds?: string[];
   savedAt?: Date;
   revealed?: boolean;
   /** @nullable */

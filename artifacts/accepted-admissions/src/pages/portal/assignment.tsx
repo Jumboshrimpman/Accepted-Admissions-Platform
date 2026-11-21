@@ -35,12 +35,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizContent } from "@/components/quiz-content";
 import { QuizMathText } from "@/components/quiz-math-text";
 import { formatQuizClock, SOFT_TIMER_NOTE, tickQuizSeconds } from "@/lib/quiz-soft-timer";
 import {
+  BookOpen,
   BookmarkPlus,
   Brain,
   CheckCircle,
@@ -68,7 +75,9 @@ import {
   canSubmitStudentAttempt,
   formatUnansweredQuestionList,
   isAnsweredValue,
+  markedQuestionNumbers,
   questionNavAriaLabel,
+  referenceSheetImageUrl,
   unansweredQuestionNumbers,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
@@ -93,6 +102,7 @@ import {
   formatStudentStemText,
   figurePrimaryChoices,
   hasCompleteLetterChoiceText,
+  hasCompleteWrittenLetterChoices,
   isFigurePrimaryQuestion,
   isStudentAnswerableQuizQuestion,
   isStudentReadableChoiceText,
@@ -409,7 +419,14 @@ function ResultView({ result }: { result: AttemptResult }) {
                               text={item.stimulus}
                               className="mt-2 text-sm text-muted-foreground"
                               hideGarbledText={item.presentation === "figure_primary"}
-                              hideImages={shouldHideMismatchedQuizFigures(item)}
+                              hideImages={shouldHideMismatchedQuizFigures({
+                                presentation: item.presentation,
+                                prompt: item.prompt,
+                                stimulus: item.stimulus,
+                                choices: item.choices,
+                                questionType: item.questionType ?? "multiple_choice",
+                                curated: item.curated,
+                              })}
                               formatMath={formatMath}
                             />
                           ) : null}
@@ -574,27 +591,41 @@ function InSessionQuestionFeedback({
   );
 }
 
+function choiceImageSrc(value: string | null | undefined): string | null {
+  const src = value?.trim() ?? "";
+  if (src.startsWith("/media/") || /^https:\/\//i.test(src)) return src;
+  return null;
+}
+
 function AnswerChoices({
   question,
   selected,
+  eliminatedChoiceIds,
   disabled,
   onSelect,
+  onToggleEliminate,
   tone = "default",
   formatMath = false,
 }: {
   question: AssignmentQuestion;
   selected?: string;
+  eliminatedChoiceIds?: string[];
   disabled?: boolean;
   onSelect: (value: string) => void;
+  onToggleEliminate?: (choiceId: string) => void;
   tone?: "default" | "ink";
   formatMath?: boolean;
 }) {
   const ink = tone === "ink";
+  const curated = question.curated === true;
   const figurePrimary = isFigurePrimaryQuestion(question);
   const rawChoices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
   const choices = (rawChoices ?? [])
     .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
-    .filter((choice) => isStudentReadableChoiceText(choice.text));
+    .filter((choice) => {
+      if (choiceImageSrc(choice.image)) return true;
+      return curated ? Boolean(choice.text.trim()) : isStudentReadableChoiceText(choice.text);
+    });
   if (isAuthoredGridInQuestion(question)) {
     const ieltsWritten = /\bielts\b/i.test(question.subject ?? "");
     return (
@@ -618,7 +649,10 @@ function AnswerChoices({
       </label>
     );
   }
-  if (shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices)) {
+  const showChoices = curated
+    ? hasCompleteWrittenLetterChoices(choices)
+    : shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices);
+  if (showChoices) {
     return (
       <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
@@ -626,40 +660,71 @@ function AnswerChoices({
         </h3>
         {choices.map((choice) => {
           const isSelected = selected === choice.id;
+          const eliminated = (eliminatedChoiceIds ?? []).includes(choice.id);
+          const image = choiceImageSrc(choice.image);
           return (
-            <button
-              key={choice.id}
-              type="button"
-              disabled={disabled}
-              onClick={() => onSelect(choice.id)}
-              data-testid="quiz-answer-choice"
-              className={`flex w-full min-w-0 max-w-full items-start gap-4 overflow-visible rounded-xl border-2 p-4 text-left transition-all ${
-                ink
-                  ? isSelected
-                    ? "border-white bg-white/15 text-white shadow-sm"
-                    : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
-                  : isSelected
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border hover:border-primary/40 hover:bg-muted/50"
-              } ${disabled ? "cursor-default" : ""}`}
-            >
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-medium ${
+            <div key={choice.id} className="flex min-w-0 items-stretch gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onSelect(choice.id)}
+                data-testid="quiz-answer-choice"
+                data-eliminated={eliminated ? "true" : "false"}
+                className={`flex w-full min-w-0 max-w-full items-start gap-4 overflow-visible rounded-xl border-2 p-4 text-left transition-all ${
                   ink
                     ? isSelected
-                      ? "bg-white text-foreground"
-                      : "bg-white/15 text-white"
+                      ? "border-white bg-white/15 text-white shadow-sm"
+                      : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
                     : isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                }`}
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border hover:border-primary/40 hover:bg-muted/50"
+                } ${eliminated ? "opacity-60" : ""} ${disabled ? "cursor-default" : ""}`}
               >
-                {choice.label}
-              </div>
-              <div className="min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                {formatMath ? <QuizMathText text={choice.text} /> : choice.text}
-              </div>
-            </button>
+                <div
+                  className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-medium ${
+                    ink
+                      ? isSelected
+                        ? "bg-white text-foreground"
+                        : "bg-white/15 text-white"
+                      : isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {choice.label}
+                  {eliminated ? (
+                    <span className="absolute inset-0 flex items-center justify-center text-lg leading-none" aria-hidden>
+                      /
+                    </span>
+                  ) : null}
+                </div>
+                <div className={`min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${eliminated ? "line-through" : ""}`}>
+                  {image || !choice.text.trim() ? null : formatMath ? <QuizMathText text={choice.text} /> : choice.text}
+                  {image ? (
+                    <img
+                      src={image}
+                      alt={`Choice ${choice.label}`}
+                      data-testid={`choice-image-${choice.id}`}
+                      className={`h-auto max-h-56 w-auto max-w-full rounded-md bg-white object-contain ${eliminated ? "opacity-40" : ""}`}
+                    />
+                  ) : null}
+                </div>
+              </button>
+              {onToggleEliminate && !disabled ? (
+                <button
+                  type="button"
+                  className={`flex w-11 shrink-0 items-center justify-center rounded-xl border text-sm font-semibold ${
+                    eliminated ? "border-foreground/40 line-through text-muted-foreground" : "border-border text-muted-foreground hover:border-foreground/40"
+                  }`}
+                  aria-pressed={eliminated}
+                  aria-label={eliminated ? `Restore choice ${choice.label}` : `Eliminate choice ${choice.label}`}
+                  data-testid={`eliminate-choice-${choice.id}`}
+                  onClick={() => onToggleEliminate(choice.id)}
+                >
+                  {choice.label}
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>
@@ -671,12 +736,14 @@ function AnswerChoices({
 function UnansweredSubmitConfirm({
   open,
   numbers,
+  markedNumbers = [],
   onOpenChange,
   onGoToQuestion,
   onConfirm,
 }: {
   open: boolean;
   numbers: number[];
+  markedNumbers?: number[];
   onOpenChange: (open: boolean) => void;
   onGoToQuestion: (index: number) => void;
   onConfirm: () => void;
@@ -688,6 +755,7 @@ function UnansweredSubmitConfirm({
           <AlertDialogTitle>Unanswered questions</AlertDialogTitle>
           <AlertDialogDescription>
             You have not answered {formatUnansweredQuestionList(numbers)}. Submit anyway, or go back and finish them first.
+            {markedNumbers.length > 0 ? ` Marked for review: ${markedNumbers.join(", ")}.` : ""}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="flex flex-wrap gap-2">
@@ -792,6 +860,7 @@ export default function PortalAssignment() {
         finalAnswer?: string;
         locked?: boolean;
         flagged?: boolean;
+        eliminatedChoiceIds?: string[];
         revealed?: boolean;
         correct?: boolean | null;
         correctAnswer?: string | null;
@@ -808,6 +877,7 @@ export default function PortalAssignment() {
   const [reportNote, setReportNote] = useState("");
   const [reportError, setReportError] = useState<{ questionId: string; message: string } | null>(null);
   const [reportPending, setReportPending] = useState(false);
+  const [referenceOpen, setReferenceOpen] = useState(false);
   const [reportedQuestionIds, setReportedQuestionIds] = useState<Set<string>>(new Set());
   const expirySubmitted = useRef(false);
   const restoredAttemptId = useRef<string | null>(null);
@@ -920,6 +990,7 @@ export default function PortalAssignment() {
         finalAnswer?: string;
         locked?: boolean;
         flagged?: boolean;
+        eliminatedChoiceIds?: string[];
         revealed?: boolean;
         correct?: boolean | null;
         correctAnswer?: string | null;
@@ -935,6 +1006,7 @@ export default function PortalAssignment() {
         finalAnswer: response.finalAnswer ?? "",
         locked: response.predictionLocked,
         flagged: response.flagged,
+        eliminatedChoiceIds: response.eliminatedChoiceIds ?? [],
         revealed,
         correct: revealed ? response.correct : null,
         correctAnswer: revealed ? response.correctAnswer : null,
@@ -1168,6 +1240,7 @@ export default function PortalAssignment() {
         ...responses[questionId],
         finalAnswer: saved.finalAnswer ?? responses[questionId]?.finalAnswer,
         flagged: saved.flagged,
+        eliminatedChoiceIds: saved.eliminatedChoiceIds ?? responses[questionId]?.eliminatedChoiceIds ?? [],
         revealed,
         correct: revealed ? saved.correct : null,
         correctAnswer: revealed ? saved.correctAnswer : null,
@@ -1178,7 +1251,13 @@ export default function PortalAssignment() {
 
   const updateResponse = (
     questionId: string,
-    updates: { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean },
+    updates: {
+      prediction?: string;
+      finalAnswer?: string;
+      locked?: boolean;
+      flagged?: boolean;
+      eliminatedChoiceIds?: string[];
+    },
     options?: { checkAnswer?: boolean },
   ) => {
     const current = localResponses[questionId] ?? {};
@@ -1199,6 +1278,7 @@ export default function PortalAssignment() {
           lockPrediction: false,
           finalAnswer: next.finalAnswer ?? null,
           flagged: next.flagged,
+          eliminatedChoiceIds: next.eliminatedChoiceIds ?? [],
           timeSpentSeconds: 0,
           checkAnswer: options?.checkAnswer,
           currentQuestionIndex,
@@ -1242,6 +1322,7 @@ export default function PortalAssignment() {
           lockPrediction: false,
           finalAnswer: current.finalAnswer ?? null,
           flagged: current.flagged,
+          eliminatedChoiceIds: current.eliminatedChoiceIds ?? [],
           timeSpentSeconds: 0,
           currentQuestionIndex: index,
         },
@@ -1343,6 +1424,21 @@ export default function PortalAssignment() {
       </div>
     );
   }
+  const referenceUrl = referenceSheetImageUrl(assignment.referenceSheet);
+  const markForReview = assignment.markForReview === true;
+  const eliminateChoices = assignment.eliminateChoices === true;
+  const markedNumbers = markForReview ? markedQuestionNumbers(questions, localResponses) : [];
+  const referenceSheet = referenceUrl ? (
+    <Sheet open={referenceOpen} onOpenChange={setReferenceOpen}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-xl" data-testid="quiz-reference-sheet">
+        <SheetHeader>
+          <SheetTitle>SAT Math reference</SheetTitle>
+        </SheetHeader>
+        <img src={referenceUrl} alt="SAT math reference sheet" className="mt-4 h-auto w-full bg-white" />
+      </SheetContent>
+    </Sheet>
+  ) : null;
+
   if (!attemptId) {
     return (
       <div className="mx-auto max-w-3xl space-y-8 py-8">
@@ -1382,6 +1478,16 @@ export default function PortalAssignment() {
             !studentFacingCopy(assignment.instructions) ? null : (
               <p className="text-muted-foreground">{studentFacingCopy(assignment.instructions)}</p>
             )}
+            {assignment.instructionsFootnote ? (
+              <p className="text-xs text-muted-foreground" data-testid="quiz-instructions-footnote">
+                {assignment.instructionsFootnote}
+              </p>
+            ) : null}
+            {referenceUrl ? (
+              <Button type="button" variant="outline" data-testid="quiz-reference" onClick={() => setReferenceOpen(true)}>
+                <BookOpen className="mr-2 h-4 w-4" /> Reference
+              </Button>
+            ) : null}
             {collaborative ? (
               <p className="text-sm text-muted-foreground">
                 {IN_SESSION_PRACTICE_CHECK_COPY} There is no prediction step and no empty auto-submit.
@@ -1390,10 +1496,13 @@ export default function PortalAssignment() {
               <p className="text-sm text-muted-foreground">
                 {inSessionHomework
                   ? `${IN_SESSION_PARTIAL_SUBMIT_COPY} ${IN_SESSION_PER_QUESTION_FEEDBACK_COPY}`
+                  : markForReview
+                  ? "Your timer is tracked on the server and pauses when you leave. Answers autosave as you work. Pause / Save & exit stores this attempt and returns you to the dashboard. Mark for review flags a question so you can jump back to it without leaving the quiz. Your score stays hidden until you submit the whole quiz."
                   : "Your timer is tracked on the server and pauses when you leave. Answers autosave as you work. Pause / Save & exit stores this attempt and returns you to the dashboard. Save for later marks this question so you can jump back to it without leaving the quiz. Submit is a separate action and stays blocked until at least one question is answered."}
               </p>
             )}
           </CardContent>
+          {referenceSheet}
           <CardContent className="bg-muted/30">
             <Button
               size="lg"
@@ -1694,9 +1803,21 @@ export default function PortalAssignment() {
             Next problem <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
+        {markedNumbers.length > 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="marked-for-review-summary">
+            Marked for review: {markedNumbers.join(", ")}
+          </p>
+        ) : null}
+        {assignment.instructionsFootnote ? (
+          <p className="text-xs text-muted-foreground" data-testid="quiz-instructions-footnote">
+            {assignment.instructionsFootnote}
+          </p>
+        ) : null}
+        {referenceSheet}
         <UnansweredSubmitConfirm
           open={unansweredSubmitOpen}
           numbers={unansweredNumbers}
+          markedNumbers={markedNumbers}
           onOpenChange={setUnansweredSubmitOpen}
           onGoToQuestion={(index) => {
             setUnansweredSubmitOpen(false);
@@ -1755,6 +1876,18 @@ export default function PortalAssignment() {
               >
                 <Pause className="mr-2 h-4 w-4" /> {QUIZ_PAUSE_EXIT_LABEL}
               </Button>
+              {referenceUrl ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-11"
+                  data-testid="quiz-reference"
+                  onClick={() => setReferenceOpen(true)}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" /> Reference
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -1765,7 +1898,13 @@ export default function PortalAssignment() {
                 onClick={() => saveCurrentQuestionForLater(question.id)}
               >
                 <BookmarkPlus className="mr-2 h-4 w-4" />
-                {response.flagged ? "Saved for later" : "Save for later"}
+                {markForReview
+                  ? response.flagged
+                    ? "Marked for review"
+                    : "Mark for review"
+                  : response.flagged
+                    ? "Saved for later"
+                    : "Save for later"}
               </Button>
               <Button
                 type="button"
@@ -1865,7 +2004,7 @@ export default function PortalAssignment() {
               variant={index === currentQuestionIndex ? "default" : "outline"}
               data-testid={`question-nav-${item.id}`}
               aria-pressed={savedForLater}
-              aria-label={questionNavAriaLabel({ index, answered, savedForLater })}
+              aria-label={questionNavAriaLabel({ index, answered, savedForLater, markForReview })}
               onClick={() => goToQuestion(index)}
             >
               {index + 1}
@@ -1875,6 +2014,16 @@ export default function PortalAssignment() {
           );
         })}
       </div>
+      {markedNumbers.length > 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="marked-for-review-summary">
+          Marked for review: {markedNumbers.join(", ")}
+        </p>
+      ) : null}
+      {assignment.instructionsFootnote ? (
+        <p className="text-xs text-muted-foreground" data-testid="quiz-instructions-footnote">
+          {assignment.instructionsFootnote}
+        </p>
+      ) : null}
       {reportedQuestionIds.has(question.id) ? (
         <p className="text-sm text-muted-foreground" data-testid="report-question-status">
           Reported. You can keep going — this question isn’t scored.
@@ -1923,9 +2072,31 @@ export default function PortalAssignment() {
           <AnswerChoices
             question={question}
             selected={response.finalAnswer}
+            eliminatedChoiceIds={response.eliminatedChoiceIds}
             disabled={viewer || revealedHere}
             formatMath={formatMath}
-            onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
+            onSelect={(value) =>
+              updateResponse(question.id, {
+                finalAnswer: value,
+                eliminatedChoiceIds: (response.eliminatedChoiceIds ?? []).filter((id) => id !== value),
+              })
+            }
+            onToggleEliminate={
+              eliminateChoices
+                ? (choiceId) => {
+                    const current = response.eliminatedChoiceIds ?? [];
+                    const next = current.includes(choiceId)
+                      ? current.filter((id) => id !== choiceId)
+                      : [...current, choiceId];
+                    updateResponse(question.id, {
+                      eliminatedChoiceIds: next,
+                      ...(next.includes(choiceId) && response.finalAnswer === choiceId
+                        ? { finalAnswer: "" }
+                        : {}),
+                    });
+                  }
+                : undefined
+            }
           />
         )}
       </div>

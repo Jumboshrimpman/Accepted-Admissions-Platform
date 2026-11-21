@@ -14,6 +14,7 @@ import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-fol
 import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-session-follow-up";
 import { ensureMichelleOct18ReviewQuiz } from "./lib/michelle-oct18-review-quiz";
 import { ensureMichelleOct25ReviewQuiz } from "./lib/michelle-oct25-review-quiz";
+import { ensureMichelleT6MathModules } from "./lib/t6-math-modules";
 import { ensureSophiaTutorLinks } from "./lib/sophia-tutor-links";
 import { ensureTaitoOct23RemainingHomework } from "./lib/taito-oct23-remaining-homework";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
@@ -118,6 +119,11 @@ void ensureRyoTaitoParentMirror()
           ensureMichelleOct25ReviewQuiz()
             .then((result) => logger.info(result, "Michelle Oct 25 review quiz ready"))
             .catch((err) => logger.warn({ err }, "Michelle Oct 25 review quiz skipped")),
+        )
+        .then(() =>
+          ensureMichelleT6MathModules()
+            .then((result) => logger.info(result, "Michelle T6 math modules ready"))
+            .catch((err) => logger.warn({ err }, "Michelle T6 math modules skipped")),
         )
         .then(() =>
           ensureSophiaTutorLinks()

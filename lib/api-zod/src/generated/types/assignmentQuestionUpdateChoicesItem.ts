@@ -10,4 +10,5 @@ export type AssignmentQuestionUpdateChoicesItem = {
   id: string;
   label: string;
   text: string;
+  image?: string;
 };

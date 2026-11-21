@@ -4,7 +4,9 @@ import {
   answeredQuestionCount,
   canSubmitStudentAttempt,
   formatUnansweredQuestionList,
+  markedQuestionNumbers,
   questionNavAriaLabel,
+  referenceSheetImageUrl,
   unansweredQuestionNumbers,
   allowsInSessionPerQuestionFeedback,
   allowsPartialInSessionSubmit,
@@ -345,5 +347,14 @@ test("unanswered question numbers and labels are listed for the submit confirm",
     questionNavAriaLabel({ index: 33, answered: true, savedForLater: true }),
     "Question 34, answered, saved for later",
   );
+  assert.equal(
+    questionNavAriaLabel({ index: 1, answered: false, savedForLater: true, markForReview: true }),
+    "Question 2, unanswered, marked for review",
+  );
+  assert.deepEqual(markedQuestionNumbers([{ id: "a" }, { id: "b" }], { b: { flagged: true } }), [2]);
+  assert.equal(referenceSheetImageUrl(null), null);
+  assert.equal(referenceSheetImageUrl("sat_math"), "/media/sat-bank/t6-math-full-length/reference-sheet.png");
+  assert.equal(referenceSheetImageUrl("https://example.com/sheet.png"), "https://example.com/sheet.png");
+  assert.equal(referenceSheetImageUrl("javascript:alert(1)"), null);
 });
 

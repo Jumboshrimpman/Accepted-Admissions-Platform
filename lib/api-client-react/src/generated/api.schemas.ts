@@ -2232,6 +2232,7 @@ export type AssignmentQuestionChoicesItem = {
   id: string;
   label: string;
   text: string;
+  image?: string;
 };
 
 export interface AssignmentQuestion {
@@ -2249,6 +2250,7 @@ export interface AssignmentQuestion {
   correctAnswer?: string;
   explanation?: string;
   presentation?: AssignmentQuestionPresentation;
+  curated?: boolean;
 }
 
 export type AdaptiveQuestion = AssignmentQuestion & {
@@ -2343,6 +2345,7 @@ export type AssignmentQuestionUpdateChoicesItem = {
   id: string;
   label: string;
   text: string;
+  image?: string;
 };
 
 export interface AssignmentQuestionUpdate {
@@ -2357,6 +2360,12 @@ export interface AssignmentQuestionUpdate {
 
 export type AssignmentDetail = AssignmentSummary & {
   instructions: string;
+  /** @nullable */
+  instructionsFootnote?: string | null;
+  /** @nullable */
+  referenceSheet?: string | null;
+  markForReview?: boolean;
+  eliminateChoices?: boolean;
   questions: AssignmentQuestion[];
 };
 
@@ -2369,6 +2378,7 @@ export interface AttemptResponse {
   finalAnswer: string | null;
   /** Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored. */
   flagged: boolean;
+  eliminatedChoiceIds?: string[];
   savedAt?: string;
   revealed?: boolean;
   /** @nullable */
@@ -2393,6 +2403,7 @@ export interface AttemptResponseInput {
      */
   finalAnswer?: string | null;
   flagged?: boolean;
+  eliminatedChoiceIds?: string[];
   /** @minimum 0 */
   timeSpentSeconds?: number;
   /** Grade this item immediately. Only allowed for during_session practice. Timed pre-work and diagnostics stay hidden until final submit. */
@@ -2427,6 +2438,7 @@ export type AttemptProgressInputResponsesItem = {
      */
   finalAnswer?: string | null;
   flagged?: boolean;
+  eliminatedChoiceIds?: string[];
 };
 
 export interface AttemptProgressInput {
@@ -2476,6 +2488,7 @@ export type AttemptResultItemChoicesItem = {
   id: string;
   label: string;
   text: string;
+  image?: string;
 };
 
 export interface AttemptResultItem {
@@ -2497,6 +2510,7 @@ export interface AttemptResultItem {
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
   presentation?: AttemptResultItemPresentation;
+  curated?: boolean;
 }
 
 export type AttemptResultReviewStatus = typeof AttemptResultReviewStatus[keyof typeof AttemptResultReviewStatus];

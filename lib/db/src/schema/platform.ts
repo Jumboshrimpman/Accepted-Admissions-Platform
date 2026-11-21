@@ -206,6 +206,17 @@ export const assignmentsTable = pgTable("assignments", {
   /** When true, the limit is a guide. The attempt never expires or auto-submits. */
   softTimeLimit: boolean("soft_time_limit").notNull().default(false),
   /**
+   * Opt-in reference sheet. `sat_math` shows the SAT math sheet.
+   * A /media or https URL shows that image. Null hides the button.
+   */
+  referenceSheet: text("reference_sheet"),
+  /** Small muted line under the instructions. Null hides it. */
+  instructionsFootnote: text("instructions_footnote"),
+  /** When true, the per-question flag is labeled Mark for review. */
+  markForReview: boolean("mark_for_review").notNull().default(false),
+  /** When true, the student can strike out answer choices. */
+  eliminateChoices: boolean("eliminate_choices").notNull().default(false),
+  /**
    * Tutor-held hard reserve for a student who is doing well in the session.
    * This is not the session's during-session practice assignment.
    */
@@ -273,7 +284,7 @@ export const questionsTable = pgTable("questions", {
   stimulus: text("stimulus"),
   prompt: text("prompt").notNull(),
   choices: jsonb("choices")
-    .$type<Array<{ id: string; label: string; text: string }>>()
+    .$type<Array<{ id: string; label: string; text: string; image?: string }>>()
     .notNull()
     .default([]),
   correctAnswer: text("correct_answer").notNull(),
@@ -382,6 +393,8 @@ export const responsesTable = pgTable(
     predictionLocked: boolean("prediction_locked").notNull().default(false),
     finalAnswer: text("final_answer"),
     flagged: boolean("flagged").notNull().default(false),
+    /** Choice ids the student struck out. Empty for quizzes that do not use elimination. */
+    eliminatedChoiceIds: jsonb("eliminated_choice_ids").$type<string[]>().notNull().default([]),
     timeSpentSeconds: numeric("time_spent_seconds", { mode: "number" }).notNull().default(0),
     correct: boolean("correct"),
     savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),

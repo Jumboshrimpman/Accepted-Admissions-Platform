@@ -3657,12 +3657,18 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
+              image:
+                type: string
+                description: Optional figure for this choice. A /media path or https URL.
         skill: { type: string }
         difficulty: { type: string, enum: [foundational, medium, hard] }
         predictionFirst: { type: boolean }
         correctAnswer: { type: string }
         explanation: { type: string }
         presentation: { type: string, enum: [text, figure_primary] }
+        curated:
+          type: boolean
+          description: Checked transcription. The written stem, figures, and choices are shown as stored.
     AssignmentQuestionUpdate:
       type: object
       properties:
@@ -3678,6 +3684,7 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
+              image: { type: string }
         correctAnswer: { type: string }
         explanation: { type: string }
     AssignmentDetail:
@@ -3687,6 +3694,18 @@ components:
           required: [instructions, questions]
           properties:
             instructions: { type: string }
+            instructionsFootnote:
+              type: ["string", "null"]
+              description: Small muted note under the instructions. Null hides it.
+            referenceSheet:
+              type: ["string", "null"]
+              description: Opt-in reference. sat_math shows the SAT math reference sheet. A /media or https URL shows that image. Null hides the button.
+            markForReview:
+              type: boolean
+              description: When true, the per-question flag is labeled Mark for review.
+            eliminateChoices:
+              type: boolean
+              description: When true, the student can strike out answer choices.
             questions:
               type: array
               items: { $ref: "#/components/schemas/AssignmentQuestion" }
@@ -3703,6 +3722,10 @@ components:
           description: >
             Review mark for the current question. The student stays in the quiz
             and can return to it. The answer is still scored.
+        eliminatedChoiceIds:
+          type: array
+          description: Choice ids the student struck out on this question.
+          items: { type: string }
         savedAt: { type: string, format: date-time }
         revealed: { type: boolean }
         correct: { type: ["boolean", "null"] }
@@ -3717,6 +3740,9 @@ components:
         lockPrediction: { type: boolean }
         finalAnswer: { type: ["string", "null"], maxLength: 2000 }
         flagged: { type: boolean }
+        eliminatedChoiceIds:
+          type: array
+          items: { type: string }
         timeSpentSeconds: { type: number, minimum: 0 }
         checkAnswer:
           type: boolean
@@ -3752,6 +3778,9 @@ components:
               questionId: { type: string }
               finalAnswer: { type: ["string", "null"], maxLength: 2000 }
               flagged: { type: boolean }
+              eliminatedChoiceIds:
+                type: array
+                items: { type: string }
     Attempt:
       type: object
       required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, currentQuestionIndex, responses]
@@ -3830,7 +3859,9 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
+              image: { type: string }
         presentation: { type: string, enum: [text, figure_primary] }
+        curated: { type: boolean }
     AttemptAnalysis:
       type: object
       required: [source, label, strengths, weaknesses, mistakePatterns, nextFocus, feedback]

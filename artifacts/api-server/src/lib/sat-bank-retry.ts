@@ -112,12 +112,25 @@ export function acceptedAnswerForms(correctAnswer: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Drop commas that are only thousands separators (`1,000` → `1000`).
+ * Leaves commas that are not part of a number (`hello, world`).
+ */
+function stripNumericCommas(value: string): string {
+  if (!value.includes(",")) return value;
+  const stripped = value.replace(/,/g, "");
+  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\/\d+(?:\.\d+)?)?$/.test(stripped)) return stripped;
+  return value;
+}
+
 /** Hyphens, superscripts, and spacing students use for the same grid-in. */
 export function canonicalizeAnswer(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[−–—]/g, "-")
+  return stripNumericCommas(
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[−–—]/g, "-"),
+  )
     .replace(/[×·∙]/g, "*")
     .replace(/²/g, "^2")
     .replace(/³/g, "^3")

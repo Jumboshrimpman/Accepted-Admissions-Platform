@@ -1,0 +1,879 @@
+{
+ "test": "SAT Practice Test #6 (College Board, digital SAT paper/linear format)",
+ "testShortLabel": "T6",
+ "testCodes": {
+  "formCode": "6VSL02",
+  "bookCode": "WX4P0010"
+ },
+ "sourcePdf": "/workspace/sat-practice-test-6-math.pdf",
+ "answerKeySource": "College Board sat-practice-test-6-answers-digital.pdf (local copy /workspace/sat-curriculum-sources/from-mac/full-length-sat-paper-practice-test_-bundle-6/), every answer independently re-solved",
+ "referenceSheet": "/workspace/t6-math/figures/reference-sheet.png",
+ "timeLimitMinutes": 50,
+ "student": {
+  "name": "Michelle Makarem",
+  "email": "makaremmichelle7@gmail.com",
+  "clerkUserId": "user_3JCRGfBj8dgWSjO1r2zeKovFVE7"
+ },
+ "sprEntryRules": "Accept any listed form; fractions or decimals. Positive answers up to 5 characters, negative up to 6. Ignore commas.",
+ "module": 2,
+ "sessionDate": "2026-11-29",
+ "title": "Math Full-Length Practice: Module 2 (Session Nov 29, 2026)",
+ "instructions": "SAT Math, Module 2 of 2: full-length practice section for Michelle’s session on Sunday, Nov 29, 2026. 27 questions, 50 minutes. A calculator is allowed on every question; the SAT reference sheet is available throughout. Mark questions for review and cross out answer choices as you work. Answers and your score appear only after you submit the whole module. Student-produced responses: enter a number, fraction, or decimal (no symbols).",
+ "inconspicuousNote": "T6 · 6VSL02",
+ "questions": [
+  {
+   "questionNumber": 1,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The function f is defined by f(x) = 8x. For what value of x does f(x) = 72?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "8"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "9"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "64"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "80"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "8x = 72 → x = 9.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q1",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q1-full.png"
+  },
+  {
+   "questionNumber": 2,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "In the figure, two lines intersect at a point. Angle 1 and angle 2 are vertical angles. The measure of angle 1 is 72°. What is the measure of angle 2?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "72°"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "108°"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "144°"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "288°"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Vertical angles are congruent: 72°.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m2-q2-figure.png",
+     "alt": "Two lines intersecting, forming angles labeled 1 and 2. Note: Figure not drawn to scale."
+    }
+   ],
+   "id": "sat-pt6-math-m2-q2",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q2-full.png"
+  },
+  {
+   "questionNumber": 3,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "On a street with 7 houses, 2 houses are blue. If a house from this street is selected at random, what is the probability of selecting a house that is blue?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "1/7"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "2/7"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "5/7"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "7/7"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "2 blue out of 7: 2/7.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q3",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q3-full.png"
+  },
+  {
+   "questionNumber": 4,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The graph of function f is shown, where y = f(x). Which of the following describes function f?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "Increasing linear"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "Decreasing linear"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "Increasing exponential"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "Decreasing exponential"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "The graph is a straight line rising left to right.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m2-q4-graph.png",
+     "alt": "Straight line rising from about (−10, −5) through (0, 0) to (10, 5)"
+    }
+   ],
+   "id": "sat-pt6-math-m2-q4",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q4-full.png"
+  },
+  {
+   "questionNumber": 5,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The graph of the function f is shown, where y = f(x). What is the y-intercept of the graph?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "(0, −1)"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "(0, −4)"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "(0, 1)"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "(0, 4)"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "The line crosses the y-axis at (0, −4).",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m2-q5-graph.png",
+     "alt": "Steep line crossing the y-axis at −4 and the x-axis at 1"
+    }
+   ],
+   "id": "sat-pt6-math-m2-q5",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q5-full.png"
+  },
+  {
+   "questionNumber": 6,
+   "questionType": "spr",
+   "stimulus": "x = 8\nx + 3y = 26",
+   "prompt": "The solution to the given system of equations is (x, y). What is the value of y?",
+   "choices": [],
+   "correctAnswer": "6",
+   "acceptedAnswers": [
+    "6"
+   ],
+   "explanation": "8 + 3y = 26 → y = 6.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q6",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q6-full.png"
+  },
+  {
+   "questionNumber": 7,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "The amount of Hanna’s bill for a food order was $50. Hanna gave a tip of 20% of the amount of the bill. What is the amount, in dollars, of the tip Hanna gave?",
+   "choices": [],
+   "correctAnswer": "10",
+   "acceptedAnswers": [
+    "10"
+   ],
+   "explanation": "0.20 × 50 = 10.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q7",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q7-full.png"
+  },
+  {
+   "questionNumber": 8,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "Which expression is equivalent to 5x⁵ − 6x⁴ + 8x³?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "x⁴(5x − 6)"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "x³(5x² − 6x + 8)"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "8x³(5x² − 6x + 1)"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "6x⁵(−6x⁴ + 8x³ + 1)"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "Factor out x³: x³(5x² − 6x + 8).",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q8",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q8-full.png"
+  },
+  {
+   "questionNumber": 9,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The ratio of the length of line segment XY to the length of line segment ZV is 6 to 1. If the length of line segment XY is 102 inches, what is the length, in inches, of line segment ZV?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "17"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "96"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "102"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "612"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "ZV = 102/6 = 17.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q9",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q9-full.png"
+  },
+  {
+   "questionNumber": 10,
+   "questionType": "mcq",
+   "stimulus": "7(2x − 3) = 63",
+   "prompt": "Which equation has the same solution as the given equation?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "2x − 3 = 9"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "2x − 3 = 56"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "2x − 21 = 63"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "2x − 21 = 70"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Divide both sides by 7: 2x − 3 = 9.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q10",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q10-full.png"
+  },
+  {
+   "questionNumber": 11,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The function f defined by f(t) = 14t + 9 gives the estimated length, in inches, of a vine plant t months after Tavon purchased it. Which of the following is the best interpretation of 9 in this context?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "Tavon will keep the vine plant for 9 months."
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "The vine plant is expected to grow 9 inches each month."
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "The vine plant is expected to grow to a maximum length of 9 inches."
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "The estimated length of the vine plant was 9 inches when Tavon purchased it."
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "f(0) = 9 is the length at t = 0, the time of purchase.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q11",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q11-full.png"
+  },
+  {
+   "questionNumber": 12,
+   "questionType": "mcq",
+   "stimulus": "(x + 2)(x − 5)(x + 9) = 0",
+   "prompt": "What is a positive solution to the given equation?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "3"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "4"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "5"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "18"
+    }
+   ],
+   "correctAnswer": "C",
+   "acceptedAnswers": [
+    "C"
+   ],
+   "explanation": "Solutions are −2, 5, −9; the positive one is 5.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q12",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q12-full.png"
+  },
+  {
+   "questionNumber": 13,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "Brian saves 2/5 of the $215 he earns each week from his job. If Brian continues to save at this rate, how much money, in dollars, will Brian save in 9 weeks?",
+   "choices": [],
+   "correctAnswer": "774",
+   "acceptedAnswers": [
+    "774"
+   ],
+   "explanation": "(2/5)(215) = 86 per week; 86 × 9 = 774.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q13",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q13-full.png"
+  },
+  {
+   "questionNumber": 14,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "A rectangle has an area of 155 square inches. The length of the rectangle is 4 inches less than 7 times the width of the rectangle. What is the width of the rectangle, in inches?",
+   "choices": [],
+   "correctAnswer": "5",
+   "acceptedAnswers": [
+    "5"
+   ],
+   "explanation": "w(7w − 4) = 155 → 7w² − 4w − 155 = 0 → (w − 5)(7w + 31) = 0 → w = 5.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q14",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q14-full.png"
+  },
+  {
+   "questionNumber": 15,
+   "questionType": "mcq",
+   "stimulus": "4, 10, 18, 4, 4, 5, 6, 5",
+   "prompt": "What is the median of the data set shown?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "4"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "5"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "7"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "14"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "Sorted: 4, 4, 4, 5, 5, 6, 10, 18. Median = (5 + 5)/2 = 5.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q15",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q15-full.png"
+  },
+  {
+   "questionNumber": 16,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "A right circular cylinder has a volume of 432 cubic centimeters. The area of the base of the cylinder is 24 square centimeters. What is the height, in centimeters, of the cylinder?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "18"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "24"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "216"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "10,368"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "V = (base area)(h): 432 = 24h → h = 18.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q16",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q16-full.png"
+  },
+  {
+   "questionNumber": 17,
+   "questionType": "mcq",
+   "stimulus": "x² = −841",
+   "prompt": "How many distinct real solutions does the given equation have?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "Exactly one"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "Exactly two"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "Infinitely many"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "Zero"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "A real square can’t be negative, so there are zero real solutions.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q17",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q17-full.png"
+  },
+  {
+   "questionNumber": 18,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "Line k is defined by y = 7x + 1/8. Line j is perpendicular to line k in the xy-plane. What is the slope of line j?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "−8"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "−1/7"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "1/8"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "7"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "Perpendicular slope is the negative reciprocal of 7: −1/7.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q18",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q18-full.png"
+  },
+  {
+   "questionNumber": 19,
+   "questionType": "mcq",
+   "stimulus": "Number of cars | Maximum number of passengers and crew\n3 | 174\n5 | 284\n10 | 559",
+   "prompt": "The table shows the linear relationship between the number of cars, c, on a commuter train and the maximum number of passengers and crew, p, that the train can carry. Which equation represents the linear relationship between c and p?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "55c − p = −9"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "55c − p = 9"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "55p − c = −9"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "55p − c = 9"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Slope = (284 − 174)/(5 − 3) = 55, and p = 55c + 9, so 55c − p = −9.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m2-q19-table.png",
+     "alt": "Table of number of cars and maximum passengers and crew"
+    }
+   ],
+   "id": "sat-pt6-math-m2-q19",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q19-full.png"
+  },
+  {
+   "questionNumber": 20,
+   "questionType": "spr",
+   "stimulus": null,
+   "prompt": "If 4^(8c) = ∛(4⁷), what is the value of c?",
+   "choices": [],
+   "correctAnswer": "7/24",
+   "acceptedAnswers": [
+    "7/24",
+    ".2916",
+    ".2917",
+    "0.291",
+    "0.292"
+   ],
+   "explanation": "∛(4⁷) = 4^(7/3), so 8c = 7/3 and c = 7/24.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q20",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q20-full.png"
+  },
+  {
+   "questionNumber": 21,
+   "questionType": "spr",
+   "stimulus": "(x − 2) − 4(y + 7) = 117\n(x − 2) + 4(y + 7) = 442",
+   "prompt": "The solution to the given system of equations is (x, y). What is the value of 6(x − 2)?",
+   "choices": [],
+   "correctAnswer": "1677",
+   "acceptedAnswers": [
+    "1677"
+   ],
+   "explanation": "Add the equations: 2(x − 2) = 559. Multiply by 3: 6(x − 2) = 1,677.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q21",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q21-full.png"
+  },
+  {
+   "questionNumber": 22,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "In triangle ABC, angle B is a right angle. The length of side AB is 10√37 and the length of side BC is 24√37. What is the length of side AC?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "14√37"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "26√37"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "34√37"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "√(34 · 37)"
+    }
+   ],
+   "correctAnswer": "B",
+   "acceptedAnswers": [
+    "B"
+   ],
+   "explanation": "AC = √37 · √(10² + 24²) = √37 · 26 = 26√37.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q22",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q22-full.png"
+  },
+  {
+   "questionNumber": 23,
+   "questionType": "mcq",
+   "stimulus": "f(x) = (1.84)^(x/4)",
+   "prompt": "The function f is defined by the given equation. The equation can be rewritten as f(x) = (1 + p/100)^x, where p is a constant. Which of the following is closest to the value of p?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "16"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "21"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "46"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "96"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "(1.84)^(x/4) = (1.84^(1/4))^x ≈ (1.1647)^x, so p ≈ 16.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q23",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q23-full.png"
+  },
+  {
+   "questionNumber": 24,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The function f is defined by f(x) = a√(x + b), where a and b are constants. In the xy-plane, the graph of y = f(x) passes through the point (−24, 0), and f(24) < 0. Which of the following must be true?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "f(0) = 24"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "f(0) = −24"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "a > b"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "a < b"
+    }
+   ],
+   "correctAnswer": "D",
+   "acceptedAnswers": [
+    "D"
+   ],
+   "explanation": "f(−24) = 0 gives b = 24. f(24) = a√48 < 0 gives a < 0. So a < b.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q24",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q24-full.png"
+  },
+  {
+   "questionNumber": 25,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "In the xy-plane, a circle has center C with coordinates (h, k). Points A and B lie on the circle. Point A has coordinates (h + 1, k + √102), and ∠ACB is a right angle. What is the length of AB?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "√206"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "2√102"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "103√2"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "103√3"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Radius² = 1 + 102 = 103. With a right angle at C, AB = √(103 + 103) = √206.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q25",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q25-full.png"
+  },
+  {
+   "questionNumber": 26,
+   "questionType": "mcq",
+   "stimulus": null,
+   "prompt": "The scatterplot shows the relationship between two variables, x and y, for data set E. A line of best fit is shown. Data set F is created by multiplying the y-coordinate of each data point from data set E by 3.9. Which of the following could be an equation of a line of best fit for data set F?",
+   "choices": [
+    {
+     "id": "a",
+     "label": "A",
+     "text": "y = 46.8 + 5.9x"
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "text": "y = 46.8 + 1.5x"
+    },
+    {
+     "id": "c",
+     "label": "C",
+     "text": "y = 12 + 5.9x"
+    },
+    {
+     "id": "d",
+     "label": "D",
+     "text": "y = 12 + 1.5x"
+    }
+   ],
+   "correctAnswer": "A",
+   "acceptedAnswers": [
+    "A"
+   ],
+   "explanation": "Line E is about y = 12 + 1.5x. Multiplying by 3.9 gives about 46.8 + 5.85x, closest to choice A.",
+   "figures": [
+    {
+     "path": "/workspace/t6-math/figures/m2-q26-scatterplot.png",
+     "alt": "Scatterplot for data set E with line of best fit from about (0, 12) to (21, 43)"
+    }
+   ],
+   "id": "sat-pt6-math-m2-q26",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q26-full.png"
+  },
+  {
+   "questionNumber": 27,
+   "questionType": "spr",
+   "stimulus": "48x − 64y = 48y + 24\nry = 1/8 − 12x",
+   "prompt": "In the given system of equations, r is a constant. If the system has no solution, what is the value of r?",
+   "choices": [],
+   "correctAnswer": "-28",
+   "acceptedAnswers": [
+    "-28"
+   ],
+   "explanation": "First equation: 48x − 112y = 24. Second: 12x + ry = 1/8, or 48x + 4ry = 1/2. Parallel, not identical, when 4r = −112, so r = −28.",
+   "figures": [],
+   "id": "sat-pt6-math-m2-q27",
+   "fullQuestionImage": "/workspace/t6-math/figures/m2-q27-full.png"
+  }
+ ]
+}
