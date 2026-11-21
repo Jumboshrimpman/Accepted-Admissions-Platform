@@ -24,7 +24,9 @@ import {
   T6_MATH_TIME_LIMIT_MINUTES,
   t6DueAt,
   pickT6Session,
+  questionMatchesT6Draft,
   sessionMatchesT6Date,
+  t6LinkedQuestionsMatchPlan,
   type T6ModulePlan,
   type T6QuestionDraft,
 } from "./t6-math-content.ts";
@@ -79,29 +81,34 @@ function sourceKey(tags: readonly string[] | null | undefined, plan: T6ModulePla
   return (tags ?? []).find((tag) => tag.startsWith(prefix)) ?? "";
 }
 
+async function insertQuestion(plan: T6ModulePlan, draft: T6QuestionDraft): Promise<string> {
+  const [question] = await db
+    .insert(questionsTable)
+    .values({
+      subject: "SAT Math",
+      domain: "SAT Math",
+      skill: "SAT Math",
+      questionType: draft.questionType,
+      difficulty: "medium",
+      stimulus: draft.stimulus,
+      prompt: draft.prompt,
+      choices: draft.choices.map((choice) => ({ ...choice })),
+      correctAnswer: draft.correctAnswer,
+      explanation: draft.explanation,
+      sourceType: "college_board",
+      reviewStatus: "approved",
+      tags: questionTags(plan, draft),
+      generationMethod: "curated-full-length",
+    })
+    .returning({ id: questionsTable.id });
+  if (!question) throw new Error(`Could not insert T6 ${draft.key}.`);
+  return question.id;
+}
+
 async function insertQuestions(plan: T6ModulePlan): Promise<string[]> {
   const ids: string[] = [];
   for (const draft of plan.questions) {
-    const [question] = await db
-      .insert(questionsTable)
-      .values({
-        subject: "SAT Math",
-        domain: "SAT Math",
-        skill: "SAT Math",
-        questionType: draft.questionType,
-        difficulty: "medium",
-        stimulus: draft.stimulus,
-        prompt: draft.prompt,
-        choices: draft.choices.map((choice) => ({ ...choice })),
-        correctAnswer: draft.correctAnswer,
-        explanation: draft.explanation,
-        sourceType: "college_board",
-        reviewStatus: "approved",
-        tags: questionTags(plan, draft),
-        generationMethod: "curated-full-length",
-      })
-      .returning({ id: questionsTable.id });
-    ids.push(question!.id);
+    ids.push(await insertQuestion(plan, draft));
   }
   return ids;
 }
@@ -116,27 +123,6 @@ async function replaceLinks(assignmentId: string, questionIds: readonly string[]
       predictionFirst: false,
     });
   }
-}
-
-function questionMatchesDraft(
-  row: {
-    prompt: string;
-    stimulus: string | null;
-    choices: unknown;
-    correctAnswer: string;
-    explanation: string;
-    questionType: string;
-  },
-  draft: T6QuestionDraft,
-): boolean {
-  return (
-    row.prompt === draft.prompt &&
-    (row.stimulus ?? null) === draft.stimulus &&
-    row.correctAnswer === draft.correctAnswer &&
-    row.explanation === draft.explanation &&
-    row.questionType === draft.questionType &&
-    JSON.stringify(row.choices ?? []) === JSON.stringify(draft.choices)
-  );
 }
 
 async function refreshUntouchedQuestions(assignmentId: string, plan: T6ModulePlan): Promise<void> {
@@ -155,6 +141,11 @@ async function refreshUntouchedQuestions(assignmentId: string, plan: T6ModulePla
     .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
     .where(eq(assignmentQuestionsTable.assignmentId, assignmentId))
     .orderBy(sql`${assignmentQuestionsTable.position} asc`);
+
+  // Production already has the right 27 items (including a replacement
+  // without t6 tags). Matching content is a no-op and must not insert copies.
+  if (t6LinkedQuestionsMatchPlan(links, plan)) return;
+
   const sameShape =
     links.length === plan.questions.length &&
     links.every(
@@ -163,6 +154,61 @@ async function refreshUntouchedQuestions(assignmentId: string, plan: T6ModulePla
         sourceKey(link.tags, plan) === plan.questions[index]?.key,
     );
   if (!sameShape) {
+    if (links.length === plan.questions.length) {
+      const nextIds: string[] = [];
+      for (const [index, link] of links.entries()) {
+        const draft = plan.questions[index]!;
+        if (questionMatchesT6Draft(link, draft)) {
+          nextIds.push(link.id);
+          continue;
+        }
+        const tagged =
+          (link.tags ?? []).includes(T6_MATH_TAG) && sourceKey(link.tags, plan) === draft.key;
+        if (tagged) {
+          await db
+            .update(questionsTable)
+            .set({
+              prompt: draft.prompt,
+              stimulus: draft.stimulus,
+              choices: draft.choices.map((choice) => ({ ...choice })),
+              correctAnswer: draft.correctAnswer,
+              explanation: draft.explanation,
+              questionType: draft.questionType,
+            })
+            .where(
+              and(
+                eq(questionsTable.id, link.id),
+                sql`${questionsTable.tags} @> ${JSON.stringify([T6_MATH_TAG])}::jsonb`,
+              ),
+            );
+          nextIds.push(link.id);
+          continue;
+        }
+        nextIds.push(await insertQuestion(plan, draft));
+      }
+      const unchanged = nextIds.every((id, index) => id === links[index]?.id);
+      if (!unchanged) {
+        const ownedIds = links.filter((link) => (link.tags ?? []).includes(T6_MATH_TAG)).map((link) => link.id);
+        await replaceLinks(assignmentId, nextIds);
+        if (ownedIds.length > 0) {
+          const stillLinked = await db
+            .select({ questionId: assignmentQuestionsTable.questionId })
+            .from(assignmentQuestionsTable)
+            .where(inArray(assignmentQuestionsTable.questionId, ownedIds));
+          const keep = new Set(stillLinked.map((row) => row.questionId));
+          const removable = ownedIds.filter((id) => !keep.has(id));
+          if (removable.length > 0) {
+            await db.delete(questionsTable).where(
+              and(
+                inArray(questionsTable.id, removable),
+                sql`${questionsTable.tags} @> ${JSON.stringify([T6_MATH_TAG])}::jsonb`,
+              ),
+            );
+          }
+        }
+      }
+      return;
+    }
     const ownedIds = links.filter((link) => (link.tags ?? []).includes(T6_MATH_TAG)).map((link) => link.id);
     await replaceLinks(assignmentId, await insertQuestions(plan));
     if (ownedIds.length > 0) {
@@ -185,7 +231,7 @@ async function refreshUntouchedQuestions(assignmentId: string, plan: T6ModulePla
   }
   for (const [index, link] of links.entries()) {
     const draft = plan.questions[index]!;
-    if (questionMatchesDraft(link, draft)) continue;
+    if (questionMatchesT6Draft(link, draft)) continue;
     await db
       .update(questionsTable)
       .set({
@@ -257,9 +303,14 @@ async function ensureModule(
   michelle: { id: string; email: string },
   dryRun: boolean,
 ): Promise<T6MathModuleResult> {
-  const sessions = await db
-    .select()
+  const sessionRows = await db
+    .select({
+      session: sessionsTable,
+      tutorEmail: usersTable.email,
+      tutorName: usersTable.displayName,
+    })
     .from(sessionsTable)
+    .leftJoin(usersTable, eq(usersTable.id, sessionsTable.tutorUserId))
     .where(
       and(
         eq(sessionsTable.clientUserId, michelle.id),
@@ -267,7 +318,13 @@ async function ensureModule(
         ne(sessionsTable.status, "archived"),
       ),
     );
-  const matches = sessions.filter((session) => sessionMatchesT6Date(session, plan.dateKey));
+  const matches = sessionRows
+    .filter((row) => sessionMatchesT6Date(row.session, plan.dateKey))
+    .map((row) => ({
+      ...row.session,
+      tutorEmail: row.tutorEmail,
+      tutorName: row.tutorName,
+    }));
   const session = pickT6Session(matches);
   const deadline = t6DueAt(plan.dateKey, session);
 
