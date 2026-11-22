@@ -551,58 +551,81 @@ export function looksOcrGarbageChoice(text: string | null | undefined): boolean 
   return false;
 }
 
-function tokenizeTableLine(line: string): string[] {
+function tokenizeTableLine(line: string): { cells: string[]; rich: boolean } {
   if (/\t/.test(line) || / {2,}/.test(line)) {
-    return line.split(/\s{2,}|\t/).map((cell) => cell.trim()).filter(Boolean);
+    return {
+      cells: line.split(/\s{2,}|\t/).map((cell) => cell.trim()).filter(Boolean),
+      rich: true,
+    };
   }
-  return line.trim().split(/\s+/).filter(Boolean);
+  return { cells: line.trim().split(/\s+/).filter(Boolean), rich: false };
 }
 
-function looksTableCell(token: string): boolean {
-  if (token.length > 36) return false;
+/** Year-prefixed or word+number labels such as "1995 water access (%)" or "District 1". */
+function looksRichTableLabel(cell: string): boolean {
+  const tokens = cell.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 8) return false;
+  return tokens.every((token) =>
+    /^-?\d+(?:\.\d+)?$/.test(token) ||
+    /^\d{1,2}[-–]\d{1,2}$/.test(token) ||
+    /^\$?\d{1,3}(?:,\d{3})*(?:\+)?(?:[-–]\$?\d{1,3}(?:,\d{3})*)?$/.test(token) ||
+    /^[A-Za-z][A-Za-z0-9()/%$,]*$/.test(token) ||
+    /^\([A-Za-z0-9./%]+\)$/.test(token),
+  );
+}
+
+function looksTableCell(token: string, rich = false): boolean {
+  if (!token || token.length > 48) return false;
   if (/[.?!]$/.test(token) && token.length > 12) return false;
-  return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
+  if (/^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token)) return true;
+  if (!rich) return false;
+  return looksRichTableLabel(token);
 }
 
 export function extractPlainTextTable(text: string | null | undefined): {
   table: { headers: string[]; rows: string[][] } | null;
   remainder: string;
+  before: string;
+  after: string;
 } {
-  const lines = stripSatBankFigureComments(text).split("\n");
+  const cleaned = stripSatBankFigureComments(text);
+  const lines = cleaned.split("\n");
   let best: { start: number; end: number; columns: number } | null = null;
   let index = 0;
   while (index < lines.length) {
-    const cells = tokenizeTableLine(lines[index] ?? "");
-    if (cells.length < 2 || !cells.every(looksTableCell)) {
+    const first = tokenizeTableLine(lines[index] ?? "");
+    if (first.cells.length < 2 || !first.cells.every((cell) => looksTableCell(cell, first.rich))) {
       index += 1;
       continue;
     }
-    const columns = cells.length;
+    const columns = first.cells.length;
     let end = index + 1;
     while (end < lines.length) {
       const next = tokenizeTableLine(lines[end] ?? "");
-      if (next.length !== columns || !next.every(looksTableCell)) break;
+      if (next.rich !== first.rich || next.cells.length !== columns) break;
+      if (!next.cells.every((cell) => looksTableCell(cell, next.rich))) break;
       end += 1;
     }
     if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
       best = { start: index, end, columns };
     }
-    index = end;
+    index = Math.max(end, index + 1);
   }
-  if (!best) return { table: null, remainder: stripSatBankFigureComments(text) };
-  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
+  if (!best) return { table: null, remainder: cleaned, before: cleaned, after: "" };
+  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line).cells);
   const headers = block[0] ?? [];
   const rows = block.slice(1);
   if (!isPlausibleDataTable(headers, rows)) {
-    return { table: null, remainder: stripSatBankFigureComments(text) };
+    return { table: null, remainder: cleaned, before: cleaned, after: "" };
   }
-  const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const before = lines.slice(0, best.start).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const after = lines.slice(best.end).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const remainder = [before, after].filter(Boolean).join("\n\n");
   return {
     table: { headers, rows },
     remainder,
+    before,
+    after,
   };
 }
 
@@ -1097,6 +1120,11 @@ export function hasMergedOrLeakedChoices(
   return labels.length !== new Set(labels).size && labels.length > 4;
 }
 
+function isTableAlignmentLine(line: string): boolean {
+  if (line.includes("\t")) return true;
+  return line.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean).length >= 3;
+}
+
 export function prepareStudentExtractText(text: string | null | undefined): string {
   let value = stripSatBankFigureComments(text);
   if (!value) return "";
@@ -1105,8 +1133,13 @@ export function prepareStudentExtractText(text: string | null | undefined): stri
     .replace(/\(\s*\)\s*\?/g, "")
     .replace(/\(\s*\)/g, "")
     .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n");
+  value = value
+    .split("\n")
+    .map((line) =>
+      isTableAlignmentLine(line) ? line.replace(/[ \t]+$/g, "") : line.replace(/[ \t]{2,}/g, " "),
+    )
+    .join("\n")
     .trim();
   return formatStudentStemText(value);
 }

@@ -6,6 +6,7 @@ import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import { CANONICAL_APP_ORIGIN, resolveConfiguredAppOrigin } from "./public-origin.ts";
 import { selectStatusHomework, type StatusHomeworkCandidate } from "./session-homework.ts";
 import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
+import { extractPlainTextTable } from "./sat-bank-figure-primary.ts";
 
 export type SessionQuestionPdfPhase = "all" | "before_session" | "during_session";
 
@@ -826,6 +827,67 @@ class QuestionPdf {
     if (figure.alt) this.paragraph(figure.alt, 9);
   }
 
+  table(headers: string[], rows: string[][]) {
+    const columns = headers.length;
+    if (columns < 2 || rows.length === 0) return;
+    const fontSize = 9;
+    const pad = 4;
+    const lineHeight = fontSize + 2;
+    const contentWidth = PAGE_WIDTH - MARGIN * 2;
+    const minCol = 28;
+    const natural = Array.from({ length: columns }, (_, i) => {
+      const texts = [headers[i] ?? "", ...rows.map((row) => row[i] ?? "")];
+      return Math.max(minCol, ...texts.map((text) => helveticaTextWidth(text, fontSize) + pad * 2));
+    });
+    const sum = natural.reduce((total, width) => total + width, 0);
+    const widths =
+      sum <= contentWidth
+        ? natural
+        : natural.map((width) => Math.max(minCol, (width / sum) * contentWidth));
+    const used = widths.reduce((total, width) => total + width, 0);
+    const scaled = used <= contentWidth ? widths : widths.map((width) => (width / used) * contentWidth);
+
+    const wrapCell = (text: string, width: number, bold = false) =>
+      wrapText(text, fontSize, Math.max(8, width - pad * 2), bold);
+
+    const rowBox = (cells: string[], bold = false) => {
+      const wrapped = cells.map((cell, index) => wrapCell(cell ?? "", scaled[index] ?? minCol, bold));
+      const height = Math.max(...wrapped.map((lines) => lines.length), 1) * lineHeight + pad * 2;
+      return { wrapped, height };
+    };
+
+    const strokeRow = (box: { wrapped: string[][]; height: number }, headerRow: boolean) => {
+      this.ensure(box.height);
+      const top = this.y;
+      const bottom = this.y - box.height;
+      let x = MARGIN;
+      this.current.push("0.5 w");
+      for (let index = 0; index < columns; index += 1) {
+        const width = scaled[index] ?? minCol;
+        this.current.push(
+          `${x.toFixed(2)} ${bottom.toFixed(2)} ${width.toFixed(2)} ${box.height.toFixed(2)} re S`,
+        );
+        let textY = top - pad - fontSize;
+        const font = headerRow ? "/F2" : "/F1";
+        for (const line of box.wrapped[index] ?? []) {
+          this.current.push(
+            `BT ${font} ${fontSize} Tf ${(x + pad).toFixed(2)} ${textY.toFixed(2)} Td ${pdfLiteral(line)} Tj ET`,
+          );
+          textY -= lineHeight;
+        }
+        x += width;
+      }
+      this.y = bottom;
+    };
+
+    strokeRow(rowBox(headers, true), true);
+    for (const row of rows) {
+      const cells = Array.from({ length: columns }, (_, index) => row[index] ?? "");
+      strokeRow(rowBox(cells), false);
+    }
+    this.y -= 8;
+  }
+
   finish(): Buffer {
     if (this.current.length > 0) this.pages.push(this.current.join("\n"));
     const objects: Buffer[] = [];
@@ -908,6 +970,17 @@ function phaseTitle(phase: SessionQuestionPdfPhase, includeAnswerKey: boolean): 
   return includeAnswerKey ? `${part} — answer key` : part;
 }
 
+function drawTextOrTable(pdf: QuestionPdf, text: string, size: number) {
+  const extracted = extractPlainTextTable(text);
+  if (!extracted.table) {
+    pdf.paragraph(text, size);
+    return;
+  }
+  if (extracted.before.trim()) pdf.paragraph(extracted.before, size);
+  pdf.table(extracted.table.headers, extracted.table.rows);
+  if (extracted.after.trim()) pdf.paragraph(extracted.after, size);
+}
+
 function drawQuestion(
   pdf: QuestionPdf,
   question: SessionQuestionPdfQuestion,
@@ -915,7 +988,7 @@ function drawQuestion(
   includeAnswerKey: boolean,
 ) {
   pdf.paragraph(`${number}. ${stripMarkdownFigures(question.prompt) || "Question"}`, 12);
-  if (question.stimulus) pdf.paragraph(question.stimulus, 11);
+  if (question.stimulus) drawTextOrTable(pdf, question.stimulus, 11);
   const figures =
     question.figures && question.figures.length > 0
       ? question.figures

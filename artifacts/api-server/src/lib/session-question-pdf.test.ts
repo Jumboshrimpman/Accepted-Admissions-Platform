@@ -735,3 +735,79 @@ test("WinAnsi fractions and accents use Helvetica AFM widths, and bold titles wr
     assert.ok(right <= rightLimit, `"${run.text}" ends at ${right}`);
   }
 });
+
+
+const MICHELLE_B1_Q1_BANK_STIMULUS = `Infant Mortality per 1,000 Live Births and Clean-Water Access
+
+District    1995 water access (%)  2015 water access (%)  1995 mortality  2015 mortality
+District 1  40                     85                     92              41
+District 2  45                     52                     88              79
+District 3  38                     81                     95              47
+
+Public-health researchers examining three districts argued that expanding clean-water access was associated with large declines in infant mortality, noting that the district where water access barely changed saw much smaller improvement.`;
+
+const MICHELLE_B1_Q8_BANK_STIMULUS = `Electricity Generation Share (%) in Country X
+
+Source           2010  2015  2020  2025
+Coal             48    41    29    17
+Natural gas      22    30    34    31
+Wind and solar   3     8     19    35
+Hydro and other  27    21    18    17
+
+An energy analyst argues that natural gas served as a 'bridge' fuel in Country X: its share rose while coal declined, but it began to lose ground once wind and solar became the largest single source.`;
+
+test("session question and answer-key PDFs draw Bundle 1 tables as a bordered grid", () => {
+  const questions = [
+    {
+      prompt: "Which choice most effectively uses data from the table to support the researchers' argument?",
+      stimulus: MICHELLE_B1_Q1_BANK_STIMULUS,
+      choices: [
+        { label: "A", text: "District 3 had the lowest water access in 1995." },
+        { label: "B", text: "Infant mortality declined in all three districts." },
+        { label: "C", text: "In 1995, all three districts had infant mortality rates above 85." },
+        { label: "D", text: "Districts 1 and 3 roughly doubled water access." },
+      ],
+      correctAnswer: "D",
+      explanation: "The districts where access rose most also had the largest mortality drops.",
+    },
+    {
+      prompt: "Which choice most effectively uses data from the table to support the analyst's argument?",
+      stimulus: MICHELLE_B1_Q8_BANK_STIMULUS,
+      choices: [
+        { label: "A", text: "Natural gas rose then dipped once wind and solar led." },
+        { label: "B", text: "Wind and solar more than doubled." },
+        { label: "C", text: "Coal fell by 31 points." },
+        { label: "D", text: "Coal generated more than gas plus renewables in 2010." },
+      ],
+      correctAnswer: "A",
+      explanation: "Gas rose as coal fell, then lost share once wind and solar became the largest source.",
+    },
+  ];
+  const input = {
+    phase: "before_session" as const,
+    sessionTitle: "Michelle's SAT Session with Sophia",
+    sessionDateLabel: "Sunday, November 22, 2026",
+    studentName: "Michelle Makarem",
+    questions,
+  };
+  const questionsPdf = renderSessionQuestionPdf({ ...input, includeAnswerKey: false });
+  const keyPdf = renderSessionQuestionPdf({ ...input, includeAnswerKey: true });
+  for (const [label, pdf] of [["questions", questionsPdf], ["answer key", keyPdf]] as const) {
+    assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
+    const text = pdf.toString("latin1");
+    assert.match(text, /1995 water access/, `${label} missing year-prefixed header`);
+    assert.match(text, /District 1/, `${label} missing first row label`);
+    assert.match(text, /Natural gas/, `${label} missing Q8 row`);
+    assert.match(text, / re S/, `${label} should stroke table cell rectangles`);
+    assert.doesNotMatch(
+      text,
+      /District 1995 water access \(%\) 2015 water access \(%\) 1995 mortality 2015 mortality/,
+      `${label} still flattened the Q1 header into one line`,
+    );
+  }
+  const keyText = keyPdf.toString("latin1");
+  assert.match(keyText, /\(Answer:\)/);
+  assert.match(keyText, /Td \(D\) Tj/);
+  assert.match(keyText, /\(mortality\)/);
+  assert.match(keyText, /\(drops\.\)/);
+});

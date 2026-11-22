@@ -15,6 +15,25 @@ import {
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png";
 
+const MICHELLE_B1_Q1_BANK_STIMULUS = `Infant Mortality per 1,000 Live Births and Clean-Water Access
+
+District    1995 water access (%)  2015 water access (%)  1995 mortality  2015 mortality
+District 1  40                     85                     92              41
+District 2  45                     52                     88              79
+District 3  38                     81                     95              47
+
+Public-health researchers examining three districts argued that expanding clean-water access was associated with large declines in infant mortality, noting that the district where water access barely changed saw much smaller improvement.`;
+
+const MICHELLE_B1_Q8_BANK_STIMULUS = `Electricity Generation Share (%) in Country X
+
+Source           2010  2015  2020  2025
+Coal             48    41    29    17
+Natural gas      22    30    34    31
+Wind and solar   3     8     19    35
+Hydro and other  27    21    18    17
+
+An energy analyst argues that natural gas served as a 'bridge' fuel in Country X: its share rose while coal declined, but it began to lose ground once wind and solar became the largest single source.`;
+
 test("resolves absolute https figure URLs and ignores path-only entries", () => {
   assert.equal(
     resolveBankFigureUrl({ url: figureUrl, path: "figures/sat-practice-test-4-digital/p10-draw1.png" }),
@@ -196,4 +215,47 @@ test("figure markdown line uses alt text when present", () => {
     figureMarkdownLine({ url: figureUrl, alt: "Question figure region page 10" }),
     `![Question figure region page 10](${figureUrl})`,
   );
+});
+
+test("materializedQuestionContent keeps Bundle 1 table structure instead of flattening columns", () => {
+  const base = {
+    section: "rw",
+    domain: "Information and Ideas",
+    skill: "Command of Evidence",
+    questionType: "mcq",
+    difficulty: "hard",
+    figures: [],
+    choices: [
+      { id: "a", label: "A", text: "Choice A" },
+      { id: "b", label: "B", text: "Choice B" },
+      { id: "c", label: "C", text: "Choice C" },
+      { id: "d", label: "D", text: "Choice D" },
+    ],
+    correctAnswer: "d",
+    officialExplanation: "Uses the table.",
+    examFamily: "sat",
+  };
+
+  const q1 = materializedQuestionContent({
+    ...base,
+    prompt: "Which choice most effectively uses data from the table to support the researchers' argument?",
+    stimulus: MICHELLE_B1_Q1_BANK_STIMULUS,
+  });
+  assert.match(q1.stimulus ?? "", /Infant Mortality per 1,000 Live Births/);
+  assert.match(q1.stimulus ?? "", /1995 water access \(%\)/);
+  assert.match(q1.stimulus ?? "", /District 1\t40\t85\t92\t41/);
+  assert.doesNotMatch(
+    q1.stimulus ?? "",
+    /District 1995 water access \(%\) 2015 water access \(%\) 1995 mortality 2015 mortality/,
+  );
+  assert.match(q1.stimulus ?? "", /Public-health researchers/);
+
+  const q8 = materializedQuestionContent({
+    ...base,
+    prompt: "Which choice most effectively uses data from the table to support the analyst's argument?",
+    stimulus: MICHELLE_B1_Q8_BANK_STIMULUS,
+  });
+  assert.match(q8.stimulus ?? "", /Source\t2010\t2015\t2020\t2025/);
+  assert.match(q8.stimulus ?? "", /Natural gas\t22\t30\t34\t31/);
+  assert.match(q8.stimulus ?? "", /bridge/);
 });
