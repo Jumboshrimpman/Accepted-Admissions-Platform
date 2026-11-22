@@ -835,17 +835,38 @@ class QuestionPdf {
     const lineHeight = fontSize + 2;
     const contentWidth = PAGE_WIDTH - MARGIN * 2;
     const minCol = 28;
+    const longestWordWidth = (text: string, bold = false) =>
+      Math.max(
+        0,
+        ...text.split(/\s+/).filter(Boolean).map((word) => helveticaTextWidth(word, fontSize, bold)),
+      );
     const natural = Array.from({ length: columns }, (_, i) => {
-      const texts = [headers[i] ?? "", ...rows.map((row) => row[i] ?? "")];
-      return Math.max(minCol, ...texts.map((text) => helveticaTextWidth(text, fontSize) + pad * 2));
+      const header = headers[i] ?? "";
+      const texts = [header, ...rows.map((row) => row[i] ?? "")];
+      return Math.max(minCol, ...texts.map((text, index) => helveticaTextWidth(text, fontSize, index === 0) + pad * 2));
+    });
+    const minWidths = Array.from({ length: columns }, (_, i) => {
+      const headerWord = longestWordWidth(headers[i] ?? "", true);
+      const bodyWord = Math.max(0, ...rows.map((row) => longestWordWidth(row[i] ?? "")));
+      return Math.max(minCol, headerWord + pad * 2, bodyWord + pad * 2);
     });
     const sum = natural.reduce((total, width) => total + width, 0);
-    const widths =
-      sum <= contentWidth
-        ? natural
-        : natural.map((width) => Math.max(minCol, (width / sum) * contentWidth));
+    let widths: number[];
+    if (sum <= contentWidth) {
+      widths = natural;
+    } else {
+      const minSum = minWidths.reduce((total, width) => total + width, 0);
+      const slack = contentWidth - minSum;
+      if (slack <= 0) {
+        widths = minWidths.map((width) => (width / minSum) * contentWidth);
+      } else {
+        const extraNeed = natural.map((width, index) => Math.max(0, width - minWidths[index]!));
+        const needSum = extraNeed.reduce((total, width) => total + width, 0);
+        widths = minWidths.map((width, index) => width + (needSum > 0 ? (slack * extraNeed[index]!) / needSum : 0));
+      }
+    }
     const used = widths.reduce((total, width) => total + width, 0);
-    const scaled = used <= contentWidth ? widths : widths.map((width) => (width / used) * contentWidth);
+    const scaled = used <= contentWidth + 0.01 ? widths : widths.map((width) => (width / used) * contentWidth);
 
     const wrapCell = (text: string, width: number, bold = false) =>
       wrapText(text, fontSize, Math.max(8, width - pad * 2), bold);

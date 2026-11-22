@@ -564,21 +564,32 @@ function tokenizeTableLine(line: string): { cells: string[]; rich: boolean } {
 /** Year-prefixed or word+number labels such as "1995 water access (%)" or "District 1". */
 function looksRichTableLabel(cell: string): boolean {
   const tokens = cell.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0 || tokens.length > 8) return false;
+  if (tokens.length === 0 || tokens.length > 12) return false;
   return tokens.every((token) =>
-    /^-?\d+(?:\.\d+)?$/.test(token) ||
-    /^\d{1,2}[-–]\d{1,2}$/.test(token) ||
-    /^\$?\d{1,3}(?:,\d{3})*(?:\+)?(?:[-–]\$?\d{1,3}(?:,\d{3})*)?$/.test(token) ||
-    /^[A-Za-z][A-Za-z0-9()/%$,]*$/.test(token) ||
-    /^\([A-Za-z0-9./%]+\)$/.test(token),
+    /^[\p{L}\p{N}%$°º²µ+\-–—−=.,()/?]+$/u.test(token),
   );
 }
 
+function looksLikeTableSentence(cell: string): boolean {
+  const trimmed = cell.trim();
+  if (/^(?:which|what|how|the best|for this)\b/i.test(trimmed) && trimmed.length > 20) return true;
+  if (/[.!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 6) return true;
+  return false;
+}
+
 function looksTableCell(token: string, rich = false): boolean {
-  if (!token || token.length > 48) return false;
-  if (/[.?!]$/.test(token) && token.length > 12) return false;
+  if (!token) return false;
+  if (looksLikeTableSentence(token)) return false;
+  if (!rich) {
+    if (token.length > 48) return false;
+    if (/[.?!]$/.test(token) && token.length > 12) return false;
+    return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
+  }
+  // Aligned (tab or 2+ space) cells may hold units, ranges, hyphens, or a trailing ?.
+  if (token.length > 80) return false;
+  if (/[.!]$/.test(token) && token.length > 12) return false;
+  if (/\?$/.test(token) && token.split(/\s+/).length <= 8 && token.length <= 48) return true;
   if (/^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token)) return true;
-  if (!rich) return false;
   return looksRichTableLabel(token);
 }
 
@@ -593,6 +604,10 @@ export function extractPlainTextTable(text: string | null | undefined): {
   let best: { start: number; end: number; columns: number } | null = null;
   let index = 0;
   while (index < lines.length) {
+    if (!(lines[index] ?? "").trim()) {
+      index += 1;
+      continue;
+    }
     const first = tokenizeTableLine(lines[index] ?? "");
     if (first.cells.length < 2 || !first.cells.every((cell) => looksTableCell(cell, first.rich))) {
       index += 1;
@@ -601,10 +616,13 @@ export function extractPlainTextTable(text: string | null | undefined): {
     const columns = first.cells.length;
     let end = index + 1;
     while (end < lines.length) {
-      const next = tokenizeTableLine(lines[end] ?? "");
+      let cursor = end;
+      while (cursor < lines.length && !(lines[cursor] ?? "").trim()) cursor += 1;
+      if (cursor >= lines.length) break;
+      const next = tokenizeTableLine(lines[cursor] ?? "");
       if (next.rich !== first.rich || next.cells.length !== columns) break;
       if (!next.cells.every((cell) => looksTableCell(cell, next.rich))) break;
-      end += 1;
+      end = cursor + 1;
     }
     if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
       best = { start: index, end, columns };
@@ -612,7 +630,10 @@ export function extractPlainTextTable(text: string | null | undefined): {
     index = Math.max(end, index + 1);
   }
   if (!best) return { table: null, remainder: cleaned, before: cleaned, after: "" };
-  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line).cells);
+  const block = lines
+    .slice(best.start, best.end)
+    .filter((line) => line.trim())
+    .map((line) => tokenizeTableLine(line).cells);
   const headers = block[0] ?? [];
   const rows = block.slice(1);
   if (!isPlausibleDataTable(headers, rows)) {
@@ -629,15 +650,19 @@ export function extractPlainTextTable(text: string | null | undefined): {
   };
 }
 
+function isNumericTableCell(cell: string): boolean {
+  return /^[+]?(?:[−–-])?\$?\d{1,3}(?:,\d{3})*(?:\.\d+)?%?$/.test(cell.trim());
+}
+
 function isPlausibleDataTable(headers: string[], rows: string[][]): boolean {
   if (headers.length < 2 || rows.length < 2) return false;
   const cells = [...headers, ...rows.flat()];
-  const numeric = cells.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length;
+  const numeric = cells.filter((cell) => isNumericTableCell(cell)).length;
   const mathHeader = headers.some((header) => MATH_TABLE_HEADER.test(header));
   if (numeric === 0 && !mathHeader) return false;
   if (headers.some((header) => SENTENCE_TABLE_HEADER.test(header))) return false;
   // `Corn / yes / 15.1` is a data row used as a header — not a recovered table.
-  if (headers.some((header) => /^-?\d+\.\d+$/.test(header))) return false;
+  if (headers.some((header) => /^[+]?(?:[−–-])?\d+\.\d+$/.test(header))) return false;
   const hasYesNo = headers.some((header) => /^(?:yes|no)$/i.test(header));
   const hasNumericHeader = headers.some((header) => /^-?\d+(?:\.\d+)?$/.test(header));
   if (hasYesNo && hasNumericHeader) return false;
@@ -1122,7 +1147,9 @@ export function hasMergedOrLeakedChoices(
 
 function isTableAlignmentLine(line: string): boolean {
   if (line.includes("\t")) return true;
-  return line.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean).length >= 3;
+  const cells = line.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
+  if (cells.length < 2) return false;
+  return cells.every((cell) => looksTableCell(cell, true)) && !looksLikeTableSentence(line);
 }
 
 export function prepareStudentExtractText(text: string | null | undefined): string {

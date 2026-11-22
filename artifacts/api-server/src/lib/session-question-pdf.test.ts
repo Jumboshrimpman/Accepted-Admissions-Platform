@@ -16,6 +16,7 @@ import {
   temporaryAliasMayDownloadAnswerKey,
   type SessionPdfAssignment,
 } from "./session-question-pdf.ts";
+import { michelleLamasAlignedTableFixtures } from "./michelle-lamas-aligned-table-fixtures.ts";
 
 function crc32(buffer: Buffer): number {
   let crc = ~0;
@@ -810,4 +811,61 @@ test("session question and answer-key PDFs draw Bundle 1 tables as a bordered gr
   assert.match(keyText, /Td \(D\) Tj/);
   assert.match(keyText, /\(mortality\)/);
   assert.match(keyText, /\(drops\.\)/);
+});
+
+test("session PDFs draw every Michelle × Sophia Lamas aligned table as a bordered grid without mid-word wraps", () => {
+  const fixtures = michelleLamasAlignedTableFixtures();
+  assert.equal(fixtures.length, 48);
+  const questionsPdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: false,
+    sessionTitle: "Michelle's SAT Session with Sophia",
+    sessionDateLabel: "Sunday, November 22, 2026",
+    studentName: "Michelle",
+    questions: fixtures.map((item) => ({
+      prompt: item.prompt,
+      stimulus: item.stimulus,
+      choices: item.choices,
+      correctAnswer: item.correctAnswer,
+      explanation: item.explanation,
+    })),
+  });
+  const keyPdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: true,
+    sessionTitle: "Michelle's SAT Session with Sophia",
+    sessionDateLabel: "Sunday, November 22, 2026",
+    studentName: "Michelle",
+    questions: fixtures.map((item) => ({
+      prompt: item.prompt,
+      stimulus: item.stimulus,
+      choices: item.choices,
+      correctAnswer: item.correctAnswer,
+      explanation: item.explanation,
+    })),
+  });
+  for (const [label, pdf] of [["questions", questionsPdf], ["answer key", keyPdf]] as const) {
+    const text = pdf.toString("latin1");
+    assert.match(text, / re S/, `${label} should stroke table cell rectangles`);
+    const runs = pdfTextRuns(pdf).map((run) => run.text);
+    for (const item of fixtures) {
+      const words = [...item.headers, ...item.rows.flat()].flatMap((cell) => cell.split(/\s+/).filter(Boolean));
+      for (const word of words) {
+        const printable = word.replace(/[–—−]/g, "-").replace(/[^ -~]/g, "");
+        if (!printable || printable.length < 2) continue;
+        const found =
+          text.includes(word) ||
+          text.includes(printable) ||
+          runs.some((run) => run.includes(word) || run.includes(printable) || run.replace(/[–—−]/g, "-") === printable);
+        assert.ok(found, `${label} ${item.sourceKey} missing word ${word}`);
+        // Mid-word wraps such as "Mont" / "h" for "Month". Ignore short numeric tokens.
+        if (!/^[A-Za-z]{4,}$/.test(printable)) continue;
+        const mid = Math.floor(printable.length / 2);
+        const prefix = printable.slice(0, mid);
+        const suffix = printable.slice(mid);
+        const split = runs.some((run, index) => run === prefix && runs[index + 1] === suffix);
+        assert.equal(split, false, `${label} ${item.sourceKey} mid-word wrap ${prefix}/${suffix}`);
+      }
+    }
+  }
 });
