@@ -77,6 +77,45 @@ import {
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p34-q1-question.png";
 
+const MICHELLE_B1_Q1_BANK_STIMULUS = `Infant Mortality per 1,000 Live Births and Clean-Water Access
+
+District    1995 water access (%)  2015 water access (%)  1995 mortality  2015 mortality
+District 1  40                     85                     92              41
+District 2  45                     52                     88              79
+District 3  38                     81                     95              47
+
+Public-health researchers examining three districts argued that expanding clean-water access was associated with large declines in infant mortality, noting that the district where water access barely changed saw much smaller improvement.`;
+
+const MICHELLE_B1_Q8_BANK_STIMULUS = `Electricity Generation Share (%) in Country X
+
+Source           2010  2015  2020  2025
+Coal             48    41    29    17
+Natural gas      22    30    34    31
+Wind and solar   3     8     19    35
+Hydro and other  27    21    18    17
+
+An energy analyst argues that natural gas served as a 'bridge' fuel in Country X: its share rose while coal declined, but it began to lose ground once wind and solar became the largest single source.`;
+
+const MICHELLE_B1_Q1_HEADERS = [
+  "District",
+  "1995 water access (%)",
+  "2015 water access (%)",
+  "1995 mortality",
+  "2015 mortality",
+];
+const MICHELLE_B1_Q1_ROWS = [
+  ["District 1", "40", "85", "92", "41"],
+  ["District 2", "45", "52", "88", "79"],
+  ["District 3", "38", "81", "95", "47"],
+];
+const MICHELLE_B1_Q8_HEADERS = ["Source", "2010", "2015", "2020", "2025"];
+const MICHELLE_B1_Q8_ROWS = [
+  ["Coal", "48", "41", "29", "17"],
+  ["Natural gas", "22", "30", "34", "31"],
+  ["Wind and solar", "3", "8", "19", "35"],
+  ["Hydro and other", "27", "21", "18", "17"],
+];
+
 test("detects leaked sat-bank-figures comments and strips them", () => {
   const raw = "<!-- sat-bank-figures -->\nV = i,.r3\n<!-- /sat-bank-figures -->";
   assert.equal(looksGarbledExtractText(raw), true);
@@ -973,4 +1012,29 @@ test("student-facing fields hide garbled stems and do not emit empty letter keys
     "hard-OCR stems stay hidden when the official crop is served",
   );
   assert.deepEqual(letterMcqChoices([]).map((choice) => choice.id), ["a", "b", "c", "d"]);
+});
+
+test("prepareStudentExtractText keeps Bundle 1 bank table column spacing", () => {
+  const q1 = prepareStudentExtractText(MICHELLE_B1_Q1_BANK_STIMULUS);
+  assert.match(q1, /District {2,}1995 water access \(%\) {2,}2015 water access \(%\)/);
+  assert.match(q1, /District 1 {2,}40 {2,}85 {2,}92 {2,}41/);
+  assert.doesNotMatch(q1, /District 1995 water access \(%\) 2015 water access \(%\) 1995 mortality 2015 mortality/);
+
+  const q8 = prepareStudentExtractText(MICHELLE_B1_Q8_BANK_STIMULUS);
+  assert.match(q8, /Source {2,}2010 {2,}2015 {2,}2020 {2,}2025/);
+  assert.match(q8, /Natural gas {2,}22 {2,}30 {2,}34 {2,}31/);
+});
+
+test("extractPlainTextTable keeps year-prefixed headers on Bundle 1 Q1 and Q8 bank stimuli", () => {
+  const q1 = extractPlainTextTable(MICHELLE_B1_Q1_BANK_STIMULUS);
+  assert.ok(q1.table);
+  assert.deepEqual(q1.table?.headers, MICHELLE_B1_Q1_HEADERS);
+  assert.deepEqual(q1.table?.rows, MICHELLE_B1_Q1_ROWS);
+  assert.match(q1.before, /Infant Mortality/);
+  assert.match(q1.after, /Public-health researchers/);
+
+  const q8 = extractPlainTextTable(MICHELLE_B1_Q8_BANK_STIMULUS);
+  assert.ok(q8.table);
+  assert.deepEqual(q8.table?.headers, MICHELLE_B1_Q8_HEADERS);
+  assert.deepEqual(q8.table?.rows, MICHELLE_B1_Q8_ROWS);
 });

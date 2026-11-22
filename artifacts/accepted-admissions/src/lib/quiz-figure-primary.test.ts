@@ -1108,3 +1108,57 @@ test("a complete A–D question that cites an unparsed table is still shown", ()
   );
   assert.equal(hasUsableQuizTableData("The researcher recorded several measurements, but the grid could not be recovered."), false);
 });
+
+
+const MICHELLE_B1_Q1_BANK_STIMULUS = `Infant Mortality per 1,000 Live Births and Clean-Water Access
+
+District    1995 water access (%)  2015 water access (%)  1995 mortality  2015 mortality
+District 1  40                     85                     92              41
+District 2  45                     52                     88              79
+District 3  38                     81                     95              47
+
+Public-health researchers examining three districts argued that expanding clean-water access was associated with large declines in infant mortality, noting that the district where water access barely changed saw much smaller improvement.`;
+
+const MICHELLE_B1_Q8_BANK_STIMULUS = `Electricity Generation Share (%) in Country X
+
+Source           2010  2015  2020  2025
+Coal             48    41    29    17
+Natural gas      22    30    34    31
+Wind and solar   3     8     19    35
+Hydro and other  27    21    18    17
+
+An energy analyst argues that natural gas served as a 'bridge' fuel in Country X: its share rose while coal declined, but it began to lose ground once wind and solar became the largest single source.`;
+
+test("embeddedQuizTable keeps year-prefixed headers on Bundle 1 Q1 and Q8 bank tables", () => {
+  const q1 = embeddedQuizTable(MICHELLE_B1_Q1_BANK_STIMULUS);
+  assert.ok(q1);
+  assert.deepEqual(q1?.headers, [
+    "District",
+    "1995 water access (%)",
+    "2015 water access (%)",
+    "1995 mortality",
+    "2015 mortality",
+  ]);
+  assert.deepEqual(q1?.rows, [
+    ["District 1", "40", "85", "92", "41"],
+    ["District 2", "45", "52", "88", "79"],
+    ["District 3", "38", "81", "95", "47"],
+  ]);
+  assert.match(q1?.before ?? "", /Infant Mortality/);
+  assert.match(q1?.after ?? "", /Public-health researchers/);
+  const q1Parts = splitQuizRichText(MICHELLE_B1_Q1_BANK_STIMULUS);
+  const q1Table = q1Parts.find((part) => part.type === "table");
+  assert.ok(q1Table && q1Table.type === "table");
+  if (q1Table && q1Table.type === "table") {
+    assert.equal(q1Table.headers[1], "1995 water access (%)");
+    assert.equal(q1Table.rows[0][0], "District 1");
+    assert.equal(q1Table.rows.length, 3);
+  }
+
+  const q8 = embeddedQuizTable(MICHELLE_B1_Q8_BANK_STIMULUS);
+  assert.ok(q8);
+  assert.deepEqual(q8?.headers, ["Source", "2010", "2015", "2020", "2025"]);
+  assert.deepEqual(q8?.rows[1], ["Natural gas", "22", "30", "34", "31"]);
+  const q8Table = splitQuizRichText(MICHELLE_B1_Q8_BANK_STIMULUS).find((part) => part.type === "table");
+  assert.ok(q8Table && q8Table.type === "table");
+});

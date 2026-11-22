@@ -730,13 +730,27 @@ function quizTableTokens(line: string): { cells: string[]; rich: boolean } {
   return { cells: line.trim().split(/\s+/).filter(Boolean), rich: false };
 }
 
+/** Year-prefixed or word+number labels such as "1995 water access (%)" or "District 1". */
+function quizTableRichLabel(cell: string): boolean {
+  const tokens = cell.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 8) return false;
+  return tokens.every((token) =>
+    /^-?\d+(?:\.\d+)?$/.test(token) ||
+    /^\d{1,2}[-–]\d{1,2}$/.test(token) ||
+    /^\$?\d{1,3}(?:,\d{3})*(?:\+)?(?:[-–]\$?\d{1,3}(?:,\d{3})*)?$/.test(token) ||
+    /^[A-Za-z][A-Za-z0-9()/%$,]*$/.test(token) ||
+    /^\([A-Za-z0-9./%]+\)$/.test(token),
+  );
+}
+
 function quizTableCellOk(cell: string, rich: boolean): boolean {
   if (!cell || cell.length > 48) return false;
   if (/[.?!]$/.test(cell) && cell.length > 12) return false;
   if (QUIZ_TABLE_STRICT_CELL.test(cell)) return true;
   if (!rich) return false;
   if (QUIZ_TABLE_MATH_CELL.test(cell)) return true;
-  return QUIZ_TABLE_WORD_LABEL.test(cell);
+  if (QUIZ_TABLE_WORD_LABEL.test(cell)) return true;
+  return quizTableRichLabel(cell);
 }
 
 function plausibleQuizDataTable(headers: string[], rows: string[][]): boolean {

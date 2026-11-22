@@ -134,16 +134,29 @@ export function materializedQuestionContent(bank: {
     extractGaps: bank.extractGaps,
     tags: bank.tags,
   });
-  const extracted = extractPlainTextTable(repaired.prompt);
-  const tableBlock = extracted.table ? formatRecoveredTable(extracted.table) : null;
-  const cleanedPrompt = prepareStudentExtractText(extracted.remainder || repaired.prompt);
+  const extractedPrompt = extractPlainTextTable(repaired.prompt);
+  const extractedStimulus = extractPlainTextTable(repaired.stimulus);
+  const promptTableBlock =
+    extractedPrompt.table && !extractedStimulus.table
+      ? formatRecoveredTable(extractedPrompt.table)
+      : null;
+  const cleanedPrompt = prepareStudentExtractText(extractedPrompt.remainder || repaired.prompt);
+  const cleanedStimulus = extractedStimulus.table
+    ? [
+        prepareStudentExtractText(extractedStimulus.before),
+        formatRecoveredTable(extractedStimulus.table),
+        prepareStudentExtractText(extractedStimulus.after),
+      ]
+        .filter((part) => part.trim().length > 0)
+        .join("\n\n")
+    : prepareStudentExtractText(repaired.stimulus);
   const stimulusFigures = selectStimulusFigures(figures, {
     prompt: repaired.prompt,
     stimulus: repaired.stimulus,
   });
   const stimulus = stripSatBankFigureComments(
     enrichStimulusWithFigures(
-      [tableBlock, prepareStudentExtractText(repaired.stimulus)].filter(Boolean).join("\n\n") || null,
+      [promptTableBlock, cleanedStimulus].filter(Boolean).join("\n\n") || null,
       stimulusFigures,
     ) ?? "",
   );
