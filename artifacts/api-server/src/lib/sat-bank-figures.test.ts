@@ -11,6 +11,8 @@ import {
   recordLinkedRefresh,
   resolveBankFigureUrl,
 } from "./sat-bank-figures.ts";
+import { extractPlainTextTable } from "./sat-bank-figure-primary.ts";
+import { michelleLamasAlignedTableFixtures } from "./michelle-lamas-aligned-table-fixtures.ts";
 
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png";
@@ -258,4 +260,26 @@ test("materializedQuestionContent keeps Bundle 1 table structure instead of flat
   assert.match(q8.stimulus ?? "", /Source\t2010\t2015\t2020\t2025/);
   assert.match(q8.stimulus ?? "", /Natural gas\t22\t30\t34\t31/);
   assert.match(q8.stimulus ?? "", /bridge/);
+});
+
+test("materializedQuestionContent rematerializes every Michelle × Sophia Lamas aligned table with the real header", () => {
+  const fixtures = michelleLamasAlignedTableFixtures();
+  assert.equal(fixtures.length, 48);
+  for (const item of fixtures) {
+    const content = materializedQuestionContent({
+      section: "Reading and Writing",
+      domain: item.domain,
+      skill: item.skill,
+      questionType: "mcq",
+      difficulty: "hard",
+      stimulus: item.stimulus,
+      prompt: item.prompt,
+      choices: item.choices,
+      correctAnswer: item.correctAnswer,
+    });
+    const extracted = extractPlainTextTable(content.stimulus);
+    assert.ok(extracted.table, `${item.sourceKey} rematerialized table missing`);
+    assert.deepEqual(extracted.table?.headers, item.headers, `${item.sourceKey} rematerialized header`);
+    assert.deepEqual(extracted.table?.rows, item.rows, `${item.sourceKey} rematerialized rows`);
+  }
 });

@@ -73,6 +73,11 @@ import {
   stripSatBankFigureComments,
   studentFacingFigurePrimaryFields,
 } from "./sat-bank-figure-primary.ts";
+import {
+  expectedAlignedTable,
+  michelleLamasAlignedTableFixtures,
+  spacedHeaderTabBodyVariant,
+} from "./michelle-lamas-aligned-table-fixtures.ts";
 
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p34-q1-question.png";
@@ -1037,4 +1042,23 @@ test("extractPlainTextTable keeps year-prefixed headers on Bundle 1 Q1 and Q8 ba
   assert.ok(q8.table);
   assert.deepEqual(q8.table?.headers, MICHELLE_B1_Q8_HEADERS);
   assert.deepEqual(q8.table?.rows, MICHELLE_B1_Q8_ROWS);
+});
+
+test("extractPlainTextTable keeps the real header on every Michelle × Sophia Lamas aligned table", () => {
+  const fixtures = michelleLamasAlignedTableFixtures();
+  assert.equal(fixtures.length, 48);
+  assert.equal(fixtures.filter((item) => item.bundle === 1).length, 12);
+  assert.equal(fixtures.filter((item) => item.bundle === 2).length, 12);
+  assert.equal(fixtures.filter((item) => item.bundle === 3).length, 12);
+  assert.equal(fixtures.filter((item) => item.bundle === 4).length, 12);
+  for (const item of fixtures) {
+    const extracted = extractPlainTextTable(item.stimulus);
+    assert.ok(extracted.table, `${item.sourceKey} was not detected`);
+    assert.deepEqual(extracted.table?.headers, item.headers, `${item.sourceKey} header`);
+    assert.deepEqual(extracted.table?.rows, item.rows, `${item.sourceKey} rows`);
+    const variant = spacedHeaderTabBodyVariant(item.stimulus);
+    const fromVariant = extractPlainTextTable(variant);
+    assert.deepEqual(fromVariant.table?.headers, item.headers, `${item.sourceKey} blank-line/tab variant header`);
+    assert.deepEqual(fromVariant.table?.rows, item.rows, `${item.sourceKey} blank-line/tab variant rows`);
+  }
 });

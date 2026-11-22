@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { splitQuizRichText } from "./quiz-rich-text.ts";
 import {
+  michelleLamasAlignedTableFixtures,
+  spacedHeaderTabBodyVariant,
+} from "../../../api-server/src/lib/michelle-lamas-aligned-table-fixtures.ts";
+import {
   displayAnswerLabel,
   figurePrimaryChoices,
   hasCompleteLetterChoiceText,
@@ -1161,4 +1165,18 @@ test("embeddedQuizTable keeps year-prefixed headers on Bundle 1 Q1 and Q8 bank t
   assert.deepEqual(q8?.rows[1], ["Natural gas", "22", "30", "34", "31"]);
   const q8Table = splitQuizRichText(MICHELLE_B1_Q8_BANK_STIMULUS).find((part) => part.type === "table");
   assert.ok(q8Table && q8Table.type === "table");
+});
+
+test("embeddedQuizTable keeps the real header on every Michelle × Sophia Lamas aligned table", () => {
+  const fixtures = michelleLamasAlignedTableFixtures();
+  assert.equal(fixtures.length, 48);
+  for (const item of fixtures) {
+    const table = embeddedQuizTable(item.stimulus);
+    assert.ok(table, `${item.sourceKey} was not detected`);
+    assert.deepEqual(table?.headers, item.headers, `${item.sourceKey} header`);
+    assert.deepEqual(table?.rows, item.rows, `${item.sourceKey} rows`);
+    const variant = embeddedQuizTable(spacedHeaderTabBodyVariant(item.stimulus));
+    assert.deepEqual(variant?.headers, item.headers, `${item.sourceKey} blank-line/tab variant header`);
+    assert.deepEqual(variant?.rows, item.rows, `${item.sourceKey} blank-line/tab variant rows`);
+  }
 });
