@@ -30,6 +30,74 @@ function attemptRank(status?: string | null): number {
   return 0;
 }
 
+export type PolledPreworkStatus = {
+  assignments: readonly {
+    id: string;
+    latestAttemptStatus?: string | null;
+    latestAttemptId?: string | null;
+    latestScore?: number | null;
+  }[];
+  homework: readonly {
+    assignmentId: string;
+    attemptStatus?: string | null;
+    attemptId?: string | null;
+    score?: number | null;
+    submittedAt?: string | null;
+    mistakeCount?: number | null;
+  }[];
+};
+
+/**
+ * Copy a lightweight poll onto the cached session. The poll does not replace
+ * the session document, so slides and notes stay as they were on the full GET.
+ */
+export function applyPolledPreworkStatus<
+  T extends {
+    assignments?: readonly {
+      id: string;
+      latestAttemptStatus?: string | null;
+      latestAttemptId?: string | null;
+      latestScore?: number | null;
+    }[];
+    homework?: readonly {
+      assignmentId: string;
+      attemptStatus?: string | null;
+      attemptId?: string | null;
+      score?: number | null;
+      submittedAt?: string | Date | null;
+      mistakeCount?: number;
+    }[];
+  },
+>(session: T, status: PolledPreworkStatus): T {
+  const assignmentById = new Map(status.assignments.map((row) => [row.id, row]));
+  const homeworkById = new Map(status.homework.map((row) => [row.assignmentId, row]));
+  return {
+    ...session,
+    assignments: (session.assignments ?? []).map((assignment) => {
+      const next = assignmentById.get(assignment.id);
+      if (!next) return assignment;
+      return {
+        ...assignment,
+        latestAttemptStatus: next.latestAttemptStatus ?? null,
+        latestAttemptId: next.latestAttemptId ?? null,
+        latestScore: next.latestScore ?? null,
+      };
+    }),
+    homework: (session.homework ?? []).map((row) => {
+      const next = homeworkById.get(row.assignmentId);
+      if (!next) return row;
+      return {
+        ...row,
+        attemptStatus: next.attemptStatus ?? null,
+        attemptId: next.attemptId ?? null,
+        score: next.score ?? null,
+        submittedAt: next.submittedAt ?? null,
+        mistakeCount: next.mistakeCount ?? row.mistakeCount,
+      };
+    }),
+  };
+}
+
 /**
  * One row per live pre-work assignment. The assignment summary
  * (`latestAttemptStatus`) is what the student portal already uses. Homework is

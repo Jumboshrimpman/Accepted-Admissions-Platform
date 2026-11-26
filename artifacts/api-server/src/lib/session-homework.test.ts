@@ -894,13 +894,21 @@ test("staff session attempt lookup includes the assigned student and prefers a s
 
 test("manage session loads the displayed attempt and does not cache the session payload", () => {
   const source = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const homeworkStart = source.indexOf("async function homeworkRowsForListedAssignments");
   const sessionGetStart = source.indexOf('router.get("/sessions/:sessionId", async');
+  const pollStart = source.indexOf('router.get("/sessions/:sessionId/prework-status"');
   const sessionGetEnd = source.indexOf('router.get("/sessions/:sessionId/question-pdf"');
-  assert.ok(sessionGetStart > 0 && sessionGetEnd > sessionGetStart);
-  const sessionGet = source.slice(sessionGetStart, sessionGetEnd);
-  assert.match(sessionGet, /assignment\.latestAttemptId/);
+  assert.ok(homeworkStart > 0 && sessionGetStart > homeworkStart);
+  assert.ok(pollStart > sessionGetStart && sessionGetEnd > pollStart);
+  const attemptLoad = source.slice(homeworkStart, sessionGetStart);
+  assert.match(attemptLoad, /assignment\.latestAttemptId/);
+  const sessionGet = source.slice(sessionGetStart, pollStart);
+  assert.match(sessionGet, /ensureMichelleSophiaLamasSatPrepSlidesSafe/);
   assert.match(sessionGet, /private, no-store/);
   assert.doesNotMatch(sessionGet, /homeworkUserId/);
+  const poll = source.slice(pollStart, sessionGetEnd);
+  assert.match(poll, /private, no-store/);
+  assert.doesNotMatch(poll, /ensureMichelleSophiaLamasSatPrepSlidesSafe/);
   assert.match(source, /sessionStaffAttemptUserIds\(/);
   assert.match(source, /selectDisplayedStudentAttempt\(/);
   const adaptiveStart = source.indexOf('export async function adaptiveCurriculumForSession');

@@ -29,6 +29,7 @@ const sessionPageState = {
 const queryOptions = {
   session: null as { query?: { refetchInterval?: number; refetchOnWindowFocus?: boolean } } | null,
   adaptive: null as { query?: { refetchInterval?: number } } | null,
+  prework: null as { queryKey?: unknown; refetchInterval?: number | false } | null,
 };
 
 const preworkLookup = {
@@ -307,7 +308,11 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn() }),
+  useQuery: (options: { queryKey?: unknown; refetchInterval?: number | false }) => {
+    queryOptions.prework = options;
+    return { data: undefined };
+  },
 }));
 
 import TutorSession from "./session";
@@ -338,6 +343,7 @@ afterEach(() => {
   preworkLookup.assignmentLatestScore = null;
   queryOptions.session = null;
   queryOptions.adaptive = null;
+  queryOptions.prework = null;
   adaptiveLists.mistakes = [{ skill: "Transitions" }];
   adaptiveLists.recommendations = [];
   adaptiveLists.hardQuestions = [];
@@ -404,6 +410,8 @@ describe("tutor session review page", () => {
     expect(screen.getByRole("heading", { name: "Pre-work" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "In-session quiz" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Reserve" })).toBeTruthy();
+    expect(screen.queryByText("Reserve questions")).toBeNull();
+    expect(screen.getByTestId("manage-session-reserve").textContent).toMatch(/No reserve set/);
     expect(screen.getByRole("heading", { name: "Notes and reports" })).toBeTruthy();
     expect(screen.getByTestId("tutor-prework-status").getAttribute("data-status")).toBe("submitted");
     expect(screen.getByTestId("tutor-prework-status").textContent).toMatch(/Submitted/);
@@ -583,7 +591,9 @@ describe("tutor session review page", () => {
       "/tutor/attempts/attempt-live",
     );
     expect(queryOptions.session?.query?.refetchOnWindowFocus).toBe(true);
-    expect(queryOptions.session?.query?.refetchInterval).toBeGreaterThan(0);
-    expect(queryOptions.adaptive?.query?.refetchInterval).toBe(queryOptions.session?.query?.refetchInterval);
+    expect(queryOptions.session?.query?.refetchInterval).toBeUndefined();
+    expect(queryOptions.prework?.refetchInterval).toBe(12_000);
+    expect(String(queryOptions.prework?.queryKey)).toMatch(/prework-status/);
+    expect(queryOptions.adaptive?.query?.refetchInterval).toBe(12_000);
   });
 });

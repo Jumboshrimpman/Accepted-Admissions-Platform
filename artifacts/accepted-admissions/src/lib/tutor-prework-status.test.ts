@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { mergeListedPreworkAttempts, tutorPreworkStatus } from "./tutor-prework-status.ts";
+import {
+  applyPolledPreworkStatus,
+  mergeListedPreworkAttempts,
+  tutorPreworkStatus,
+} from "./tutor-prework-status.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { MANAGE_SESSION_POLL_MS, manageSessionLiveQuery } from "./manage-session-live-query.ts";
 
@@ -64,6 +68,45 @@ test("manage session uses the assignment summary when homework missed the submis
   assert.equal(started.kind, "in_progress");
   assert.equal(started.label, "In progress");
   assert.equal(started.attemptId, "attempt-paused");
+});
+
+test("pre-work poll updates attempt fields on the cached session", () => {
+  const session = {
+    id: "session-1",
+    assignments: [
+      { id: "p", latestAttemptStatus: null, latestAttemptId: null, latestScore: null },
+      { id: "other", latestAttemptStatus: null, latestAttemptId: null, latestScore: null },
+    ],
+    homework: [
+      { assignmentId: "p", attemptStatus: null, attemptId: null, score: null, submittedAt: null, mistakeCount: 0 },
+    ],
+  };
+  const next = applyPolledPreworkStatus(session, {
+    assignments: [
+      { id: "p", latestAttemptStatus: "submitted", latestAttemptId: "attempt-1", latestScore: 82 },
+    ],
+    homework: [
+      {
+        assignmentId: "p",
+        attemptStatus: "submitted",
+        attemptId: "attempt-1",
+        score: 82,
+        submittedAt: "2026-11-19T23:05:00.000Z",
+        mistakeCount: 4,
+      },
+    ],
+  });
+  assert.equal(next.assignments[0]?.latestAttemptStatus, "submitted");
+  assert.equal(next.assignments[1]?.id, "other");
+  assert.equal(next.homework[0]?.attemptStatus, "submitted");
+  assert.equal(next.homework[0]?.mistakeCount, 4);
+  assert.equal(next.id, "session-1");
+  const status = tutorPreworkStatus(
+    mergeListedPreworkAttempts(next.assignments, next.homework),
+    ["p"],
+  );
+  assert.equal(status.kind, "submitted");
+  assert.equal(status.attemptId, "attempt-1");
 });
 
 test("manage session live query refetches on focus and on an interval", () => {

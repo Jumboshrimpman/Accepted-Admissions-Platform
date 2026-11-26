@@ -17,15 +17,20 @@ export function AdminSessionQuizLinks({
   assignments,
   kinds,
   testId = "admin-session-quiz-links",
+  rowTestIds = true,
 }: {
   assignments: SessionAssignment;
   kinds?: readonly AdminSessionQuizKind[];
   testId?: string | null;
+  /** Secondary slices omit row ids so the full listing keeps the canonical ones. */
+  rowTestIds?: boolean;
 }) {
   const links = adminSessionQuizLinks(assignments).filter(
     (link) => !kinds || kinds.includes(link.kind),
   );
-  if (links.length === 0) return null;
+  // A filtered slice (the reserve card) stays quiet when that kind is absent.
+  // The full listing still shows main's empty state.
+  if (kinds && links.length === 0) return null;
   return (
     <div className="space-y-2" data-testid={testId || undefined}>
       <p className="text-sm font-semibold">Quizzes for this session</p>
@@ -36,7 +41,7 @@ export function AdminSessionQuizLinks({
           <div
             key={link.id}
             className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2"
-            data-testid={`admin-session-quiz-${link.kind}`}
+            data-testid={rowTestIds ? `admin-session-quiz-${link.kind}` : undefined}
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

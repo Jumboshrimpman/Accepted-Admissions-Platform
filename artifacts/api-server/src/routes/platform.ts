@@ -14865,37 +14865,11 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
   );
 });
 
-router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void> => {
-  const params = GetSessionParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [session] = await db
-    .select()
-    .from(sessionsTable)
-    .where(eq(sessionsTable.id, params.data.sessionId));
-  if (!session || !(await canAccessSession(req.appUser!, session))) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
-  if (hidesCancelledSessions(req.appUser!.role) && isCancelledBooking(session)) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
-  await ensureMichelleSophiaLamasSatPrepSlidesSafe(session.id);
-  const blocks = await db
-    .select()
-    .from(curriculumBlocksTable)
-    .where(eq(curriculumBlocksTable.sessionId, session.id))
-    .orderBy(asc(curriculumBlocksTable.position));
-  const listedAssignments = await listAssignmentsForUser(
-    req.appUser!,
-    session.courseId,
-    session.id,
-  );
-  const assignments = selectStatusHomework(listedAssignments);
-  const homework = await Promise.all(
+async function homeworkRowsForListedAssignments(
+  assignments: Awaited<ReturnType<typeof listAssignmentsForUser>>,
+  role: string,
+) {
+  return Promise.all(
     assignments.map(async (assignment) => {
       // Use the attempt chosen for this assignment (session client, else the
       // assigned student). A second lookup by client id alone dropped submissions
@@ -14934,15 +14908,46 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
         attemptStatus: attempt?.status ?? null,
         score: attempt?.score ?? null,
         submittedAt:
-          req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
-            ? attempt?.submittedAt ?? null
-            : null,
+          role === "tutor" || role === "administrator" ? attempt?.submittedAt ?? null : null,
         mistakeCount: resultItems.filter((item) => item.correct === false).length,
         analysis: analysis ?? null,
         studentResolvedAt: assignment.studentResolvedAt ?? null,
       };
     }),
   );
+}
+
+router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void> => {
+  const params = GetSessionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.sessionId));
+  if (!session || !(await canAccessSession(req.appUser!, session))) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  if (hidesCancelledSessions(req.appUser!.role) && isCancelledBooking(session)) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  await ensureMichelleSophiaLamasSatPrepSlidesSafe(session.id);
+  const blocks = await db
+    .select()
+    .from(curriculumBlocksTable)
+    .where(eq(curriculumBlocksTable.sessionId, session.id))
+    .orderBy(asc(curriculumBlocksTable.position));
+  const listedAssignments = await listAssignmentsForUser(
+    req.appUser!,
+    session.courseId,
+    session.id,
+  );
+  const assignments = selectStatusHomework(listedAssignments);
+  const homework = await homeworkRowsForListedAssignments(assignments, req.appUser!.role);
   const [tutorNote] = await db
     .select({ content: sessionArtifactsTable.content })
     .from(sessionArtifactsTable)
@@ -15010,6 +15015,51 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       homework,
     }),
   );
+});
+
+router.get("/sessions/:sessionId/prework-status", async (req: AuthedRequest, res): Promise<void> => {
+  const params = GetSessionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.sessionId));
+  if (!session || !(await canAccessSession(req.appUser!, session))) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  if (hidesCancelledSessions(req.appUser!.role) && isCancelledBooking(session)) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  // Polling reads attempt status only. Slide attachment stays on the full session GET.
+  const listedAssignments = await listAssignmentsForUser(
+    req.appUser!,
+    session.courseId,
+    session.id,
+  );
+  const assignments = selectStatusHomework(listedAssignments);
+  const homework = await homeworkRowsForListedAssignments(assignments, req.appUser!.role);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({
+    assignments: assignments.map((assignment) => ({
+      id: assignment.id,
+      latestAttemptStatus: assignment.latestAttemptStatus ?? null,
+      latestAttemptId: assignment.latestAttemptId ?? null,
+      latestScore: assignment.latestScore ?? null,
+    })),
+    homework: homework.map((row) => ({
+      assignmentId: row.assignmentId,
+      attemptStatus: row.attemptStatus,
+      attemptId: row.attemptId,
+      score: row.score,
+      submittedAt: row.submittedAt,
+      mistakeCount: row.mistakeCount,
+    })),
+  });
 });
 
 router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res): Promise<void> => {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   getGetSessionQueryKey,
   getGetAdaptiveCurriculumQueryKey,
   getGetAssignmentQueryKey,
+  customFetch,
   getListSessionArtifactsQueryKey,
   useGetAdaptiveCurriculum,
   useGetAssignment,
@@ -64,8 +65,13 @@ import {
 } from "@/components/session-tutor-materials";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
-import { manageSessionLiveQuery } from "@/lib/manage-session-live-query";
-import { mergeListedPreworkAttempts, tutorPreworkStatus } from "@/lib/tutor-prework-status";
+import { manageSessionLiveQuery, manageSessionRefreshQuery } from "@/lib/manage-session-live-query";
+import {
+  applyPolledPreworkStatus,
+  mergeListedPreworkAttempts,
+  tutorPreworkStatus,
+  type PolledPreworkStatus,
+} from "@/lib/tutor-prework-status";
 import { MANUAL_AUTO_PREPARE_ENABLED } from "@/lib/manual-auto-prepare";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
@@ -83,7 +89,21 @@ export default function TutorSession() {
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetSessionQueryKey(sessionId),
-      ...manageSessionLiveQuery,
+      ...manageSessionRefreshQuery,
+    },
+  });
+  useQuery({
+    queryKey: ["/api/sessions", sessionId, "prework-status"],
+    enabled: Boolean(sessionId),
+    ...manageSessionLiveQuery,
+    queryFn: async () => {
+      const status = await customFetch<PolledPreworkStatus>(
+        `/api/sessions/${sessionId}/prework-status`,
+      );
+      queryClient.setQueryData(getGetSessionQueryKey(sessionId), (current) =>
+        current ? applyPolledPreworkStatus(current, status) : current,
+      );
+      return status;
     },
   });
   const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
@@ -593,7 +613,7 @@ export default function TutorSession() {
               sessionTutor: session.tutor,
             })}
           />
-          <div className="space-y-4" data-testid={isAdmin ? "admin-session-quiz-links" : undefined}>
+          <div className="space-y-4">
             <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground" data-testid="session-authoring-note">
               Edits apply to this session’s copy only. Shared bank items and other sessions stay unchanged.
             </p>
@@ -704,7 +724,7 @@ export default function TutorSession() {
                   </p>
                   {isAdmin ? (
                     <div className="mt-4">
-                      <AdminSessionQuizLinks assignments={session.assignments} kinds={["prework"]} testId={null} />
+                      <AdminSessionQuizLinks assignments={session.assignments} />
                     </div>
                   ) : beforeAssignmentId ? (
                     <div className="mt-4">
@@ -735,11 +755,6 @@ export default function TutorSession() {
                       </Button>
                     </div>
                   ) : null}
-                  {isAdmin ? (
-                    <div className="mt-4">
-                      <AdminSessionQuizLinks assignments={session.assignments} kinds={["in_session"]} testId={null} />
-                    </div>
-                  ) : null}
                 </section>
                 <section className="rounded-xl border bg-background p-4" data-testid="manage-session-reserve">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -757,19 +772,10 @@ export default function TutorSession() {
                             assignments={session.assignments}
                             kinds={["reserve"]}
                             testId={null}
+                            rowTestIds={false}
                           />
                         </div>
-                      ) : (
-                        <div className="mt-4">
-                          <TutorSessionQuizEditor
-                            assignmentId={reserveAssignment.id}
-                            heading="Reserve questions"
-                            sessionTitle={session.title}
-                            clientName={sessionStudentLabel(session)}
-                            onChanged={refreshAdaptiveData}
-                          />
-                        </div>
-                      )}
+                      ) : null}
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">No reserve set for this session.</p>
