@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +12,12 @@ vi.mock("@workspace/api-client-react", () => ({
 import { TutorOfferedAvailability } from "./offered-availability";
 
 const CONNECT_URL = "/api/calendar/connect?redirect=1&returnTo=%2Ftutor";
+
+function slotStarts(root: ParentNode): string[] {
+  return [...root.querySelectorAll("[data-testid='offered-availability-slot']")].map(
+    (node) => node.getAttribute("data-start") ?? "",
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -59,12 +65,32 @@ describe("tutor offered availability", () => {
     });
     render(<TutorOfferedAvailability />);
 
-    expect(await screen.findByRole("region", { name: "1 hour" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "1.5 hours" }).textContent).toContain("No open times");
+    const hour = await screen.findByRole("region", { name: "1 hour" });
+    expect(hour.textContent).toContain("3:00 PM");
+    expect(hour.textContent).toContain("Tuesday, October 20, 2026");
+    expect(slotStarts(hour)).toEqual(["2026-10-20T19:00:00.000Z"]);
+    expect(screen.getByRole("button", { name: "Today" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Previous week" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next week" })).toBeTruthy();
+    expect(screen.getByTestId("offered-availability-calendar").getAttribute("data-layout")).toBe("week");
+    expect(screen.getByTestId("offered-availability-timezone").textContent).toContain(
+      "ET (America/New_York)",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /1\.5 hours/ }));
+    const hourAndAHalf = screen.getByRole("region", { name: "1.5 hours" });
+    expect(hourAndAHalf.textContent).toContain("No open times");
+    expect(slotStarts(hourAndAHalf)).toEqual([]);
+
+    fireEvent.click(screen.getByRole("button", { name: /2 hours/ }));
     const twoHours = screen.getByRole("region", { name: "2 hours" });
     expect(twoHours.textContent).toContain("3:00 PM");
     expect(twoHours.textContent).toContain("5:00 PM");
     expect(twoHours.textContent).toContain("Tuesday, October 20, 2026");
+    expect(slotStarts(twoHours)).toEqual([
+      "2026-10-20T19:00:00.000Z",
+      "2026-10-20T21:00:00.000Z",
+    ]);
     expect(screen.getByTestId("tutor-offered-availability").textContent).not.toMatch(/@/);
     expect(screen.queryByText(/Quinlan Piihold/)).toBeNull();
     expect(screen.queryByRole("link", { name: "Connect Google Calendar" })).toBeNull();
