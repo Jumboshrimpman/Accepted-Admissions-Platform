@@ -2,13 +2,9 @@ import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { CalendarClock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OfferedAvailabilityCalendar } from "@/components/offered-availability-calendar";
 import { calendarConnectUrl } from "@/pages/portal/calendar-connection-card";
-import {
-  bookingSlotDayKey,
-  clientTimezoneCaption,
-  formatBookingSlotTime,
-  formatSessionDate,
-} from "@/lib/session-display";
+import { clientTimezoneCaption } from "@/lib/session-display";
 
 type OfferedLength = {
   durationMinutes: number;
@@ -25,24 +21,6 @@ export type OfferedAvailability = {
   usesAdminCalendarFallback?: boolean;
   lengths: OfferedLength[];
 };
-
-function durationLabel(minutes: number): string {
-  if (minutes === 60) return "1 hour";
-  if (minutes === 90) return "1.5 hours";
-  if (minutes === 120) return "2 hours";
-  return `${minutes} minutes`;
-}
-
-function slotsByDay(slots: string[], timezone: string): Array<{ dayKey: string; slots: string[] }> {
-  const groups = new Map<string, string[]>();
-  for (const slot of slots) {
-    const dayKey = bookingSlotDayKey(slot, timezone);
-    const current = groups.get(dayKey);
-    if (current) current.push(slot);
-    else groups.set(dayKey, [slot]);
-  }
-  return [...groups.entries()].map(([dayKey, daySlots]) => ({ dayKey, slots: daySlots }));
-}
 
 export function TutorOfferedAvailability({
   preview,
@@ -172,44 +150,12 @@ export function TutorOfferedAvailability({
           </div>
         ) : null}
         {showSlots && offer ? (
-          <div className="max-h-96 space-y-6 overflow-y-auto">
-            {offer.lengths.map((length) => {
-              const days = slotsByDay(length.slots, offer.timezone);
-              return (
-                <section key={length.durationMinutes} aria-label={durationLabel(length.durationMinutes)}>
-                  <h3 className="text-sm font-semibold">
-                    {durationLabel(length.durationMinutes)}
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      {length.slots.length === 0
-                        ? "No open times"
-                        : `${length.slots.length} open ${length.slots.length === 1 ? "time" : "times"}`}
-                    </span>
-                  </h3>
-                  {days.length > 0 ? (
-                    <ul className="mt-2 space-y-3">
-                      {days.map((day) => (
-                        <li key={day.dayKey}>
-                          <p className="text-sm text-muted-foreground">
-                            {formatSessionDate({ dateTime: day.slots[0]!, timezone: offer.timezone })}
-                          </p>
-                          <ul className="mt-1 flex flex-wrap gap-2">
-                            {day.slots.map((slot) => (
-                              <li
-                                key={slot}
-                                className="rounded-full border px-3 py-1 text-sm"
-                              >
-                                {formatBookingSlotTime(slot, offer.timezone)}
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </section>
-              );
-            })}
-          </div>
+          <OfferedAvailabilityCalendar
+            timezone={offer.timezone}
+            from={offer.from}
+            to={offer.to}
+            lengths={offer.lengths}
+          />
         ) : null}
       </CardContent>
     </Card>
