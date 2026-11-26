@@ -228,9 +228,9 @@ export function SessionTutorMaterials({
   }
   return (
     <div className="rounded-xl border bg-background p-4" data-testid="tutor-session-materials">
-      <p className="font-semibold">Pre-work and homework</p>
+      <p className="font-semibold">Completion</p>
       <p className="mt-1 text-sm text-muted-foreground">
-        Completion for this session, plus one questions PDF and one answer key when a quiz is attached.
+        Status for the quizzes on this session, plus a questions PDF and an answer key.
       </p>
       <div className="mt-3 space-y-3">
         {prework.map((row) => (

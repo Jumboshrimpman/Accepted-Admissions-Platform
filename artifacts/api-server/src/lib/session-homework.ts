@@ -65,6 +65,8 @@ export type StatusHomeworkCandidate = {
    * or points at topic homework.
    */
   planAssignmentId?: string | null;
+  /** Latest attempt for the session student. Used when attempt counts were not loaded. */
+  latestAttemptStatus?: string | null;
 };
 
 export function statusHomeworkId(item: StatusHomeworkCandidate): string | null {
@@ -174,10 +176,17 @@ function collapsesWithListedHomework(
   );
 }
 
+/** Submitted work outranks an in-progress attempt, which outranks a blank copy. */
+export function listedAttemptProgressRank(status?: string | null): number {
+  if (status === "submitted" || status === "expired") return 2;
+  if (status === "active" || status === "paused") return 1;
+  return 0;
+}
+
 /**
- * Has questions, then attempts, then createdAt, then id.
+ * Has questions, then attempts, then a known student attempt status, then createdAt, then id.
  * createdAt replaces the largest-id tie-break. An untouched newer copy does
- * not outrank homework the student already started.
+ * not outrank homework the student already started or submitted.
  */
 function pickListedStatusKeeper<T extends StatusHomeworkCandidate>(current: T, incoming: T): T {
   const currentQuestions = (current.questionCount ?? 0) > 0 ? 1 : 0;
@@ -187,6 +196,10 @@ function pickListedStatusKeeper<T extends StatusHomeworkCandidate>(current: T, i
   }
   const attemptDelta = (incoming.attemptCount ?? 0) - (current.attemptCount ?? 0);
   if (attemptDelta !== 0) return attemptDelta > 0 ? incoming : current;
+  const statusDelta =
+    listedAttemptProgressRank(incoming.latestAttemptStatus) -
+    listedAttemptProgressRank(current.latestAttemptStatus);
+  if (statusDelta !== 0) return statusDelta > 0 ? incoming : current;
   const currentChosen = isPlanChosenBankPrework(current) ? 1 : 0;
   const incomingChosen = isPlanChosenBankPrework(incoming) ? 1 : 0;
   if (incomingChosen !== currentChosen) return incomingChosen > currentChosen ? incoming : current;
@@ -513,6 +526,55 @@ export function sessionAttemptUserId(input: {
     return input.sessionClientUserId;
   }
   return input.viewerUserId;
+}
+
+/**
+ * User ids whose attempts count on a staff session page, in preference order.
+ * The session client comes first, then the student assigned on the quiz when
+ * that is a different account. A tutor or admin viewing the page is not included,
+ * so their own preview attempt cannot hide the student's submission.
+ */
+export function sessionStaffAttemptUserIds(input: {
+  role: string;
+  viewerUserId: string;
+  sessionClientUserId?: string | null;
+  assignedStudentUserId?: string | null;
+  sessionScoped: boolean;
+}): string[] {
+  if (
+    input.sessionScoped &&
+    (input.role === "tutor" || input.role === "administrator")
+  ) {
+    const ids: string[] = [];
+    if (input.sessionClientUserId) ids.push(input.sessionClientUserId);
+    if (input.assignedStudentUserId && !ids.includes(input.assignedStudentUserId)) {
+      ids.push(input.assignedStudentUserId);
+    }
+    if (ids.length > 0) return ids;
+  }
+  const primary = sessionAttemptUserId(input);
+  return primary ? [primary] : [];
+}
+
+/**
+ * The attempt Manage session should display. Among the preferred students, a
+ * submitted or expired attempt outranks an in-progress one so a blank preview
+ * does not hide pre-work the student already turned in. Within one student,
+ * the most recently started attempt still wins.
+ */
+export function selectDisplayedStudentAttempt<
+  T extends { userId: string; startedAt: Date; status?: string | null },
+>(attempts: readonly T[], preferredUserIds: readonly string[]): T | null {
+  const candidates = preferredUserIds
+    .map((userId) => selectLatestStudentAttempt(attempts, userId))
+    .filter((attempt): attempt is T => attempt != null);
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((left, right) => {
+    const rank =
+      listedAttemptProgressRank(right.status) - listedAttemptProgressRank(left.status);
+    if (rank !== 0) return rank;
+    return right.startedAt.getTime() - left.startedAt.getTime();
+  })[0] ?? null;
 }
 
 /**

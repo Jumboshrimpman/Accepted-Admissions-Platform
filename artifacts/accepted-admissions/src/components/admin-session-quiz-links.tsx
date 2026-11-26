@@ -2,7 +2,10 @@ import { Link } from "wouter";
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { adminSessionQuizLinks } from "@/lib/admin-session-quiz-links";
+import {
+  adminSessionQuizLinks,
+  type AdminSessionQuizKind,
+} from "@/lib/admin-session-quiz-links";
 
 type SessionAssignment = Parameters<typeof adminSessionQuizLinks>[0];
 
@@ -10,10 +13,21 @@ type SessionAssignment = Parameters<typeof adminSessionQuizLinks>[0];
  * Admin-only replacement for the full "Homework questions for this session"
  * listing: one compact row per quiz with links to open it.
  */
-export function AdminSessionQuizLinks({ assignments }: { assignments: SessionAssignment }) {
-  const links = adminSessionQuizLinks(assignments);
+export function AdminSessionQuizLinks({
+  assignments,
+  kinds,
+  testId = "admin-session-quiz-links",
+}: {
+  assignments: SessionAssignment;
+  kinds?: readonly AdminSessionQuizKind[];
+  testId?: string | null;
+}) {
+  const links = adminSessionQuizLinks(assignments).filter(
+    (link) => !kinds || kinds.includes(link.kind),
+  );
+  if (links.length === 0) return null;
   return (
-    <div className="space-y-2" data-testid="admin-session-quiz-links">
+    <div className="space-y-2" data-testid={testId || undefined}>
       <p className="text-sm font-semibold">Quizzes for this session</p>
       {links.length === 0 ? (
         <p className="text-sm text-muted-foreground">No quizzes are attached to this session yet.</p>

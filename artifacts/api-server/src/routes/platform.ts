@@ -648,9 +648,10 @@ import {
   hydrateMistakePrompts,
   placeholderArchiveApplyIds,
   selectActivePrework,
+  selectDisplayedStudentAttempt,
   selectLatestStudentAttempt,
   selectStatusHomework,
-  sessionAttemptUserId,
+  sessionStaffAttemptUserIds,
   shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "../lib/session-homework";
@@ -14883,7 +14884,6 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   await ensureMichelleSophiaLamasSatPrepSlidesSafe(session.id);
-  const subjectUserId = await dataSubjectUserId(req.appUser!);
   const blocks = await db
     .select()
     .from(curriculumBlocksTable)
@@ -14895,27 +14895,25 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     session.id,
   );
   const assignments = selectStatusHomework(listedAssignments);
-  const homeworkUserId = session.clientUserId ?? subjectUserId;
   const homework = await Promise.all(
     assignments.map(async (assignment) => {
-      const [attempt] = await db
-        .select({
-          id: attemptsTable.id,
-          status: attemptsTable.status,
-          score: attemptsTable.score,
-          submittedAt: attemptsTable.submittedAt,
-          result: attemptsTable.result,
-          analysis: attemptsTable.analysis,
-        })
-        .from(attemptsTable)
-        .where(
-          and(
-            eq(attemptsTable.assignmentId, assignment.id),
-            eq(attemptsTable.userId, homeworkUserId),
-          ),
-        )
-        .orderBy(desc(attemptsTable.startedAt))
-        .limit(1);
+      // Use the attempt chosen for this assignment (session client, else the
+      // assigned student). A second lookup by client id alone dropped submissions
+      // stored on the assigned student and left Manage session on "Not started".
+      const [attempt] = assignment.latestAttemptId
+        ? await db
+            .select({
+              id: attemptsTable.id,
+              status: attemptsTable.status,
+              score: attemptsTable.score,
+              submittedAt: attemptsTable.submittedAt,
+              result: attemptsTable.result,
+              analysis: attemptsTable.analysis,
+            })
+            .from(attemptsTable)
+            .where(eq(attemptsTable.id, assignment.latestAttemptId))
+            .limit(1)
+        : [];
       const storedResult = attempt?.result as AttemptResultPayload | null | undefined;
       const resultItems = Array.isArray(storedResult?.items) ? storedResult.items : [];
       const analysis = resultItems.length
@@ -14965,6 +14963,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
         name: tutorViewer ? tutorStudentName(sessionStudent.name) : sessionStudent.name,
       }
     : sessionStudent;
+  res.setHeader("Cache-Control", "private, no-store");
   res.json(
     GetSessionResponse.parse({
       ...publicSessionShape(
@@ -15345,22 +15344,30 @@ async function listAssignmentsForUser(
         .select({ count: sql<number>`count(*)` })
         .from(assignmentQuestionsTable)
         .where(eq(assignmentQuestionsTable.assignmentId, assignment.id));
-      const attemptUserId = sessionAttemptUserId({
+      const attemptUserIds = sessionStaffAttemptUserIds({
         role: user.role,
         viewerUserId: subjectUserId,
         sessionClientUserId: linkedSession?.clientUserId,
+        assignedStudentUserId: assignment.assignedStudentUserId,
         sessionScoped: Boolean(sessionId),
       });
-      const attempts = await db
-        .select()
-        .from(attemptsTable)
-        .where(
-          and(
-            eq(attemptsTable.assignmentId, assignment.id),
-            eq(attemptsTable.userId, attemptUserId),
-          ),
-        )
-        .orderBy(desc(attemptsTable.startedAt));
+      const attempts =
+        attemptUserIds.length === 0
+          ? []
+          : await db
+              .select()
+              .from(attemptsTable)
+              .where(
+                and(
+                  eq(attemptsTable.assignmentId, assignment.id),
+                  inArray(attemptsTable.userId, attemptUserIds),
+                ),
+              )
+              .orderBy(desc(attemptsTable.startedAt));
+      const latestStudentAttempt = selectDisplayedStudentAttempt(attempts, attemptUserIds);
+      const countedAttempts = latestStudentAttempt
+        ? attempts.filter((attempt) => attempt.userId === latestStudentAttempt.userId)
+        : [];
       const liveTitle = liveDiagnosticAssignmentTitle({
         title: assignment.title,
         questionCount: Number(count),
@@ -15380,11 +15387,11 @@ async function listAssignmentsForUser(
         deadline: assignment.deadline,
         questionCount: Number(count),
         timeLimitMinutes: assignment.timeLimitMinutes,
-        attemptCount: attempts.length,
+        attemptCount: countedAttempts.length,
         maxAttempts: assignment.maxAttempts,
-        latestScore: attempts[0]?.score ?? null,
-        latestAttemptId: attempts[0]?.id ?? null,
-        latestAttemptStatus: attempts[0]?.status ?? null,
+        latestScore: latestStudentAttempt?.score ?? null,
+        latestAttemptId: latestStudentAttempt?.id ?? null,
+        latestAttemptStatus: latestStudentAttempt?.status ?? null,
         createdAt: assignment.createdAt,
         planAssignmentId: assignment.sessionId
           ? (planAssignmentBySession.get(assignment.sessionId) ?? null)
@@ -15457,21 +15464,17 @@ export async function adaptiveCurriculumForSession(
   const summaries = await listAssignmentsForUser(user, session.courseId, session.id);
   const selectedHomework = selectActivePrework(summaries);
   const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
-  const [latestAttempt] = selectedHomework
+  const [latestAttempt] = selectedHomework?.latestAttemptId
     ? await db
         .select()
         .from(attemptsTable)
-        .where(
-          and(
-            eq(attemptsTable.assignmentId, selectedHomework.id),
-            eq(attemptsTable.userId, subjectUserId),
-          ),
-        )
-        .orderBy(desc(attemptsTable.startedAt))
+        .where(eq(attemptsTable.id, selectedHomework.latestAttemptId))
         .limit(1)
     : [];
   const homework = selectedHomework
-    ? homeworkWithStudentAttempt(selectedHomework, latestAttempt)
+    ? latestAttempt
+      ? homeworkWithStudentAttempt(selectedHomework, latestAttempt)
+      : selectedHomework
     : null;
   const result = latestAttempt?.result as
     | { items?: AdaptiveResultItem[] }
@@ -15727,6 +15730,7 @@ router.get(
       res.status(404).json({ error: "Session not found" });
       return;
     }
+    res.setHeader("Cache-Control", "private, no-store");
     res.json(
       GetAdaptiveCurriculumResponse.parse(
         await adaptiveCurriculumForSession(session, req.appUser!),

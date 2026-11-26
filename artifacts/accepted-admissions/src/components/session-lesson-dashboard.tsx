@@ -24,6 +24,7 @@ import {
   retrySourceLabel,
   type RetryFeedbackFields,
 } from "./session-lesson-display";
+import { manageSessionLiveQuery } from "@/lib/manage-session-live-query";
 import { usableWrittenExplanation, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
 function errorText(error: unknown): string {
@@ -88,6 +89,7 @@ export function SessionLessonDashboard({
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetSessionLessonQueryKey(sessionId),
+      ...(audience === "tutor" ? manageSessionLiveQuery : {}),
     },
   });
   const requestRetry = useRequestSessionRetry();
