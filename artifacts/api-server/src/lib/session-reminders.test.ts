@@ -2,16 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { STUDENT_BOOKING_CONFIRMATION_PORTAL_URL } from "./booking-student-email.ts";
+import { formatBookingWhen, STUDENT_BOOKING_CONFIRMATION_PORTAL_URL } from "./booking-student-email.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { MICHELLE_MAKAREM_MEET_URL, SOPHIA_SLEIMAN_EMAIL, SOPHIA_SLEIMAN_MEET_URL } from "./session-meeting-url.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEETING_URL, TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { DEFAULT_SESSION_REMINDER_STUDENT_EMAILS, SESSION_REMINDER_INTERVAL_MS, deliverSessionReminders, hoursUntilSession, isSessionReminderStudent, planSessionReminders, sessionReminderAllowlistFromEnv, sessionReminderClaimKey, sessionReminderEmail, sessionReminderLeadHours, sessionReminderSubject, sessionReminderTimezone, shouldSendSessionReminder, startSessionReminderTick, type PlannedSessionReminder, type SessionReminderCandidate } from "./session-reminders.ts";
+import { DEFAULT_SESSION_REMINDER_STUDENT_EMAILS, MICHELLE_MAKAREM_REMINDER_CLERK_USER_ID, SESSION_REMINDER_INTERVAL_MS, SOPHIA_SLEIMAN_REMINDER_TIMEZONE, SOPHIA_SLEIMAN_REMINDER_USER_ID, dayBeforePreclaims, deliverSessionReminders, hoursUntilSession, isSessionReminderStudent, isSophiaSleimanReminderRecipient, planSessionReminders, sessionReminderAllowlistFromEnv, sessionReminderClaimKey, sessionReminderDayWord, sessionReminderEmail, sessionReminderLeadHours, sessionReminderSubject, sessionReminderTimezone, shouldSendSessionReminder, startSessionReminderTick, type PlannedSessionReminder, type SessionReminderCandidate } from "./session-reminders.ts";
 
 const NOW = new Date("2026-11-27T15:00:00.000Z");
 const START = new Date("2026-11-28T12:00:00.000Z"); // 7:00 AM ET, 9:00 PM JST
+const DAY_BEFORE_NOW = new Date(START.getTime() - 23.5 * 60 * 60 * 1000);
 const CREATED = new Date("2026-11-20T12:00:00.000Z");
 const ALLOWLIST = new Set(DEFAULT_SESSION_REMINDER_STUDENT_EMAILS);
 
@@ -191,7 +192,7 @@ test("1-day and 1-hour windows do not overlap, and a late booking only gets the 
       hoursUntilSession: 14,
       leadHours: 23.9,
     }),
-    false,
+    true,
   );
   assert.equal(
     shouldSendSessionReminder({
@@ -279,7 +280,7 @@ test("each recipient sees their own timezone, or ET when it was never set", () =
 
 test("the join link is the student-facing meeting URL, and a missing one uses the portal", () => {
   const taito = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [candidate()],
   });
@@ -290,10 +291,11 @@ test("the join link is the student-facing meeting URL, and a missing one uses th
   assert.match(taito[1]!.text, /4:00 AM PT/);
   assert.match(taito[0]!.text, /Tutor: Eunice Chon/);
   assert.match(taito[1]!.text, /Student: Taito Goto/);
-  assert.equal(taito[1]?.subject, "Reminder: your session with Taito Goto is tomorrow");
+  assert.equal(taito[1]?.subject, "Reminder: your session with Taito Goto is tomorrow at 4:00 AM PT");
+  assert.match(taito[0]!.subject, /is tomorrow at 9:00 PM JST/);
 
   const michelle = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [
       candidate({
@@ -361,7 +363,7 @@ test("the join link is the student-facing meeting URL, and a missing one uses th
   assert.match(sophia[0]!.text, new RegExp(SOPHIA_SLEIMAN_MEET_URL.replace(/[.]/g, "\\.")));
 
   const noMeeting = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: new Set(["new.student@school.edu"]),
     sessions: [
       candidate({
@@ -421,7 +423,7 @@ test("the join link is the student-facing meeting URL, and a missing one uses th
 
 test("a linked parent viewer gets nothing, and other students' tutors do not", () => {
   const withParent = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [
       candidate({
@@ -452,7 +454,7 @@ test("a linked parent viewer gets nothing, and other students' tutors do not", (
   }
 
   const outsider = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [
       candidate({
@@ -475,7 +477,7 @@ test("a linked parent viewer gets nothing, and other students' tutors do not", (
   assert.equal(outsider.length, 0);
 
   const late = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [
       candidate({
@@ -505,16 +507,323 @@ test("a linked parent viewer gets nothing, and other students' tutors do not", (
   assert.equal(passed.length, 0);
 
   const cancelled = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [candidate({ cancelled: true })],
   });
   assert.equal(cancelled.length, 0);
 });
 
+test("Sophia keeps the #268 reminder: Abu Dhabi plus ET, wide window, and original sign-off", () => {
+  assert.equal(
+    isSophiaSleimanReminderRecipient({
+      userId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+      email: "someone-else@example.com",
+      role: "student",
+    }),
+    true,
+  );
+  assert.equal(
+    isSophiaSleimanReminderRecipient({
+      userId: "other-user",
+      email: SOPHIA_SLEIMAN_EMAIL,
+      role: "student",
+    }),
+    true,
+  );
+  assert.equal(
+    isSophiaSleimanReminderRecipient({
+      userId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+      email: SOPHIA_SLEIMAN_EMAIL,
+      role: "tutor",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentUserId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+      studentEmail: "renamed@example.com",
+      audience: "student",
+      allowlist: new Set(["taito0525@gmail.com"]),
+      sessionCancelled: false,
+      hoursUntilSession: 14,
+      leadHours: 2,
+      remindersEnabled: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentUserId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+      studentEmail: SOPHIA_SLEIMAN_EMAIL,
+      audience: "tutor",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 5,
+      leadHours: 48,
+      remindersEnabled: true,
+    }),
+    false,
+  );
+
+  const sophiaStart = new Date("2026-11-18T15:00:00.000Z");
+  assert.equal(
+    formatBookingWhen(sophiaStart, SOPHIA_SLEIMAN_REMINDER_TIMEZONE, "America/New_York"),
+    "Wednesday, November 18, 2026 at 7:00 PM GST (10:00 AM ET)",
+  );
+  const email = sessionReminderEmail({
+    recipientName: "Sophia Sleiman",
+    studentName: "Sophia Sleiman",
+    tutorName: "Eunice Chon",
+    sessionTitle: "Sophia’s SAT Session with Eunice",
+    start: sophiaStart,
+    durationMinutes: 90,
+    meetUrl: SOPHIA_SLEIMAN_MEET_URL,
+    kind: "1_day",
+    audience: "student",
+    timezone: "America/Los_Angeles",
+    timezoneSource: "browser",
+    legacySophia: true,
+    now: new Date("2026-11-17T15:00:00.000Z"),
+  });
+  assert.equal(email.subject, "Reminder: your session with Eunice Chon is tomorrow");
+  assert.match(email.text, /This is a reminder that your session is tomorrow\./);
+  assert.match(email.text, /7:00 PM GST \(10:00 AM ET\)/);
+  assert.match(email.text, /1 hour 30 minutes/);
+  assert.doesNotMatch(email.text, /^Student:/m);
+  assert.doesNotMatch(email.html, /Student:/);
+  assert.match(email.text, /— Accepted Admissions$/);
+  assert.match(email.html, /&mdash; Accepted Admissions/);
+  assert.doesNotMatch(email.text, /Sama/);
+  assert.doesNotMatch(email.text, /today at/i);
+
+  const planned = planSessionReminders({
+    now: new Date(sophiaStart.getTime() - 5 * 60 * 60 * 1000),
+    allowlist: ALLOWLIST,
+    remindersEnabled: true,
+    sessions: [
+      candidate({
+        sessionId: "sophia-soon",
+        title: "Sophia’s SAT Session with Eunice",
+        start: sophiaStart,
+        createdAt: new Date(sophiaStart.getTime() - 2 * 60 * 60 * 1000),
+        student: person({
+          userId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+          email: "renamed-sophia@example.com",
+          displayName: "Sophia Sleiman",
+          timezone: "America/New_York",
+          timezoneSource: "default",
+        }),
+        meeting: {
+          meetUrl: null,
+          clientEmail: "renamed-sophia@example.com",
+          clientUserId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+        },
+      }),
+    ],
+  });
+  const studentMail = planned.filter((item) => item.audience === "student");
+  assert.equal(studentMail.length, 1);
+  assert.equal(studentMail[0]?.kind, "1_day");
+  assert.match(studentMail[0]!.text, /7:00 PM GST \(10:00 AM ET\)/);
+  assert.equal(planned.filter((item) => item.audience === "tutor").length, 0);
+});
+
+test("a session 5 hours out gets no day-before email, and copy says today or tomorrow", () => {
+  const fiveHoursOut = planSessionReminders({
+    now: new Date(START.getTime() - 5 * 60 * 60 * 1000),
+    allowlist: ALLOWLIST,
+    remindersEnabled: true,
+    sessions: [candidate({ createdAt: new Date("2026-11-01T00:00:00.000Z") })],
+  });
+  assert.equal(fiveHoursOut.length, 0);
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 5,
+      leadHours: 100,
+      remindersEnabled: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 23.5,
+      leadHours: 10,
+      remindersEnabled: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 23.5,
+      leadHours: 48,
+      remindersEnabled: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 23,
+      leadHours: 48,
+      remindersEnabled: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_hour",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      sessionCancelled: false,
+      hoursUntilSession: 0.5,
+      leadHours: 2,
+      remindersEnabled: true,
+    }),
+    true,
+  );
+
+  const todayStart = new Date("2026-11-28T04:45:00.000Z"); // 11:45 PM ET Nov 27
+  const todayNow = new Date("2026-11-27T05:15:00.000Z"); // 12:15 AM ET Nov 27
+  assert.equal(sessionReminderDayWord(todayStart, todayNow, "America/New_York"), "today");
+  const todayMail = sessionReminderEmail({
+    recipientName: "Taito Goto",
+    studentName: "Taito Goto",
+    tutorName: "Eunice Chon",
+    sessionTitle: "Taito's SAT Session with Eunice",
+    start: todayStart,
+    durationMinutes: 60,
+    meetUrl: SHARED_FALL_MEETING_URL,
+    kind: "1_day",
+    audience: "student",
+    timezone: "America/New_York",
+    timezoneSource: "admin",
+    now: todayNow,
+  });
+  assert.match(todayMail.subject, /is today at 11:45 PM ET/);
+  assert.match(todayMail.text, /your session is today at 11:45 PM ET/);
+  assert.doesNotMatch(todayMail.subject, /tomorrow/);
+  assert.doesNotMatch(todayMail.text, /is tomorrow/);
+
+  const tomorrowStart = new Date("2026-11-28T17:30:00.000Z"); // 12:30 PM ET Nov 28
+  const tomorrowNow = new Date("2026-11-27T18:00:00.000Z"); // 1:00 PM ET Nov 27
+  assert.equal(sessionReminderDayWord(tomorrowStart, tomorrowNow, "America/New_York"), "tomorrow");
+  const tomorrowMail = sessionReminderEmail({
+    recipientName: "Eunice Chon",
+    studentName: "Taito Goto",
+    tutorName: "Eunice Chon",
+    sessionTitle: "Taito's SAT Session with Eunice",
+    start: tomorrowStart,
+    durationMinutes: 60,
+    kind: "1_day",
+    audience: "tutor",
+    timezone: "America/New_York",
+    timezoneSource: "browser",
+    now: tomorrowNow,
+  });
+  assert.match(tomorrowMail.subject, /is tomorrow at 12:30 PM ET/);
+  assert.match(tomorrowMail.text, /your session with Taito Goto is tomorrow at 12:30 PM ET/);
+});
+
+test("deploy pre-claims the day-before email inside the 24h horizon, except Sophia", () => {
+  const soon = new Date(START.getTime() - 5 * 60 * 60 * 1000);
+  const taitoSoon = candidate({ sessionId: "taito-soon", start: START, createdAt: new Date("2026-11-01T00:00:00.000Z") });
+  const taitoLater = candidate({
+    sessionId: "taito-later",
+    start: new Date(soon.getTime() + 30 * 60 * 60 * 1000),
+  });
+  const sophiaSoon = candidate({
+    sessionId: "sophia-soon",
+    start: START,
+    student: person({
+      userId: SOPHIA_SLEIMAN_REMINDER_USER_ID,
+      email: SOPHIA_SLEIMAN_EMAIL,
+      displayName: "Sophia Sleiman",
+    }),
+  });
+  const michelleByClerk = candidate({
+    sessionId: "michelle-clerk",
+    start: START,
+    student: person({
+      userId: "michelle-row",
+      clerkUserId: MICHELLE_MAKAREM_REMINDER_CLERK_USER_ID,
+      email: "michelle.other@example.com",
+      displayName: "Michelle Makarem",
+    }),
+  });
+  const claims = dayBeforePreclaims({
+    now: soon,
+    allowlist: new Set([TAITO_STUDENT_EMAIL]),
+    sessions: [taitoSoon, taitoLater, sophiaSoon, michelleByClerk],
+  });
+  const keys = claims.map((claim) => `${claim.sessionId}:${claim.audience}:${claim.recipientEmail}`);
+  assert.ok(keys.includes(`taito-soon:student:${TAITO_STUDENT_EMAIL}`));
+  assert.ok(keys.includes("taito-soon:tutor:eunice_chon@berkeley.edu"));
+  assert.equal(keys.some((key) => key.startsWith("taito-later:")), false);
+  assert.equal(keys.some((key) => key.includes(SOPHIA_SLEIMAN_EMAIL)), false);
+  assert.ok(keys.includes("sophia-soon:tutor:eunice_chon@berkeley.edu"));
+  assert.ok(keys.includes("michelle-clerk:student:michelle.other@example.com"));
+  assert.equal(claims.every((claim) => claim.kind === "1_day"), true);
+
+  assert.equal(
+    isSessionReminderStudent("michelle.other@example.com", new Set(), {
+      clerkUserId: MICHELLE_MAKAREM_REMINDER_CLERK_USER_ID,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: TAITO_STUDENT_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      remindersEnabled: false,
+      sessionCancelled: false,
+      hoursUntilSession: 23.5,
+      leadHours: 48,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendSessionReminder({
+      kind: "1_day",
+      studentEmail: SOPHIA_SLEIMAN_EMAIL,
+      audience: "student",
+      allowlist: ALLOWLIST,
+      remindersEnabled: false,
+      sessionCancelled: false,
+      hoursUntilSession: 14,
+      leadHours: 2,
+    }),
+    true,
+  );
+});
+
 test("claims are per session, recipient, and kind, and a failed send can be retried", async () => {
   const planned = planSessionReminders({
-    now: NOW,
+    now: DAY_BEFORE_NOW,
     allowlist: ALLOWLIST,
     sessions: [candidate()],
   });
@@ -627,7 +936,13 @@ test("the reminder job reuses the in-app tick and does not send calendar or Cler
     "utf8",
   );
   assert.match(rules, /studentFacingMeetingUrl/);
+  assert.match(rules, /formatBookingWhen/);
+  assert.match(rules, /SOPHIA_SLEIMAN_REMINDER_TIMEZONE/);
   assert.match(run, /planSessionReminders/);
+  assert.match(migration, /interval '24 hours'/);
+  assert.match(migration, /user_3JCRGfBj8dgWSjO1r2zeKovFVE7/);
+  assert.match(migration, /sophiasleiman13@gmail.com/);
+  assert.match(migration, /ON CONFLICT \("session_id", "recipient_email", "kind"\) DO NOTHING/);
   assert.doesNotMatch(run, /viewerLinksTable|viewer_links/);
   assert.doesNotMatch(rules, /"viewer"/);
   assert.doesNotMatch(migration, /'viewer'/);

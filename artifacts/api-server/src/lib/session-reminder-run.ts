@@ -85,6 +85,7 @@ export async function runSessionReminders(input?: {
       clientUserId: sessionsTable.clientUserId,
       tutorUserId: sessionsTable.tutorUserId,
       studentEmail: usersTable.email,
+      studentClerkUserId: usersTable.clerkUserId,
       studentName: usersTable.displayName,
       studentRole: usersTable.role,
       studentTimezone: usersTable.timezone,
@@ -105,7 +106,12 @@ export async function runSessionReminders(input?: {
     );
 
   const eligible = rows.filter(
-    (row) => row.clientUserId && isSessionReminderStudent(row.studentEmail, allowlist),
+    (row) =>
+      row.clientUserId &&
+      isSessionReminderStudent(row.studentEmail, allowlist, {
+        userId: row.clientUserId,
+        clerkUserId: row.studentClerkUserId,
+      }),
   );
   if (eligible.length === 0) return result;
 
@@ -148,6 +154,7 @@ export async function runSessionReminders(input?: {
       confirmed: session.bookingStatus === "confirmed",
       student: {
         userId: session.clientUserId,
+        clerkUserId: session.studentClerkUserId,
         email: session.studentEmail,
         displayName: session.studentName,
         timezone: session.studentTimezone,

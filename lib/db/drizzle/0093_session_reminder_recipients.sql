@@ -63,3 +63,54 @@ DROP INDEX IF EXISTS "student_session_reminder_sends_session_kind_idx";
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "student_session_reminder_sends_recipient_user_idx"
   ON "student_session_reminder_sends" USING btree ("recipient_user_id");
+--> statement-breakpoint
+-- One-shot at migrate time. Sessions already inside the next 24 hours must not
+-- get a day-before email on the first tick. Sophia's student reminder is not
+-- claimed here; she keeps the wide window from #268. Later restarts do not
+-- repeat this insert.
+INSERT INTO "student_session_reminder_sends" ("session_id", "recipient_user_id", "recipient_email", "audience", "kind")
+SELECT sessions."id", users."id", lower(btrim(users."email")), 'student', '1_day'
+FROM "sessions" AS sessions
+JOIN "users" AS users ON users."id" = sessions."client_user_id"
+WHERE sessions."date_time" > now()
+  AND sessions."date_time" <= now() + interval '24 hours'
+  AND sessions."cancelled_at" IS NULL
+  AND sessions."booking_status" = 'confirmed'
+  AND sessions."status" <> 'archived'
+  AND users."role" = 'student'
+  AND (
+    lower(btrim(users."email")) IN (
+      'taito0525@gmail.com',
+      'makaremmichelle7@gmail.com',
+      'sophiasleiman13@gmail.com'
+    )
+    OR users."clerk_user_id" = 'user_3JCRGfBj8dgWSjO1r2zeKovFVE7'
+    OR users."id" = 'bf530aa6-faaa-43df-b3cf-140026f3313e'
+  )
+  AND users."id" <> 'bf530aa6-faaa-43df-b3cf-140026f3313e'
+  AND lower(btrim(users."email")) <> 'sophiasleiman13@gmail.com'
+ON CONFLICT ("session_id", "recipient_email", "kind") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "student_session_reminder_sends" ("session_id", "recipient_user_id", "recipient_email", "audience", "kind")
+SELECT sessions."id", tutors."id", lower(btrim(tutors."email")), 'tutor', '1_day'
+FROM "sessions" AS sessions
+JOIN "users" AS students ON students."id" = sessions."client_user_id"
+JOIN "users" AS tutors ON tutors."id" = sessions."tutor_user_id"
+WHERE sessions."date_time" > now()
+  AND sessions."date_time" <= now() + interval '24 hours'
+  AND sessions."cancelled_at" IS NULL
+  AND sessions."booking_status" = 'confirmed'
+  AND sessions."status" <> 'archived'
+  AND students."role" = 'student'
+  AND tutors."role" = 'tutor'
+  AND lower(btrim(tutors."email")) <> 'admin@acceptedadmissions.org'
+  AND (
+    lower(btrim(students."email")) IN (
+      'taito0525@gmail.com',
+      'makaremmichelle7@gmail.com',
+      'sophiasleiman13@gmail.com'
+    )
+    OR students."clerk_user_id" = 'user_3JCRGfBj8dgWSjO1r2zeKovFVE7'
+    OR students."id" = 'bf530aa6-faaa-43df-b3cf-140026f3313e'
+  )
+ON CONFLICT ("session_id", "recipient_email", "kind") DO NOTHING;
