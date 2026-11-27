@@ -6,7 +6,7 @@ import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureMichelleFutureHardSatSets, ensureTaitoOct30HardPrework } from "./lib/sat-hard-sets";
 import { startMichelleFutureHardSatSetRefresh } from "./lib/michelle-hard-booking";
-import { startSophiaSessionReminderTick } from "./lib/session-reminder-run";
+import { startSessionReminderTick } from "./lib/session-reminder-run";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
 import { resetSamaXavierSatCapabilityAttempts } from "./lib/reset-sama-xavier-capability";
 import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
@@ -52,7 +52,7 @@ void ensureRyoTaitoParentMirror()
       }
 
       logger.info({ port }, "Server listening");
-      startSophiaSessionReminderTick();
+      startSessionReminderTick();
       void ensureOfficialExtractsImported()
         .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
         .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
