@@ -655,7 +655,10 @@ export const studentBookingConfirmationSendsTable = pgTable(
   ],
 );
 
-/** One 1-day and one 1-hour session reminder per session. Sophia Sleiman only. Claimed before send. */
+/**
+ * One 1-day and one 1-hour session reminder per session and recipient
+ * (the student and the tutor). Claimed before send.
+ */
 export const studentSessionReminderSendsTable = pgTable(
   "student_session_reminder_sends",
   {
@@ -663,11 +666,21 @@ export const studentSessionReminderSendsTable = pgTable(
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessionsTable.id, { onDelete: "cascade" }),
+    recipientUserId: uuid("recipient_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    recipientEmail: text("recipient_email").notNull(),
+    audience: text("audience").notNull(),
     kind: text("kind").notNull(),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("student_session_reminder_sends_session_kind_idx").on(table.sessionId, table.kind),
+    uniqueIndex("student_session_reminder_sends_session_recipient_kind_idx").on(
+      table.sessionId,
+      table.recipientEmail,
+      table.kind,
+    ),
+    index("student_session_reminder_sends_recipient_user_idx").on(table.recipientUserId),
   ],
 );
 

@@ -780,7 +780,7 @@ import {
 } from "../lib/submission-alerts";
 import { sendTransactionalEmail, verifiedFromAddress } from "../lib/transactional-email";
 import { runPreworkReminders } from "../lib/prework-reminder-run";
-import { runSophiaSessionReminders } from "../lib/session-reminder-run";
+import { runSessionReminders } from "../lib/session-reminder-run";
 import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
@@ -7783,7 +7783,7 @@ router.post("/internal/session-reminders/run", async (req, res): Promise<void> =
     return;
   }
   try {
-    const result = await runSophiaSessionReminders({ now: new Date() });
+    const result = await runSessionReminders({ now: new Date() });
     res.json({
       ok: true,
       considered: result.considered,
