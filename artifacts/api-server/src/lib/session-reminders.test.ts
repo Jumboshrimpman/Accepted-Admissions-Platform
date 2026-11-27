@@ -50,7 +50,6 @@ function candidate(overrides: Partial<SessionReminderCandidate> = {}): SessionRe
       timezone: "America/Los_Angeles",
       timezoneSource: "browser",
     }),
-    viewers: [],
     meeting: {
       meetUrl: null,
       providerEventUrl: null,
@@ -420,13 +419,13 @@ test("the join link is the student-facing meeting URL, and a missing one uses th
   assert.doesNotMatch(direct.html, /calendar\/event/);
 });
 
-test("parent viewers get the student reminder and other students' tutors do not", () => {
+test("a linked parent viewer gets nothing, and other students' tutors do not", () => {
   const withParent = planSessionReminders({
     now: NOW,
     allowlist: ALLOWLIST,
     sessions: [
       candidate({
-        viewers: [
+        linkedViewers: [
           person({
             userId: "ryo",
             email: "ryo@jaac.co.jp",
@@ -438,14 +437,19 @@ test("parent viewers get the student reminder and other students' tutors do not"
       }),
     ],
   });
-  const audiences = withParent.map((item) => item.audience);
-  assert.deepEqual(audiences, ["student", "tutor", "viewer"]);
-  const parent = withParent.find((item) => item.to === "ryo@jaac.co.jp");
-  assert.equal(parent?.audience, "viewer");
-  assert.match(parent?.subject ?? "", /Taito's session with Eunice Chon is tomorrow/);
-  assert.match(parent?.text ?? "", /Hi Ryo/);
-  assert.match(parent?.text ?? "", /9:00 PM JST/);
-  assert.match(parent?.text ?? "", /Student: Taito Goto/);
+  assert.deepEqual(
+    withParent.map((item) => item.to),
+    [TAITO_STUDENT_EMAIL, "eunice_chon@berkeley.edu"],
+  );
+  assert.deepEqual(
+    withParent.map((item) => item.audience),
+    ["student", "tutor"],
+  );
+  assert.equal(withParent.some((item) => item.to === "ryo@jaac.co.jp"), false);
+  for (const email of withParent) {
+    assert.doesNotMatch(email.text, /Hi Ryo/);
+    assert.doesNotMatch(email.text, /ryo@jaac\.co\.jp/);
+  }
 
   const outsider = planSessionReminders({
     now: NOW,
@@ -462,7 +466,7 @@ test("parent viewers get the student reminder and other students' tutors do not"
           email: "eunice_chon@berkeley.edu",
           displayName: "Eunice Chon",
         }),
-        viewers: [
+        linkedViewers: [
           person({ userId: "parent", email: "parent@example.com", displayName: "Parent" }),
         ],
       }),
@@ -624,7 +628,9 @@ test("the reminder job reuses the in-app tick and does not send calendar or Cler
   );
   assert.match(rules, /studentFacingMeetingUrl/);
   assert.match(run, /planSessionReminders/);
-  assert.match(run, /viewerLinksTable/);
+  assert.doesNotMatch(run, /viewerLinksTable|viewer_links/);
+  assert.doesNotMatch(rules, /"viewer"/);
+  assert.doesNotMatch(migration, /'viewer'/);
   assert.doesNotMatch(`${rules}\n${run}`, /clerkClient|createGoogleEvent|sendInvite|calendar\.events/i);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "recipient_email"/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "audience"/);

@@ -5,7 +5,6 @@ import {
   sessionsTable,
   studentSessionReminderSendsTable,
   usersTable,
-  viewerLinksTable,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types runner resolves the source extension directly.
 import { isCancelledBooking } from "./session-listing.ts";
@@ -114,31 +113,11 @@ export async function runSessionReminders(input?: {
     ...new Set(eligible.map((row) => row.tutorUserId).filter((id): id is string => Boolean(id))),
   ];
   const courseIds = [...new Set(eligible.map((row) => row.courseId))];
-  const studentIds = eligible.map((row) => row.clientUserId).filter((id): id is string => Boolean(id));
   const sessionIds = eligible.map((row) => row.sessionId);
 
-  const [tutors, courses, viewers, priorSends] = await Promise.all([
+  const [tutors, courses, priorSends] = await Promise.all([
     loadReminderTutors(tutorIds),
     loadReminderCourses(courseIds),
-    db
-      .select({
-        studentUserId: viewerLinksTable.studentUserId,
-        id: usersTable.id,
-        email: usersTable.email,
-        displayName: usersTable.displayName,
-        role: usersTable.role,
-        timezone: usersTable.timezone,
-        timezoneSource: usersTable.timezoneSource,
-      })
-      .from(viewerLinksTable)
-      .innerJoin(usersTable, eq(usersTable.id, viewerLinksTable.viewerUserId))
-      .where(
-        and(
-          inArray(viewerLinksTable.studentUserId, studentIds),
-          eq(viewerLinksTable.active, true),
-          eq(usersTable.role, "viewer"),
-        ),
-      ),
     db
       .select({
         sessionId: studentSessionReminderSendsTable.sessionId,
@@ -151,13 +130,6 @@ export async function runSessionReminders(input?: {
 
   const tutorById = new Map(tutors.map((tutor) => [tutor.id, tutor]));
   const courseById = new Map(courses.map((course) => [course.id, course]));
-  const viewersByStudent = new Map<string, SessionReminderPerson[]>();
-  for (const viewer of viewers) {
-    if (viewer.role !== "viewer") continue;
-    const list = viewersByStudent.get(viewer.studentUserId) ?? [];
-    list.push(personFrom(viewer));
-    viewersByStudent.set(viewer.studentUserId, list);
-  }
 
   const sessions: SessionReminderCandidate[] = eligible.map((session) => {
     const tutor = session.tutorUserId ? tutorById.get(session.tutorUserId) : undefined;
@@ -182,7 +154,6 @@ export async function runSessionReminders(input?: {
         timezoneSource: session.studentTimezoneSource,
       },
       tutor: tutor ? personFrom(tutor) : null,
-      viewers: session.clientUserId ? viewersByStudent.get(session.clientUserId) ?? [] : [],
       meeting: {
         meetUrl: session.meetUrl,
         providerEventUrl: session.providerEventUrl,

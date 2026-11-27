@@ -3,8 +3,8 @@
  * Pure: no database and no network. Emails only — no calendar invites and no Clerk.
  *
  * Students come from SESSION_REMINDER_STUDENT_EMAILS when that env var is set,
- * otherwise the built-in allowlist. Tutors on those sessions, and active
- * parent viewers linked to those students, are included automatically.
+ * otherwise the built-in allowlist. The tutor on each of those sessions is
+ * included. Parent and viewer accounts are not recipients.
  */
 
 // @ts-expect-error Node's strip-types runner resolves the source extension directly.
@@ -35,7 +35,7 @@ export const SESSION_REMINDER_SIGN_OFF_NAME = "Sama";
 export const SESSION_REMINDER_SIGN_OFF_SITE = "acceptedadmissions.org";
 
 export type SessionReminderKind = "1_day" | "1_hour";
-export type SessionReminderAudience = "student" | "tutor" | "viewer";
+export type SessionReminderAudience = "student" | "tutor";
 
 export type SessionReminderPerson = {
   userId: string | null;
@@ -56,7 +56,11 @@ export type SessionReminderCandidate = {
   confirmed: boolean;
   student: SessionReminderPerson;
   tutor: SessionReminderPerson | null;
-  viewers: SessionReminderPerson[];
+  /**
+   * Active parent/viewer links for this student, such as Ryo for Taito.
+   * Ignored. Those accounts are not reminder recipients.
+   */
+  linkedViewers?: SessionReminderPerson[];
   meeting: SessionMeetingInput;
 };
 
@@ -207,25 +211,16 @@ export function sessionReminderSubject(input: {
 }): string {
   const tutor = cleanText(input.tutorName) || "your tutor";
   const student = cleanText(input.studentName) || "your student";
-  const studentFirst = firstNameFromDisplayName(input.studentName);
   const when = input.kind === "1_hour" ? "starts in 1 hour" : "is tomorrow";
   if (input.audience === "tutor") return `Reminder: your session with ${student} ${when}`;
-  if (input.audience === "viewer") {
-    return `Reminder: ${studentFirst}'s session with ${tutor} ${when}`;
-  }
   return `Reminder: your session with ${tutor} ${when}`;
 }
 
-function reminderLead(input: SessionReminderEmailInput, student: string, studentFirst: string): string {
+function reminderLead(input: SessionReminderEmailInput, student: string): string {
   if (input.audience === "tutor") {
     return input.kind === "1_hour"
       ? `This is a reminder that your session with ${student} starts in 1 hour.`
       : `This is a reminder that your session with ${student} is tomorrow.`;
-  }
-  if (input.audience === "viewer") {
-    return input.kind === "1_hour"
-      ? `This is a reminder that ${studentFirst}'s session starts in 1 hour.`
-      : `This is a reminder that ${studentFirst}'s session is tomorrow.`;
   }
   return input.kind === "1_hour"
     ? "This is a reminder that your session starts in 1 hour."
@@ -240,7 +235,6 @@ export function sessionReminderEmail(input: SessionReminderEmailInput): {
 } {
   const recipient = firstNameFromDisplayName(input.recipientName);
   const student = cleanText(input.studentName) || "your student";
-  const studentFirst = firstNameFromDisplayName(input.studentName);
   const tutor = cleanText(input.tutorName) || "your tutor";
   const title = cleanText(input.sessionTitle) || "your session";
   const timezone = sessionReminderTimezone({
@@ -255,7 +249,7 @@ export function sessionReminderEmail(input: SessionReminderEmailInput): {
   const meet = resolvedStoredMeetUrl(input.meetUrl);
   const portal = STUDENT_BOOKING_CONFIRMATION_PORTAL_URL;
   const joinUrl = meet ?? portal;
-  const lead = reminderLead(input, student, studentFirst);
+  const lead = reminderLead(input, student);
   const lines = [
     `Hi ${recipient},`,
     "",
@@ -367,7 +361,8 @@ function reminderRecipients(session: SessionReminderCandidate): Array<{
   };
   push("student", session.student);
   push("tutor", session.tutor);
-  for (const viewer of session.viewers) push("viewer", viewer);
+  // linkedViewers (parent mirrors such as Ryo) are not recipients.
+  void session.linkedViewers;
   return recipients;
 }
 

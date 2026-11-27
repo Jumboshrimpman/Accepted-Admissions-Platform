@@ -1,5 +1,5 @@
 -- Session reminders are one row per session, recipient, and kind
--- (student, tutor, or parent viewer). Existing Sophia-only rows stay claimed
+-- (student or tutor only). Existing Sophia-only rows stay claimed
 -- as her student reminder. Additive: no drops of tables or columns.
 ALTER TABLE "student_session_reminder_sends" ADD COLUMN IF NOT EXISTS "recipient_user_id" uuid;
 --> statement-breakpoint
@@ -45,7 +45,7 @@ END $$;
 DO $$ BEGIN
   ALTER TABLE "student_session_reminder_sends"
     ADD CONSTRAINT "student_session_reminder_sends_audience_check"
-    CHECK ("audience" IN ('student', 'tutor', 'viewer'));
+    CHECK ("audience" IN ('student', 'tutor'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint

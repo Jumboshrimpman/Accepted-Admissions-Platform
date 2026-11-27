@@ -657,7 +657,7 @@ export const studentBookingConfirmationSendsTable = pgTable(
 
 /**
  * One 1-day and one 1-hour session reminder per session and recipient
- * (student, tutor, or parent viewer). Claimed before send.
+ * (the student and the tutor). Claimed before send.
  */
 export const studentSessionReminderSendsTable = pgTable(
   "student_session_reminder_sends",
