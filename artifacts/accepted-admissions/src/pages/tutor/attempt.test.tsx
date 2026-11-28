@@ -3,12 +3,24 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const search = vi.hoisted(() => ({ value: "" }));
+const attemptState = vi.hoisted(() => ({ status: "submitted" as string }));
+const resultRequest = vi.hoisted(() => ({ enabled: false }));
+const wrongAnswersRequest = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
   getListReviewSubmissionsQueryKey: () => ["/api/review"],
   customFetch: vi.fn(),
-  useGetAttemptResult: () => ({
+  useGetAttempt: () => ({
+    data: { id: "attempt-1", status: attemptState.status },
+    isLoading: false,
+    error: null,
+  }),
+  useGetAttemptResult: (_id: string, _query: unknown, options?: { query?: { enabled?: boolean } }) => {
+    resultRequest.enabled = options?.query?.enabled === true;
+    if (!resultRequest.enabled) return { data: undefined, isLoading: false, error: null };
+    return {
     data: {
       attemptId: "attempt-1",
       assignmentId: "quiz-1",
@@ -66,7 +78,8 @@ vi.mock("@workspace/api-client-react", () => ({
     },
     isLoading: false,
     error: null,
-  }),
+    };
+  },
   useUpdateAttemptReview: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -79,7 +92,10 @@ vi.mock("wouter", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-  useQuery: () => ({
+  useQuery: (options?: { enabled?: boolean }) => {
+    wrongAnswersRequest.enabled = options?.enabled === true;
+    if (!wrongAnswersRequest.enabled) return { data: undefined, isLoading: false, error: null };
+    return {
     data: {
       attemptId: "attempt-1",
       assignmentId: "quiz-1",
@@ -89,7 +105,8 @@ vi.mock("@tanstack/react-query", () => ({
       wrongCount: 1,
       items: [{ questionId: "q2", correct: false, skill: "Transitions", prompt: "Which transition best connects the paragraphs?" }],
     },
-  }),
+    };
+  },
 }));
 
 import TutorAttempt from "./attempt";
@@ -97,6 +114,9 @@ import TutorAttempt from "./attempt";
 afterEach(() => {
   cleanup();
   search.value = "";
+  attemptState.status = "submitted";
+  resultRequest.enabled = false;
+  wrongAnswersRequest.enabled = false;
 });
 
 describe("tutor attempt wrong-answers filter", () => {
@@ -108,6 +128,16 @@ describe("tutor attempt wrong-answers filter", () => {
     expect(screen.queryByTestId("attempt-item-q1")).toBeNull();
     expect(screen.getByTestId("attempt-item-q2").textContent).toMatch(/Transitions/);
     expect(screen.getByTestId("wrong-answers-only-summary").textContent).toMatch(/1 miss/);
+  });
+
+  test("does not request results or wrong answers for a paused attempt", () => {
+    attemptState.status = "paused";
+    render(<TutorAttempt />);
+    expect(resultRequest.enabled).toBe(false);
+    expect(wrongAnswersRequest.enabled).toBe(false);
+    expect(screen.getByTestId("attempt-not-submitted").textContent).toMatch(/still in progress/i);
+    expect(screen.queryByText(/This submission is not available/i)).toBeNull();
+    expect(screen.queryByTestId("attempt-item-q1")).toBeNull();
   });
 
   test("opens already filtered when the wrongAnswersOnly query is present", () => {

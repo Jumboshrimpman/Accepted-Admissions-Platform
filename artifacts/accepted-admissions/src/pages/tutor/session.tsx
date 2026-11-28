@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   getGetSessionQueryKey,
   getGetAdaptiveCurriculumQueryKey,
   getGetAssignmentQueryKey,
+  customFetch,
   getListSessionArtifactsQueryKey,
   useGetAdaptiveCurriculum,
   useGetAssignment,
@@ -27,9 +28,9 @@ import { isPostSessionFollowUpQuiz } from "@/lib/student-quiz-list";
 import { inSessionPracticeHref } from "@/lib/student-attempt-ui";
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
-  BookOpenCheck,
   CheckCircle2,
   ChevronRight,
+  Clock3,
   FileText,
   GripVertical,
   Plus,
@@ -44,11 +45,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   displaySessionTitle,
-  formatSessionDateTime,
   formatSessionDate,
   formatSessionTimeRange,
   sessionStudentLabel,
@@ -58,6 +57,7 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
 import { AdminSessionQuizLinks } from "@/components/admin-session-quiz-links";
+import { isReserveQuizTitle } from "@/lib/admin-session-quiz-links";
 import {
   SessionSlides,
   SessionTutorMaterials,
@@ -65,7 +65,13 @@ import {
 } from "@/components/session-tutor-materials";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
-import { tutorPreworkStatus } from "@/lib/tutor-prework-status";
+import { manageSessionLiveQuery, manageSessionRefreshQuery } from "@/lib/manage-session-live-query";
+import {
+  applyPolledPreworkStatus,
+  mergeListedPreworkAttempts,
+  tutorPreworkStatus,
+  type PolledPreworkStatus,
+} from "@/lib/tutor-prework-status";
 import { MANUAL_AUTO_PREPARE_ENABLED } from "@/lib/manual-auto-prepare";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
@@ -83,6 +89,21 @@ export default function TutorSession() {
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetSessionQueryKey(sessionId),
+      ...manageSessionRefreshQuery,
+    },
+  });
+  useQuery({
+    queryKey: ["/api/sessions", sessionId, "prework-status"],
+    enabled: Boolean(sessionId),
+    ...manageSessionLiveQuery,
+    queryFn: async () => {
+      const status = await customFetch<PolledPreworkStatus>(
+        `/api/sessions/${sessionId}/prework-status`,
+      );
+      queryClient.setQueryData(getGetSessionQueryKey(sessionId), (current) =>
+        current ? applyPolledPreworkStatus(current, status) : current,
+      );
+      return status;
     },
   });
   const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
@@ -93,7 +114,9 @@ export default function TutorSession() {
   });
   const listedDuringAssignmentId =
     session?.assignments.find(
-      (assignment) => assignment.deliveryPhase === "during_session",
+      (assignment) =>
+        assignment.deliveryPhase === "during_session" &&
+        !isReserveQuizTitle(assignment.title),
     )?.id ?? "";
   const visibleHomework = sessionStatusHomework(session?.homework ?? []);
   const liveBeforeAssignments = (session?.assignments ?? []).filter(
@@ -116,6 +139,7 @@ export default function TutorSession() {
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+      ...manageSessionLiveQuery,
     },
   });
   const duringAssignmentId =
@@ -171,9 +195,30 @@ export default function TutorSession() {
 
   if (error || !session) return <div>Session not found</div>;
 
-  const submittedPrework = (session.homework ?? []).some(
-    (item) => item.attemptStatus === "submitted" || item.attemptStatus === "expired",
+  const preworkAssignments = liveBeforeAssignments.filter(
+    (assignment) => !isReserveQuizTitle(assignment.title),
   );
+  const prework = tutorPreworkStatus(
+    mergeListedPreworkAttempts(preworkAssignments, session.homework ?? []),
+    preworkAssignments.map((assignment) => assignment.id),
+  );
+  const reserveAssignment =
+    session.assignments.find(
+      (assignment) =>
+        assignment.status !== "archived" && isReserveQuizTitle(assignment.title),
+    ) ?? null;
+  const easternClock = {
+    dateTime: session.dateTime,
+    timezone: "America/New_York",
+    durationMinutes: session.durationMinutes,
+  };
+  const sessionZone = session.timezone?.trim() || "America/New_York";
+  const isAdmin = currentUser?.role === "administrator";
+  const submittedPrework =
+    prework.kind === "submitted" ||
+    (session.homework ?? []).some(
+      (item) => item.attemptStatus === "submitted" || item.attemptStatus === "expired",
+    );
   const submittedMistakeCount = (session.homework ?? [])
     .filter((item) => item.attemptStatus === "submitted" || item.attemptStatus === "expired")
     .reduce((sum, item) => sum + (item.mistakeCount ?? 0), 0);
@@ -255,159 +300,132 @@ export default function TutorSession() {
     );
   };
 
+  const preworkTone =
+    prework.kind === "submitted"
+      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+      : prework.kind === "in_progress"
+        ? "border-sky-300 bg-sky-50 text-sky-950"
+        : prework.kind === "none"
+          ? "border-border bg-muted/40 text-muted-foreground"
+          : "border-amber-300 bg-amber-50 text-amber-950";
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-20 animate-in fade-in">
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <Link href="/tutor" className="text-sm text-muted-foreground hover:text-primary">
+    <div className="mx-auto min-w-0 max-w-5xl space-y-6 pb-16 sm:space-y-8">
+      <header className="space-y-4" data-testid="manage-session-header">
+        <nav className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+          <Link href="/tutor" className="hover:text-primary">
             Dashboard
           </Link>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <Link
-            href={`/tutor/courses/${session.courseId}`}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
+          <ChevronRight className="h-4 w-4 shrink-0" />
+          <Link href={`/tutor/courses/${session.courseId}`} className="hover:text-primary">
             Course
           </Link>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Manage session</span>
-        </div>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <Badge className="mb-3">{sessionSubjectLabel(session.subject)}</Badge>
-            <h1 className="mb-2 text-3xl font-bold tracking-tight">{displaySessionTitle(session.title, session.subject)}</h1>
-            <p className="text-muted-foreground">
-              {formatSessionDateTime(session)}
-            </p>
-          </div>
-          <Badge variant="outline">{session.status}</Badge>
-        </div>
-      </div>
-
-      {(() => {
-        const prework = tutorPreworkStatus(
-          session.homework ?? [],
-          liveBeforeAssignments.map((assignment) => assignment.id),
-        );
-        const tone =
-          prework.kind === "submitted"
-            ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-            : prework.kind === "none"
-              ? "border-muted bg-muted/40 text-muted-foreground"
-              : "border-amber-300 bg-amber-50 text-amber-900";
-        return (
-          <div
-            className={`rounded-xl border-2 px-5 py-4 ${tone}`}
-            data-testid="tutor-prework-status"
-            data-status={prework.kind}
-            role="status"
-          >
-            <p className="text-lg font-semibold">{prework.label}</p>
-            {prework.detail ? <p className="mt-1 text-sm">{prework.detail}</p> : null}
-          </div>
-        );
-      })()}
-
-      <Card className="border-primary/20 bg-primary/[0.03] shadow-sm">
-        <CardHeader className="border-b bg-card/80 px-6 py-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <BookOpenCheck className="h-5 w-5 text-primary" />
-                Session workspace
-              </CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Review the student&apos;s readiness, results, focus areas, and session plan together.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {MANUAL_AUTO_PREPARE_ENABLED ? (
-              <Button
-                variant="secondary"
-                disabled={refreshAdaptive.isPending}
-                onClick={() =>
-                  refreshAdaptive.mutate(
-                    { sessionId },
-                    {
-                      onSuccess: () => {
-                        queryClient.invalidateQueries({
-                          queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
-                        });
-                        queryClient.invalidateQueries({
-                          queryKey: getGetSessionQueryKey(sessionId),
-                        });
-                      },
-                    },
-                  )
-                }
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                {refreshAdaptive.isPending ? "Preparing…" : "Auto-prepare session"}
-              </Button>
-              ) : null}
-              <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} size="default" />
-            </div>
-          </div>
-        </CardHeader>
-        {adaptive && (adaptive.sessionPrep?.mode === "not_prepared" || !adaptive.sessionPrep) ? (
-          <div className="border-b bg-muted/40 px-6 py-4" data-testid="session-not-prepared">
-            <p className="text-sm font-medium">This session has not been prepared yet.</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {MANUAL_AUTO_PREPARE_ENABLED
-                ? "Use Auto-prepare to build the plan. Opening this page does not assign questions."
-                : "Auto-prepare is turned off for now. Opening this page does not assign questions."}
-            </p>
-          </div>
-        ) : adaptive?.sessionPrep ? (
-          <div className="border-b bg-accent/5 px-6 py-4" data-testid="prepared-live-plan">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-                  Prepared live plan
-                </p>
-                <p className="mt-1 text-sm font-medium">{shownPrep?.summary}</p>
-                {adaptive.sessionPrep.needsQuestions ? (
-                  <p className="mt-2 text-sm font-medium text-destructive" data-testid="session-needs-questions">
-                    This session is not a complete hard set.
-                  </p>
-                ) : null}
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Mode: {shownPrep?.mode.replaceAll("_", " ")}
-                  {adaptive.sessionPrep.attachedQuestionCount > 0
-                    ? ` · ${adaptive.sessionPrep.attachedQuestionCount} in-session questions ready`
-                    : ""}
-                </p>
+          <ChevronRight className="h-4 w-4 shrink-0" />
+          <span className="font-medium text-foreground">Manage session</span>
+        </nav>
+        <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge>{sessionSubjectLabel(session.subject)}</Badge>
+                <Badge variant="outline" className="capitalize">{session.status}</Badge>
               </div>
-              <Badge variant="outline">{shownPrep?.mode.replaceAll("_", " ")}</Badge>
+              <h1 className="mt-3 break-words text-2xl font-semibold tracking-tight sm:text-3xl">
+                {displaySessionTitle(session.title, session.subject)}
+              </h1>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap lg:justify-end">
+              {MANUAL_AUTO_PREPARE_ENABLED ? (
+                <Button
+                  variant="secondary"
+                  disabled={refreshAdaptive.isPending}
+                  onClick={() =>
+                    refreshAdaptive.mutate(
+                      { sessionId },
+                      {
+                        onSuccess: () => {
+                          queryClient.invalidateQueries({
+                            queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+                          });
+                          queryClient.invalidateQueries({
+                            queryKey: getGetSessionQueryKey(sessionId),
+                          });
+                        },
+                      },
+                    )
+                  }
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {refreshAdaptive.isPending ? "Preparing…" : "Auto-prepare session"}
+                </Button>
+              ) : null}
+              <SessionJoinActions
+                meetingUrl={session.meetingUrl}
+                calendarEventUrl={session.calendarEventUrl}
+                meetingLabel="Open Meet"
+                size="default"
+                className="flex flex-col gap-2 sm:flex-row"
+              />
             </div>
           </div>
-        ) : null}
-        <CardContent className="grid gap-4 p-6 md:grid-cols-[0.8fr_1.2fr]">
-          <div className="space-y-4">
-            <div className="rounded-xl border bg-background p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student</p>
-              <p className="mt-2 flex items-center gap-2 font-semibold">
-                <UserRound className="h-4 w-4 text-primary" />
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="min-w-0 rounded-xl border bg-background px-4 py-3">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student</dt>
+              <dd className="mt-1 flex items-center gap-2 break-words font-semibold">
+                <UserRound className="h-4 w-4 shrink-0 text-primary" />
                 {sessionStudentLabel(session)}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {formatSessionDate(session)} · {formatSessionTimeRange(session)}
-              </p>
+              </dd>
             </div>
-            <div className="rounded-xl border bg-background p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Meeting</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {session.meetingUrl ? "Meeting link is ready." : "No meeting link has been added yet."}
-              </p>
+            <div className="min-w-0 rounded-xl border bg-background px-4 py-3">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tutor</dt>
+              <dd className="mt-1 break-words font-semibold">{session.tutor?.name?.trim() || "Tutor to be confirmed"}</dd>
             </div>
-            <div className="rounded-xl border bg-background p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes</p>
-              <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
-                {shownTutorNotes.trim() ? shownTutorNotes : "No tutor notes saved yet."}
-              </p>
+            <div className="min-w-0 rounded-xl border bg-background px-4 py-3 sm:col-span-2">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Date and time (ET)</dt>
+              <dd className="mt-1 flex items-start gap-2 text-sm font-medium sm:text-base">
+                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="break-words">
+                  {formatSessionDate(easternClock)} · {formatSessionTimeRange(easternClock)}
+                  {sessionZone !== "America/New_York" ? (
+                    <span className="mt-1 block font-normal text-muted-foreground">
+                      Session timezone: {formatSessionTimeRange(session)}
+                    </span>
+                  ) : null}
+                </span>
+              </dd>
             </div>
-          </div>
-          <div className="space-y-4">
+            {!session.meetingUrl ? (
+              <div className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground sm:col-span-2">
+                No Meet link yet.
+              </div>
+            ) : null}
+          </dl>
+        </div>
+      </header>
+
+      <SessionSlides blocks={session.blocks} />
+
+      <section className="space-y-4" data-testid="manage-session-prework">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">Pre-work</h2>
+        </div>
+        <div
+          className={`rounded-xl border px-4 py-4 sm:px-5 ${preworkTone}`}
+          data-testid="tutor-prework-status"
+          data-status={prework.kind}
+          role="status"
+        >
+          <p className="text-lg font-semibold">{prework.label}</p>
+          {prework.detail ? <p className="mt-1 text-sm">{prework.detail}</p> : null}
+          {prework.attemptId ? (
+            <div className="mt-3" data-testid="tutor-prework-results">
+              <Button asChild size="sm" variant="secondary">
+                <Link href={`/tutor/attempts/${prework.attemptId}`}>View results</Link>
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <div className="space-y-4">
             <div className="rounded-xl border bg-background p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-semibold">Homework status & results</p>
@@ -493,7 +511,9 @@ export default function TutorSession() {
                         </div>
                       )}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {homework.attemptId && (
+                        {homework.attemptId &&
+                        (homework.attemptStatus === "submitted" ||
+                          homework.attemptStatus === "expired") && (
                           <>
                             <Link href={`/tutor/attempts/${homework.attemptId}`}>
                               <Button size="sm" variant="outline">
@@ -577,27 +597,10 @@ export default function TutorSession() {
                 ) : null}
               </div>
             </div>
-            <div className="rounded-xl border bg-background p-4">
-              <p className="font-semibold">Curriculum</p>
-              <p className="mt-1 text-sm text-muted-foreground">{session.blocks.filter((block) => block.status === "published").length} published blocks are available for this session.</p>
-            </div>
           </div>
-        </CardContent>
-      </Card>
+      </section>
 
-      <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground" data-testid="session-authoring-note">
-        Edit assigned quiz questions on this session’s copy only. Shared bank items and other sessions stay unchanged.
-      </p>
-
-      <Tabs defaultValue="curriculum" className="space-y-6">
-        <TabsList className="grid h-auto w-full grid-cols-2">
-          <TabsTrigger value="curriculum">Live plan</TabsTrigger>
-          <TabsTrigger value="records">Records</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="curriculum" className="space-y-4">
-          <SessionSlides blocks={session.blocks} />
-          <SessionTutorMaterials
+      <SessionTutorMaterials
             sessionId={sessionId}
             timezone={session.timezone}
             assignments={session.assignments}
@@ -612,43 +615,66 @@ export default function TutorSession() {
               sessionTutor: session.tutor,
             })}
           />
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader className="pb-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    Adaptive session plan
-                  </CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Start with Before Session homework, then publish the approved
-                    During Session sequence. Recommendations never expose source
-                    extracts.
+          <div className="space-y-4">
+            <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground" data-testid="session-authoring-note">
+              Edits apply to this session’s copy only. Shared bank items and other sessions stay unchanged.
+            </p>
+            {adaptive && (adaptive.sessionPrep?.mode === "not_prepared" || !adaptive.sessionPrep) ? (
+              <div className="rounded-xl border bg-muted/40 px-4 py-4" data-testid="session-not-prepared">
+                <p className="text-sm font-medium">This session has not been prepared yet.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {MANUAL_AUTO_PREPARE_ENABLED
+                    ? "Use Auto-prepare to build the plan. Opening this page does not assign questions."
+                    : "Auto-prepare is turned off for now. Opening this page does not assign questions."}
+                </p>
+              </div>
+            ) : adaptive?.sessionPrep ? (
+              <div className="rounded-xl border bg-accent/5 px-4 py-4" data-testid="prepared-live-plan">
+                {prework.kind !== "none" ? (
+                  <p className="text-sm font-semibold" data-testid="prepared-plan-prework-status">
+                    {prework.kind === "submitted"
+                      ? `Submitted${prework.detail ? ` · ${prework.detail}` : ""}`
+                      : prework.label}
                   </p>
-                </div>
-                {MANUAL_AUTO_PREPARE_ENABLED ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={refreshAdaptive.isPending}
-                  onClick={() =>
-                    refreshAdaptive.mutate(
-                      { sessionId },
-                      { onSuccess: refreshAdaptiveData },
-                    )
-                  }
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  {refreshAdaptive.isPending ? "Refreshing…" : "Refresh from latest result"}
-                </Button>
+                ) : null}
+                {adaptive.sessionPrep.needsQuestions ? (
+                  <p
+                    className="mt-2 text-sm text-muted-foreground"
+                    data-testid="session-needs-questions"
+                  >
+                    {shownPrep?.summary}
+                  </p>
+                ) : (
+                  <p className={`text-sm font-medium ${prework.kind !== "none" ? "mt-2" : ""}`}>
+                    {shownPrep?.summary}
+                  </p>
+                )}
+                {adaptive.sessionPrep.attachedQuestionCount > 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {adaptive.sessionPrep.attachedQuestionCount} in-session questions ready
+                  </p>
                 ) : null}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="font-semibold">Before Session</p>
+            ) : null}
+            {MANUAL_AUTO_PREPARE_ENABLED ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={refreshAdaptive.isPending}
+                onClick={() =>
+                  refreshAdaptive.mutate(
+                    { sessionId },
+                    { onSuccess: refreshAdaptiveData },
+                  )
+                }
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {refreshAdaptive.isPending ? "Refreshing…" : "Refresh from latest result"}
+              </Button>
+            ) : null}
+              <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold">Pre-work questions</p>
                     <Badge variant="outline">
                       {adaptive?.homework?.latestAttemptStatus === "submitted" ||
                       adaptive?.homework?.latestAttemptStatus === "expired"
@@ -676,7 +702,9 @@ export default function TutorSession() {
                     />
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {adaptive?.homework?.latestAttemptId ? (
+                    {adaptive?.homework?.latestAttemptId &&
+                    (adaptive.homework.latestAttemptStatus === "submitted" ||
+                      adaptive.homework.latestAttemptStatus === "expired") ? (
                       <>
                         <Button asChild size="sm" variant="secondary">
                           <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
@@ -711,7 +739,7 @@ export default function TutorSession() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     Incomplete homework can still be worked through during the session.
                   </p>
-                  {currentUser?.role === "administrator" ? (
+                  {isAdmin ? (
                     <div className="mt-4">
                       <AdminSessionQuizLinks assignments={session.assignments} />
                     </div>
@@ -727,20 +755,15 @@ export default function TutorSession() {
                     </div>
                   ) : null}
                 </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="font-semibold">During Session</p>
+                <section className="rounded-xl border bg-background p-4" data-testid="manage-session-in-session">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-semibold">In-session quiz</h2>
                     <Badge variant="secondary" data-testid="during-session-question-count">
                       {duringQuestionCount} questions
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {duringAssignment
-                      ? duringAssignment.title
-                      : "The in-session workspace will appear after the Fall materials refresh."}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Only approved original practice can enter this sequence.
+                  <p className="break-words text-sm text-muted-foreground">
+                    {duringAssignment?.title || "No in-session quiz is attached yet."}
                   </p>
                   {practiceHref ? (
                     <div className="mt-3" data-testid="in-session-practice-link">
@@ -749,7 +772,32 @@ export default function TutorSession() {
                       </Button>
                     </div>
                   ) : null}
-                </div>
+                </section>
+                <section className="rounded-xl border bg-background p-4" data-testid="manage-session-reserve">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-semibold">Reserve</h2>
+                    {reserveAssignment ? (
+                      <Badge variant="outline">{reserveAssignment.questionCount ?? 0} questions</Badge>
+                    ) : null}
+                  </div>
+                  {reserveAssignment ? (
+                    <>
+                      <p className="break-words text-sm text-muted-foreground">{reserveAssignment.title}</p>
+                      {isAdmin ? (
+                        <div className="mt-4">
+                          <AdminSessionQuizLinks
+                            assignments={session.assignments}
+                            kinds={["reserve"]}
+                            testId={null}
+                            rowTestIds={false}
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No reserve set for this session.</p>
+                  )}
+                </section>
               </div>
 
               <SessionLessonDashboard sessionId={sessionId} />
@@ -906,32 +954,6 @@ export default function TutorSession() {
                 />
               ) : null}
 
-              <div className="rounded-xl border bg-background p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="font-semibold">Private tutor guidance</p>
-                  <Badge variant="outline">Tutor only</Badge>
-                </div>
-                <Textarea
-                  value={tutorNotesForSubmittedResult(tutorNotes, {
-                    submitted: submittedPrework,
-                    mistakeCount: submittedMistakeCount,
-                  })}
-                  onChange={(event) => setTutorNotes(event.target.value)}
-                  placeholder="Write prompts, misconceptions to probe, or a plan for working through incomplete homework."
-                  className="min-h-24"
-                />
-                <Button
-                  size="sm"
-                  className="mt-3"
-                  disabled={!tutorNotes.trim() || saveArtifact.isPending}
-                  onClick={saveTutorNotes}
-                >
-                  <Save className="mr-2 h-4 w-4" /> Save private guidance
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
           <details className="rounded-2xl border bg-card p-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold">
               Curriculum blocks
@@ -1025,9 +1047,36 @@ export default function TutorSession() {
             </Card>
           )}
           </details>
-        </TabsContent>
 
-        <TabsContent value="records" className="grid gap-6 md:grid-cols-2">
+      <section className="space-y-4" data-testid="manage-session-notes">
+        <h2 className="text-lg font-semibold tracking-tight">Notes and reports</h2>
+        <div className="rounded-xl border bg-background p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold">Private tutor guidance</p>
+            <Badge variant="outline">Tutor only</Badge>
+          </div>
+          <p className="mb-3 whitespace-pre-wrap text-sm text-muted-foreground">
+            {shownTutorNotes.trim() ? shownTutorNotes : "No tutor notes saved yet."}
+          </p>
+          <Textarea
+            value={tutorNotesForSubmittedResult(tutorNotes, {
+              submitted: submittedPrework,
+              mistakeCount: submittedMistakeCount,
+            })}
+            onChange={(event) => setTutorNotes(event.target.value)}
+            placeholder="Write prompts, misconceptions to probe, or a plan for working through incomplete homework."
+            className="min-h-24"
+          />
+          <Button
+            size="sm"
+            className="mt-3"
+            disabled={!tutorNotes.trim() || saveArtifact.isPending}
+            onClick={saveTutorNotes}
+          >
+            <Save className="mr-2 h-4 w-4" /> Save private guidance
+          </Button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           {(
             [
               ["transcript", "Transcript", transcript, setTranscript],
@@ -1041,7 +1090,9 @@ export default function TutorSession() {
                   {title}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Course visibility is enforced by membership on the server.
+                  {kind === "report"
+                    ? "Save a private draft, or publish it for the student."
+                    : "Only tutors and admins can read the transcript."}
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1101,8 +1152,8 @@ export default function TutorSession() {
               </CardContent>
             </Card>
           ))}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </section>
     </div>
   );
 }

@@ -26,6 +26,19 @@ const sessionPageState = {
   }>,
 };
 
+const queryOptions = {
+  session: null as { query?: { refetchInterval?: number; refetchOnWindowFocus?: boolean } } | null,
+  adaptive: null as { query?: { refetchInterval?: number } } | null,
+  prework: null as { queryKey?: unknown; refetchInterval?: number | false } | null,
+};
+
+const preworkLookup = {
+  homeworkAttemptStatus: "submitted" as string | null,
+  assignmentLatestStatus: null as string | null,
+  assignmentLatestAttemptId: null as string | null,
+  assignmentLatestScore: null as number | null,
+};
+
 const assignmentQueries: Record<
   string,
   {
@@ -68,7 +81,9 @@ vi.mock("@workspace/api-client-react", () => ({
   getListSessionArtifactsQueryKey: (id: string) => ["/api/artifacts", id],
   useGetCurrentUser: () => ({ data: { id: currentUserState.id, role: currentUserState.role } }),
   customFetch: (...args: unknown[]) => clearHomework(...args),
-  useGetSession: () => ({
+  useGetSession: (_id: string, options?: { query?: { refetchInterval?: number; refetchOnWindowFocus?: boolean } }) => {
+    queryOptions.session = options ?? null;
+    return {
     data: {
       id: "session-1",
       courseId: "course-1",
@@ -107,6 +122,9 @@ vi.mock("@workspace/api-client-react", () => ({
               id: "quiz-1",
               deliveryPhase: "before_session",
               title: "October pre-session mini-section",
+              latestAttemptStatus: preworkLookup.assignmentLatestStatus,
+              latestAttemptId: preworkLookup.assignmentLatestAttemptId,
+              latestScore: preworkLookup.assignmentLatestScore,
             },
           ],
       blocks: sessionPageState.blocks,
@@ -193,7 +211,7 @@ vi.mock("@workspace/api-client-react", () => ({
           title: "October pre-session mini-section",
           status: "published",
           deadline: null,
-          attemptStatus: "submitted",
+          attemptStatus: preworkLookup.homeworkAttemptStatus,
           score: 80,
           mistakeCount: 1,
           attemptId: "attempt-1",
@@ -209,10 +227,13 @@ vi.mock("@workspace/api-client-react", () => ({
     },
     isLoading: false,
     error: null,
-  }),
+    };
+  },
   useListSessionArtifacts: () => ({ data: [] }),
   useGetAssignment: (id: string) => assignmentQueries[id] ?? { data: null },
-  useGetAdaptiveCurriculum: () => ({
+  useGetAdaptiveCurriculum: (_id: string, options?: { query?: { refetchInterval?: number } }) => {
+    queryOptions.adaptive = options ?? null;
+    return {
     data: {
       homework: homeworkState,
       mistakes: adaptiveLists.mistakes,
@@ -221,7 +242,8 @@ vi.mock("@workspace/api-client-react", () => ({
       publishedBlocks: [],
       sessionPrep: adaptiveState.sessionPrep,
     },
-  }),
+    };
+  },
   useCreateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
   useUpsertSessionArtifact: () => ({ mutate: vi.fn(), isPending: false }),
@@ -286,13 +308,18 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn() }),
+  useQuery: (options: { queryKey?: unknown; refetchInterval?: number | false }) => {
+    queryOptions.prework = options;
+    return { data: undefined };
+  },
 }));
 
 import TutorSession from "./session";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   clearHomework.mockReset();
   currentUserState.id = "tutor-eunice";
   currentUserState.role = "tutor";
@@ -310,6 +337,13 @@ afterEach(() => {
   homeworkState.deadline = null;
   sessionPageState.cleanIelts = false;
   sessionPageState.blocks = [];
+  preworkLookup.homeworkAttemptStatus = "submitted";
+  preworkLookup.assignmentLatestStatus = null;
+  preworkLookup.assignmentLatestAttemptId = null;
+  preworkLookup.assignmentLatestScore = null;
+  queryOptions.session = null;
+  queryOptions.adaptive = null;
+  queryOptions.prework = null;
   adaptiveLists.mistakes = [{ skill: "Transitions" }];
   adaptiveLists.recommendations = [];
   adaptiveLists.hardQuestions = [];
@@ -373,8 +407,16 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("clear-homework-quiz-1").textContent).toMatch(/Clear & redo/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Missed on pre-work/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Transitions/);
-    expect(screen.getByRole("tab", { name: "Live plan" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Records" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pre-work" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "In-session quiz" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Reserve" })).toBeTruthy();
+    expect(screen.queryByText("Reserve questions")).toBeNull();
+    expect(screen.getByTestId("manage-session-reserve").textContent).toMatch(/No reserve set/);
+    expect(screen.getByRole("heading", { name: "Notes and reports" })).toBeTruthy();
+    expect(screen.getByTestId("tutor-prework-status").getAttribute("data-status")).toBe("submitted");
+    expect(screen.getByTestId("tutor-prework-status").textContent).toMatch(/Submitted/);
+    expect(screen.getByTestId("manage-session-header").textContent).toMatch(/ET/);
+    expect(screen.getByRole("link", { name: "Open Meet" })).toBeTruthy();
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
     fireEvent.click(screen.getByTestId("clear-homework-quiz-1"));
@@ -398,6 +440,8 @@ describe("tutor session review page", () => {
   });
 
   test("Oct 23 English pre-work shows 24 questions and a due date, not an unfinished banner", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T15:00:00.000Z"));
     sessionState.dateTime = "2026-10-23T16:00:00.000Z";
     homeworkState.title = "IELTS-style diagnostic reading — Taito’s English Session with Nika";
     homeworkState.questionCount = 24;
@@ -531,5 +575,48 @@ describe("tutor session review page", () => {
   test("hides the slides card when no published file is attached", () => {
     render(<TutorSession />);
     expect(screen.queryByTestId("tutor-session-slides-card")).toBeNull();
+  });
+
+  test("shows a submission recorded on the assignment when the homework row is still blank, and keeps polling", () => {
+    preworkLookup.homeworkAttemptStatus = null;
+    preworkLookup.assignmentLatestStatus = "submitted";
+    preworkLookup.assignmentLatestAttemptId = "attempt-live";
+    preworkLookup.assignmentLatestScore = 91;
+    render(<TutorSession />);
+    const status = screen.getByTestId("tutor-prework-status");
+    expect(status.getAttribute("data-status")).toBe("submitted");
+    expect(status.textContent).toMatch(/Submitted/);
+    expect(status.textContent).toMatch(/91%/);
+    expect(screen.getByTestId("tutor-prework-results").querySelector("a")?.getAttribute("href")).toBe(
+      "/tutor/attempts/attempt-live",
+    );
+    expect(queryOptions.session?.query?.refetchOnWindowFocus).toBe(true);
+    expect(queryOptions.session?.query?.refetchInterval).toBeUndefined();
+    expect(queryOptions.prework?.refetchInterval).toBe(12_000);
+    expect(String(queryOptions.prework?.queryKey)).toMatch(/prework-status/);
+    expect(queryOptions.adaptive?.query?.refetchInterval).toBe(12_000);
+  });
+
+  test("shows a submitted pre-work result above a bank shortfall note", () => {
+    adaptiveState.sessionPrep = {
+      mode: "hard_bank",
+      summary: "In-session set has 15 of 20 hard questions. No partial or standard questions were added to that set.",
+      duringAssignmentId: "practice-from-homework",
+      attachedQuestionCount: 15,
+      needsQuestions: true,
+    };
+    render(<TutorSession />);
+    const plan = screen.getByTestId("prepared-live-plan");
+    const status = screen.getByTestId("prepared-plan-prework-status");
+    const note = screen.getByTestId("session-needs-questions");
+    expect(status.textContent).toMatch(/Submitted/);
+    expect(status.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note.className).not.toMatch(/text-destructive/);
+    expect(note.textContent).toMatch(/In-session set has 15 of 20/);
+    expect(note.textContent).not.toMatch(/pre-work set and the full in-session/i);
+    expect(note.textContent).not.toMatch(/did not study|didn't study|not finished/i);
+    expect(plan.textContent?.indexOf("Submitted")).toBeLessThan(
+      plan.textContent?.indexOf("In-session set has 15 of 20") ?? -1,
+    );
   });
 });

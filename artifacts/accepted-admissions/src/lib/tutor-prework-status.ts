@@ -1,15 +1,134 @@
 import { describeAssignmentCompletion } from "./assignment-completion.ts";
 
-export type TutorPreworkStatus =
-  | { kind: "none"; label: string; detail: null }
-  | { kind: "submitted" | "in_progress" | "not_submitted"; label: string; detail: string | null };
+export type TutorPreworkKind = "none" | "submitted" | "in_progress" | "not_submitted";
 
-type PreworkHomework = {
+export type TutorPreworkStatus = {
+  kind: TutorPreworkKind;
+  label: string;
+  detail: string | null;
+  attemptId: string | null;
+};
+
+export type PreworkHomework = {
   assignmentId: string;
   attemptStatus?: string | null;
   score?: number | null;
   submittedAt?: string | Date | null;
+  attemptId?: string | null;
 };
+
+type PreworkAssignment = {
+  id: string;
+  latestAttemptStatus?: string | null;
+  latestScore?: number | null;
+  latestAttemptId?: string | null;
+};
+
+function attemptRank(status?: string | null): number {
+  if (status === "submitted" || status === "expired") return 2;
+  if (status === "active" || status === "paused") return 1;
+  return 0;
+}
+
+export type PolledPreworkStatus = {
+  assignments: readonly {
+    id: string;
+    latestAttemptStatus?: string | null;
+    latestAttemptId?: string | null;
+    latestScore?: number | null;
+  }[];
+  homework: readonly {
+    assignmentId: string;
+    attemptStatus?: string | null;
+    attemptId?: string | null;
+    score?: number | null;
+    submittedAt?: string | null;
+    mistakeCount?: number | null;
+  }[];
+};
+
+/**
+ * Copy a lightweight poll onto the cached session. The poll does not replace
+ * the session document, so slides and notes stay as they were on the full GET.
+ */
+export function applyPolledPreworkStatus<
+  T extends {
+    assignments?: readonly {
+      id: string;
+      latestAttemptStatus?: string | null;
+      latestAttemptId?: string | null;
+      latestScore?: number | null;
+    }[];
+    homework?: readonly {
+      assignmentId: string;
+      attemptStatus?: string | null;
+      attemptId?: string | null;
+      score?: number | null;
+      submittedAt?: string | Date | null;
+      mistakeCount?: number;
+    }[];
+  },
+>(session: T, status: PolledPreworkStatus): T {
+  const assignmentById = new Map(status.assignments.map((row) => [row.id, row]));
+  const homeworkById = new Map(status.homework.map((row) => [row.assignmentId, row]));
+  return {
+    ...session,
+    assignments: (session.assignments ?? []).map((assignment) => {
+      const next = assignmentById.get(assignment.id);
+      if (!next) return assignment;
+      return {
+        ...assignment,
+        latestAttemptStatus: next.latestAttemptStatus ?? null,
+        latestAttemptId: next.latestAttemptId ?? null,
+        latestScore: next.latestScore ?? null,
+      };
+    }),
+    homework: (session.homework ?? []).map((row) => {
+      const next = homeworkById.get(row.assignmentId);
+      if (!next) return row;
+      return {
+        ...row,
+        attemptStatus: next.attemptStatus ?? null,
+        attemptId: next.attemptId ?? null,
+        score: next.score ?? null,
+        submittedAt: next.submittedAt ?? null,
+        mistakeCount: next.mistakeCount ?? row.mistakeCount,
+      };
+    }),
+  };
+}
+
+/**
+ * One row per live pre-work assignment. The assignment summary
+ * (`latestAttemptStatus`) is what the student portal already uses. Homework is
+ * a second payload and can lag or miss the same attempt, so the stronger of
+ * the two is what Manage session shows.
+ */
+export function mergeListedPreworkAttempts(
+  assignments: readonly PreworkAssignment[],
+  homework: readonly PreworkHomework[],
+): PreworkHomework[] {
+  return assignments.map((assignment) => {
+    const row = homework.find((item) => item.assignmentId === assignment.id);
+    const useAssignment = attemptRank(assignment.latestAttemptStatus) > attemptRank(row?.attemptStatus);
+    if (useAssignment) {
+      return {
+        assignmentId: assignment.id,
+        attemptStatus: assignment.latestAttemptStatus,
+        score: assignment.latestScore ?? row?.score ?? null,
+        submittedAt: row?.submittedAt ?? null,
+        attemptId: assignment.latestAttemptId ?? row?.attemptId ?? null,
+      };
+    }
+    return {
+      assignmentId: assignment.id,
+      attemptStatus: row?.attemptStatus ?? assignment.latestAttemptStatus ?? null,
+      score: row?.score ?? assignment.latestScore ?? null,
+      submittedAt: row?.submittedAt ?? null,
+      attemptId: row?.attemptId ?? assignment.latestAttemptId ?? null,
+    };
+  });
+}
 
 /**
  * Tutor-facing pre-work status. `preworkAssignmentIds` are the session's live
@@ -21,7 +140,7 @@ export function tutorPreworkStatus(
   preworkAssignmentIds: readonly string[],
 ): TutorPreworkStatus {
   if (preworkAssignmentIds.length === 0) {
-    return { kind: "none", label: "No pre-work assigned", detail: null };
+    return { kind: "none", label: "No pre-work assigned", detail: null, attemptId: null };
   }
   const ids = new Set(preworkAssignmentIds);
   const rows = homework.filter((item) => ids.has(item.assignmentId));
@@ -35,10 +154,23 @@ export function tutorPreworkStatus(
       timezone: "America/New_York",
     });
     const detail = described.label.replace(/^Submitted(?: · )?/, "") || null;
-    return { kind: "submitted", label: "Pre-work submitted", detail };
+    return {
+      kind: "submitted",
+      label: "Submitted",
+      detail,
+      attemptId: submitted.attemptId ?? null,
+    };
   }
-  if (rows.some((item) => item.attemptStatus === "active" || item.attemptStatus === "paused")) {
-    return { kind: "in_progress", label: "Pre-work not submitted yet", detail: "In progress" };
+  const started = rows.find(
+    (item) => item.attemptStatus === "active" || item.attemptStatus === "paused",
+  );
+  if (started) {
+    return {
+      kind: "in_progress",
+      label: "In progress",
+      detail: null,
+      attemptId: started.attemptId ?? null,
+    };
   }
-  return { kind: "not_submitted", label: "Pre-work not submitted yet", detail: "Not started" };
+  return { kind: "not_submitted", label: "Not started", detail: null, attemptId: null };
 }

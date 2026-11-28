@@ -467,6 +467,7 @@ router.get(
     }
     try {
       const lesson = await getSessionLesson(session.id);
+      res.setHeader("Cache-Control", "private, no-store");
       res.json(GetSessionLessonResponse.parse(lesson));
     } catch (error) {
       req.log?.warn({ err: error }, "Session lesson could not be loaded");

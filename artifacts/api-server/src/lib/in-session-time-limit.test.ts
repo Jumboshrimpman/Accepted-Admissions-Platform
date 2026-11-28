@@ -9,6 +9,8 @@ import {
 import {
   HARD_SAT_PREWORK_MIN_COMPLETE,
   hardSatShortfallBlockedByAssignedSet,
+  hardSatShortfallNote,
+  isStaleHardSatShortfallCopy,
   taitoOct30PreworkAllowsInSession,
 } from "./sat-hard-sets.ts";
 import { HARD_SAT_PREWORK_QUESTIONS } from "./sat-set-difficulty.ts";
@@ -141,6 +143,49 @@ test("shortfall auto-resolve requires one full hard set, not a sum", () => {
   assert.match(oct30Startup, /taitoOct30PreworkAllowsInSession\(result\.action\)/);
   assert.match(oct30Startup, /ensureHardSatInSession\(session\)/);
   assert.doesNotMatch(oct30Startup, /sendEmail|sendTransactionalEmail/);
+});
+
+test("hard SAT shortfall copy names only the set that is short", () => {
+  const set = (questionCount: number, everyKeyIsHard = true) => ({ questionCount, everyKeyIsHard });
+  const inSessionOnly = hardSatShortfallNote({
+    preworkSets: [set(40)],
+    inSessionSets: [set(15)],
+    fullPrework: 30,
+    fullInSession: 20,
+  });
+  assert.equal(
+    inSessionOnly,
+    "In-session set has 15 of 20 hard questions. No partial or standard questions were added to that set.",
+  );
+  assert.doesNotMatch(inSessionOnly ?? "", /pre-work/i);
+  assert.doesNotMatch(inSessionOnly ?? "", /did not study|not finished|student/i);
+  const both = hardSatShortfallNote({
+    preworkSets: [set(12)],
+    inSessionSets: [set(15)],
+    fullPrework: 30,
+    fullInSession: 20,
+  });
+  assert.match(both ?? "", /Pre-work set has 12 of 30 hard questions/);
+  assert.match(both ?? "", /In-session set has 15 of 20 hard questions/);
+  assert.equal(
+    hardSatShortfallNote({
+      preworkSets: [set(40)],
+      inSessionSets: [set(20)],
+      fullPrework: 30,
+      fullInSession: 20,
+    }),
+    null,
+  );
+  assert.equal(isStaleHardSatShortfallCopy(
+    "The hard SAT bank could not fill the full pre-work set and the full in-session set.",
+  ), true);
+  const platform = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const hardStart = platform.indexOf("} else if (hardSession)");
+  const hardEnd = platform.indexOf("} else if (isStaff", hardStart);
+  assert.ok(hardStart > 0 && hardEnd > hardStart);
+  const hardBranch = platform.slice(hardStart, hardEnd);
+  assert.match(hardBranch, /needsQuestions: described\.needsQuestions/);
+  assert.doesNotMatch(hardBranch, /storedConfig\.needsQuestions === true \|\| described\.needsQuestions/);
 });
 
 test("a one-form pre-work of 30-39 counts as complete for the needs-questions check", () => {

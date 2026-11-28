@@ -12,8 +12,10 @@ import {
   planAssignmentIdAfterPreworkPublish,
   homeworkWithStudentAttempt,
   selectActivePrework,
+  selectDisplayedStudentAttempt,
   selectLatestStudentAttempt,
   sessionAttemptUserId,
+  sessionStaffAttemptUserIds,
   selectInSessionHomeworkQuestionIds,
   eligiblePlaceholderArchiveIds,
   futurePlaceholderSatHomework,
@@ -806,6 +808,115 @@ test("selectActivePrework prefers a submitted copy over an unattempted plan repl
     ])?.id,
     "replacement-plan",
   );
+});
+
+test("status homework keeps a submitted copy when attempt counts were not loaded", () => {
+  const replacement = {
+    id: "replacement",
+    title: "SAT pre-work (30–50 questions) — Session",
+    status: "published",
+    deliveryPhase: "before_session" as const,
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+    latestAttemptStatus: null,
+    createdAt: "2026-11-02T00:00:00.000Z",
+  };
+  const submitted = {
+    id: "submitted-copy",
+    title: "SAT pre-work (30–50 questions) — Session",
+    status: "published",
+    deliveryPhase: "before_session" as const,
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+    latestAttemptStatus: "submitted" as const,
+    createdAt: "2026-11-01T00:00:00.000Z",
+  };
+  assert.deepEqual(
+    selectStatusHomework([replacement, submitted]).map((item) => item.id),
+    ["submitted-copy"],
+  );
+  assert.deepEqual(
+    selectStatusHomework([submitted, replacement]).map((item) => item.id),
+    ["submitted-copy"],
+  );
+});
+
+test("staff session attempt lookup includes the assigned student and prefers a submission", () => {
+  assert.deepEqual(
+    sessionStaffAttemptUserIds({
+      role: "tutor",
+      viewerUserId: "tutor-xavier",
+      sessionClientUserId: "client-parent",
+      assignedStudentUserId: "student-michelle",
+      sessionScoped: true,
+    }),
+    ["client-parent", "student-michelle"],
+  );
+  assert.deepEqual(
+    sessionStaffAttemptUserIds({
+      role: "administrator",
+      viewerUserId: "admin-user",
+      sessionClientUserId: null,
+      assignedStudentUserId: "student-michelle",
+      sessionScoped: true,
+    }),
+    ["student-michelle"],
+  );
+  assert.deepEqual(
+    sessionStaffAttemptUserIds({
+      role: "tutor",
+      viewerUserId: "tutor-xavier",
+      sessionClientUserId: "student-michelle",
+      sessionScoped: false,
+    }),
+    ["tutor-xavier"],
+  );
+  const earlier = new Date("2026-11-01T12:00:00.000Z");
+  const later = new Date("2026-11-02T12:00:00.000Z");
+  const displayed = selectDisplayedStudentAttempt(
+    [
+      { id: "client-blank", userId: "client-parent", startedAt: later, status: "active" },
+      { id: "student-done", userId: "student-michelle", startedAt: earlier, status: "submitted" },
+    ],
+    ["client-parent", "student-michelle"],
+  );
+  assert.equal(displayed?.id, "student-done");
+  const inProgress = selectDisplayedStudentAttempt(
+    [{ id: "student-live", userId: "student-michelle", startedAt: earlier, status: "active" }],
+    ["client-parent", "student-michelle"],
+  );
+  assert.equal(inProgress?.id, "student-live");
+});
+
+test("manage session loads the displayed attempt and does not cache the session payload", () => {
+  const source = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const homeworkStart = source.indexOf("async function homeworkRowsForListedAssignments");
+  const sessionGetStart = source.indexOf('router.get("/sessions/:sessionId", async');
+  const pollStart = source.indexOf('router.get("/sessions/:sessionId/prework-status"');
+  const sessionGetEnd = source.indexOf('router.get("/sessions/:sessionId/question-pdf"');
+  assert.ok(homeworkStart > 0 && sessionGetStart > homeworkStart);
+  assert.ok(pollStart > sessionGetStart && sessionGetEnd > pollStart);
+  const attemptLoad = source.slice(homeworkStart, sessionGetStart);
+  assert.match(attemptLoad, /assignment\.latestAttemptId/);
+  const sessionGet = source.slice(sessionGetStart, pollStart);
+  assert.match(sessionGet, /ensureMichelleSophiaLamasSatPrepSlidesSafe/);
+  assert.match(sessionGet, /private, no-store/);
+  assert.doesNotMatch(sessionGet, /homeworkUserId/);
+  const poll = source.slice(pollStart, sessionGetEnd);
+  assert.match(poll, /private, no-store/);
+  assert.doesNotMatch(poll, /ensureMichelleSophiaLamasSatPrepSlidesSafe/);
+  assert.match(source, /sessionStaffAttemptUserIds\(/);
+  assert.match(source, /selectDisplayedStudentAttempt\(/);
+  const adaptiveStart = source.indexOf('export async function adaptiveCurriculumForSession');
+  const adaptiveEnd = source.indexOf('router.get(\n  "/sessions/:sessionId/adaptive-curriculum"');
+  assert.ok(adaptiveStart > 0 && adaptiveEnd > adaptiveStart);
+  const adaptive = source.slice(adaptiveStart, adaptiveEnd);
+  assert.match(adaptive, /selectedHomework\?\.latestAttemptId/);
+  assert.doesNotMatch(adaptive, /eq\(attemptsTable\.userId, subjectUserId\)/);
 });
 
 test("session attempt lookup uses the student on a staff session page", () => {
