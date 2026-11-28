@@ -511,7 +511,9 @@ export default function TutorSession() {
                         </div>
                       )}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {homework.attemptId && (
+                        {homework.attemptId &&
+                        (homework.attemptStatus === "submitted" ||
+                          homework.attemptStatus === "expired") && (
                           <>
                             <Link href={`/tutor/attempts/${homework.attemptId}`}>
                               <Button size="sm" variant="outline">
@@ -628,12 +630,25 @@ export default function TutorSession() {
               </div>
             ) : adaptive?.sessionPrep ? (
               <div className="rounded-xl border bg-accent/5 px-4 py-4" data-testid="prepared-live-plan">
-                <p className="text-sm font-medium">{shownPrep?.summary}</p>
-                {adaptive.sessionPrep.needsQuestions ? (
-                  <p className="mt-2 text-sm font-medium text-destructive" data-testid="session-needs-questions">
-                    This session is not a complete hard set.
+                {prework.kind !== "none" ? (
+                  <p className="text-sm font-semibold" data-testid="prepared-plan-prework-status">
+                    {prework.kind === "submitted"
+                      ? `Submitted${prework.detail ? ` · ${prework.detail}` : ""}`
+                      : prework.label}
                   </p>
                 ) : null}
+                {adaptive.sessionPrep.needsQuestions ? (
+                  <p
+                    className="mt-2 text-sm text-muted-foreground"
+                    data-testid="session-needs-questions"
+                  >
+                    {shownPrep?.summary}
+                  </p>
+                ) : (
+                  <p className={`text-sm font-medium ${prework.kind !== "none" ? "mt-2" : ""}`}>
+                    {shownPrep?.summary}
+                  </p>
+                )}
                 {adaptive.sessionPrep.attachedQuestionCount > 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {adaptive.sessionPrep.attachedQuestionCount} in-session questions ready
@@ -687,7 +702,9 @@ export default function TutorSession() {
                     />
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {adaptive?.homework?.latestAttemptId ? (
+                    {adaptive?.homework?.latestAttemptId &&
+                    (adaptive.homework.latestAttemptStatus === "submitted" ||
+                      adaptive.homework.latestAttemptStatus === "expired") ? (
                       <>
                         <Button asChild size="sm" variant="secondary">
                           <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>

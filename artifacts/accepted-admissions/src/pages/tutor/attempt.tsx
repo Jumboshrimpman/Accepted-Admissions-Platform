@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import { Link, useParams, useSearch } from "wouter";
 import {
   customFetch,
+  getGetAttemptQueryKey,
   getGetAttemptResultQueryKey,
   getListReviewSubmissionsQueryKey,
   type AttemptResult,
+  useGetAttempt,
   useGetAttemptResult,
   useUpdateAttemptReview,
 } from "@workspace/api-client-react";
@@ -60,12 +62,24 @@ export default function TutorAttempt() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const search = useSearch();
   const queryClient = useQueryClient();
-  const { data: result, isLoading, error } = useGetAttemptResult(attemptId, undefined, {
-    query: { enabled: Boolean(attemptId), queryKey: getGetAttemptResultQueryKey(attemptId) },
+  const attemptQuery = useGetAttempt(attemptId ?? "", {
+    query: {
+      enabled: Boolean(attemptId),
+      queryKey: getGetAttemptQueryKey(attemptId ?? ""),
+    },
+  });
+  const attemptStatus = attemptQuery.data?.status;
+  const resultReady =
+    Boolean(attemptId) && (attemptStatus === "submitted" || attemptStatus === "expired");
+  const { data: result, isLoading, error } = useGetAttemptResult(attemptId ?? "", undefined, {
+    query: {
+      enabled: resultReady,
+      queryKey: getGetAttemptResultQueryKey(attemptId ?? "pending"),
+    },
   });
   const wrongAnswersQuery = useQuery({
     queryKey: ["/api/attempts", attemptId, "wrong-answers"],
-    enabled: Boolean(attemptId),
+    enabled: resultReady,
     queryFn: () => customFetch<AttemptWrongAnswers>(`/api/attempts/${attemptId}/wrong-answers`),
   });
   const [notes, setNotes] = useState<string | null>(null);
@@ -88,8 +102,26 @@ export default function TutorAttempt() {
     return source.map((item) => repairMichelleQuizQuestionFields(item, repairStackedMath));
   }, [result, wrongAnswersQuery.data, wrongOnly]);
 
-  if (isLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
-  if (error || !result) return <div className="rounded-2xl bg-destructive/10 p-8 text-center text-destructive">This submission is not available.</div>;
+  if (attemptQuery.isLoading || (resultReady && isLoading)) {
+    return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
+  }
+  if (!resultReady) {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border bg-card p-8 text-center" data-testid="attempt-not-submitted">
+        <h1 className="text-xl font-semibold">This attempt is still in progress</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Results and wrong answers appear after the student submits.
+        </p>
+      </div>
+    );
+  }
+  if (error || !result) {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border bg-card p-8 text-center text-muted-foreground" data-testid="attempt-result-unavailable">
+        Results are not ready for this attempt yet.
+      </div>
+    );
+  }
   const tutorNotes = notes ?? result.tutorNotes ?? "";
   const formatMath = quizShowsFormattedMath(result.assignmentTitle);
   return (

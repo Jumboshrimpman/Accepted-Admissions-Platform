@@ -171,6 +171,11 @@ async function hardPlanOptionsForSession(session: {
 export const HARD_SAT_NEEDS_QUESTIONS_SUMMARY =
   "This session still needs questions. The hard SAT bank could not fill the full pre-work set and the full in-session set, so no partial set was assigned and standard items were not used.";
 
+/** Older prep blocks stored the canned sentence that blamed both sets. */
+export function isStaleHardSatShortfallCopy(text: string | null | undefined): boolean {
+  return /could not fill the full pre-work set and the full in-session set/i.test(text ?? "");
+}
+
 /**
  * Smallest one-form official pre-work that counts as complete for the
  * "needs questions" check. New sets are still drawn at 40; this only stops a
@@ -509,6 +514,36 @@ export type HardSatAssignedSetCheck = {
 };
 
 /**
+ * Name only the hard set that is actually short, with the attached count and
+ * the count that counts as full. A complete pre-work set is not described as
+ * missing, and the note is about the question bank, not the student's work.
+ */
+export function hardSatShortfallNote(input: {
+  preworkSets: readonly HardSatAssignedSetCheck[];
+  inSessionSets: readonly HardSatAssignedSetCheck[];
+  fullPrework: number;
+  fullInSession: number;
+}): string | null {
+  const lines: string[] = [];
+  const describe = (
+    label: string,
+    sets: readonly HardSatAssignedSetCheck[],
+    target: number,
+  ) => {
+    if (target <= 0) return;
+    const complete = sets.some((set) => set.everyKeyIsHard && set.questionCount >= target);
+    if (complete) return;
+    const attached = sets.reduce((max, set) => Math.max(max, set.questionCount), 0);
+    lines.push(`${label} has ${attached} of ${target} hard questions`);
+  };
+  describe("Pre-work set", input.preworkSets, input.fullPrework);
+  describe("In-session set", input.inSessionSets, input.fullInSession);
+  if (lines.length === 0) return null;
+  const which = lines.length === 1 ? "that set" : "those sets";
+  return `${lines.join(". ")}. No partial or standard questions were added to ${which}.`;
+}
+
+/**
  * The empty-pool alert is stale only when one pre-work assignment and one
  * in-session assignment are each a full hard set. Question counts from
  * separate assignments do not add up, and a set counts only when every
@@ -695,7 +730,13 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
     };
   }
   const summary = needsQuestions
-    ? `${HARD_SAT_NEEDS_QUESTIONS_SUMMARY} Assigned now: ${preworkCount} pre-work and ${questionCount} in-session; a full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`
+    ? (hardSatShortfallNote({
+        preworkSets,
+        inSessionSets,
+        fullPrework: HARD_SAT_PREWORK_MIN_COMPLETE,
+        fullInSession: target,
+      }) ??
+      "The hard SAT bank did not fill a short set. No partial or standard questions were added.")
     : `Hard SAT set: ${preworkCount} pre-work questions and ${questionCount} in-session module 2 questions. The in-session set is not timed.`;
   return { summary, duringAssignmentId, questionCount, preworkCount, needsQuestions };
 }

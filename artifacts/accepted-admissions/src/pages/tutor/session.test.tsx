@@ -596,4 +596,27 @@ describe("tutor session review page", () => {
     expect(String(queryOptions.prework?.queryKey)).toMatch(/prework-status/);
     expect(queryOptions.adaptive?.query?.refetchInterval).toBe(12_000);
   });
+
+  test("shows a submitted pre-work result above a bank shortfall note", () => {
+    adaptiveState.sessionPrep = {
+      mode: "hard_bank",
+      summary: "In-session set has 15 of 20 hard questions. No partial or standard questions were added to that set.",
+      duringAssignmentId: "practice-from-homework",
+      attachedQuestionCount: 15,
+      needsQuestions: true,
+    };
+    render(<TutorSession />);
+    const plan = screen.getByTestId("prepared-live-plan");
+    const status = screen.getByTestId("prepared-plan-prework-status");
+    const note = screen.getByTestId("session-needs-questions");
+    expect(status.textContent).toMatch(/Submitted/);
+    expect(status.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note.className).not.toMatch(/text-destructive/);
+    expect(note.textContent).toMatch(/In-session set has 15 of 20/);
+    expect(note.textContent).not.toMatch(/pre-work set and the full in-session/i);
+    expect(note.textContent).not.toMatch(/did not study|didn't study|not finished/i);
+    expect(plan.textContent?.indexOf("Submitted")).toBeLessThan(
+      plan.textContent?.indexOf("In-session set has 15 of 20") ?? -1,
+    );
+  });
 });
